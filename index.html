@@ -195,6 +195,16 @@ select.field-input{appearance:none;cursor:pointer;}
 .dot:nth-child(3){animation-delay:.4s;}
 @keyframes dotBounce{0%,100%{transform:translateY(0);opacity:0.4;}50%{transform:translateY(-5px);opacity:1;}}
 
+/* Chips info patient */
+.info-chip{display:inline-flex;align-items:center;gap:5px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 10px;}
+.chip-key{font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;}
+.chip-val{font-size:12px;color:var(--text);font-weight:600;}
+
+/* Bouton envoyer prescription */
+.btn-envoyer{width:100%;background:linear-gradient(135deg,#00C896,#0EA5E9);border:none;border-radius:14px;padding:15px;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:var(--bg);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .2s;box-shadow:0 4px 20px rgba(0,200,150,0.25);}
+.btn-envoyer:active{opacity:0.85;}
+.btn-envoyer:disabled{opacity:0.4;cursor:not-allowed;}
+
 /* Modal médicament */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;display:none;align-items:flex-end;}
 .modal-overlay.on{display:flex;}
@@ -474,35 +484,32 @@ function renderConsult(){
   var readonly=d.statut==='traite'||d.statut==='refere';
   var body=document.getElementById('consultBody');
 
+  // Parser les symptômes en liste
+  function sympToList(txt){
+    var items=txt.split(/[.,;]+/).map(function(s){return s.trim();}).filter(function(s){return s.length>3;});
+    return items.map(function(s){return '<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);"><span style="color:var(--accent);font-size:11px;margin-top:2px;">•</span><span style="font-size:12px;color:var(--text2);">'+s+'</span></div>';}).join('');
+  }
+
   body.innerHTML=
-    // 1. Infos patient
+    // 1. Infos patient — une ligne compacte
     '<div class="form-section">'+
       '<div class="form-section-title">'+
         '<div class="form-section-ico blue">👤</div>'+
-        '<div class="form-section-label">Informations patient</div>'+
+        '<div class="form-section-label">Patient</div>'+
       '</div>'+
-      '<div class="info-grid">'+
-        '<div class="info-item"><div class="info-key">Nom</div><div class="info-val">'+d.patient.nom+'</div></div>'+
-        '<div class="info-item"><div class="info-key">Âge</div><div class="info-val">'+d.patient.age+' ans</div></div>'+
-        '<div class="info-item"><div class="info-key">Profil</div><div class="info-val">'+d.patient.profil+'</div></div>'+
-        '<div class="info-item"><div class="info-key">Date</div><div class="info-val">'+d.date+'</div></div>'+
-        '<div class="info-item full"><div class="info-key">Symptômes décrits</div><div class="symp-box" style="margin-top:6px;">'+d.symptomes+'</div></div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">'+
+        '<div class="info-chip"><span class="chip-key">Nom</span><span class="chip-val">'+d.patient.nom+'</span></div>'+
+        '<div class="info-chip"><span class="chip-key">Âge</span><span class="chip-val">'+d.patient.age+' ans</span></div>'+
+        '<div class="info-chip"><span class="chip-key">Profil</span><span class="chip-val">'+d.patient.profil+'</span></div>'+
+        '<div class="info-chip"><span class="chip-key">Ville</span><span class="chip-val">'+(d.patient.ville||'Abidjan')+'</span></div>'+
+        '<div class="info-chip"><span class="chip-key">Voyage</span><span class="chip-val">'+(d.patient.voyage||'Aucun signalé')+'</span></div>'+
+        '<div class="info-chip"><span class="chip-key">Date</span><span class="chip-val">'+d.date+'</span></div>'+
       '</div>'+
+      '<div class="field-label" style="margin-bottom:8px;">Symptômes</div>'+
+      '<div style="background:var(--bg);border-radius:10px;padding:10px 12px;">'+sympToList(d.symptomes)+'</div>'+
     '</div>'+
 
-    // 2. Diagnostic IA
-    '<div class="form-section">'+
-      '<div class="form-section-title">'+
-        '<div class="form-section-ico blue">🤖</div>'+
-        '<div class="form-section-label">Analyse IA (non transmise au patient)</div>'+
-      '</div>'+
-      '<div class="ia-diag">'+
-        '<div class="ia-tag">✦ HEY DOC! IA</div>'+
-        '<div class="ia-text">'+d.diagIA.replace(/\n/g,'<br>')+'</div>'+
-      '</div>'+
-    '</div>'+
-
-    // 3. Diagnostic médecin
+    // 2. Diagnostic médecin
     '<div class="form-section">'+
       '<div class="form-section-title">'+
         '<div class="form-section-ico green">🔬</div>'+
@@ -511,19 +518,15 @@ function renderConsult(){
       '<div class="disease-tags" id="diseaseTags">'+renderDiseaseTags(d.diagMed)+'</div>'+
       '<div class="field-row">'+
         '<div class="field-label">Diagnostic retenu</div>'+
-        '<input class="field-input" id="diagMedInput" placeholder="Ex: Fièvre typhoïde confirmée" value="'+d.diagMed+'"'+(readonly?' readonly':'')+'/>'+
+        '<input class="field-input" id="diagMedInput" placeholder="Ex: Fièvre typhoïde confirmée" value="'+d.diagMed+'"'+(readonly?' readonly':'')+' autocomplete="off"/>'+
       '</div>'+
       '<div class="field-row">'+
         '<div class="field-label">Examens demandés</div>'+
         '<textarea class="field-input" id="examensInput" rows="2" placeholder="Ex: NFS, hémoculture, Widal..."'+(readonly?' readonly':'')+'>'+(d.examens||'')+'</textarea>'+
       '</div>'+
-      '<div class="field-row">'+
-        '<div class="field-label">Notes cliniques</div>'+
-        '<textarea class="field-input" id="notesInput" rows="2" placeholder="Observations cliniques..."'+(readonly?' readonly':'')+'>'+(d.notes||'')+'</textarea>'+
-      '</div>'+
     '</div>'+
 
-    // 4. Traitement
+    // 3. Traitement
     '<div class="form-section">'+
       '<div class="form-section-title">'+
         '<div class="form-section-ico warn">💊</div>'+
@@ -532,71 +535,137 @@ function renderConsult(){
       '<div id="medList">'+renderMedList(readonly)+'</div>'+
       (!readonly?'<button class="add-med-btn" onclick="openMedModal()">+ Ajouter un médicament</button>':'')+'</div>'+
 
-    // 5. Validation IA
+    // 4. Bouton envoyer (déclenche validation IA)
     (!readonly?
-      '<div class="form-section" id="valSection">'+
+      '<div style="padding:0 0 14px;">'+
+        '<button class="btn-envoyer" id="btnEnvoyer" onclick="envoyerPrescription()">'+
+          '📤 Envoyer la prescription'+
+        '</button>'+
+      '</div>'
+    :'')+
+
+    // 5. Section validation IA — masquée au départ, révélée après envoi
+    '<div id="valSection" style="display:none;">'+
+      '<div class="form-section">'+
+        '<div class="form-section-title">'+
+          '<div class="form-section-ico blue">🤖</div>'+
+          '<div class="form-section-label">Analyse IA (confidentielle)</div>'+
+        '</div>'+
+        '<div class="ia-diag" id="iaDiagBox">'+
+          '<div class="ia-tag">✦ HEY DOC! IA</div>'+
+          '<div class="ia-text">'+d.diagIA.replace(/\n/g,'<br>')+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="form-section" id="valFormSection">'+
         '<div class="form-section-title">'+
           '<div class="form-section-ico purple">✦</div>'+
-          '<div class="form-section-label">Validation IA du traitement</div>'+
+          '<div class="form-section-label">Validation du traitement</div>'+
         '</div>'+
-        '<div id="valBox"><div class="val-box attente" style="text-align:center;color:var(--text3);font-size:12px;">Complétez le diagnostic et le traitement<br>puis lancez la validation</div></div>'+
-        '<div style="margin-top:14px;">'+
-          '<button class="btn-valider" id="btnValider" onclick="lancerValidation()">'+
-            '✦ Valider avec l\'IA'+
-          '</button>'+
-        '</div>'+
-      '</div>'
-    :
+        '<div id="valBox"><div class="val-box loading" style="text-align:center;padding:20px;"><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span><div style="margin-top:8px;font-size:12px;color:var(--text2);">Validation en cours...</div></div></div>'+
+      '</div>'+
+    '</div>'+
+
+    // Dossier traité — résultat validation
+    (readonly&&d.valIA?
       '<div class="form-section">'+
         '<div class="form-section-title">'+
           '<div class="form-section-ico purple">✦</div>'+
           '<div class="form-section-label">Résultat validation IA</div>'+
         '</div>'+
-        (d.valIA?renderValResult(d.valIA):'<div style="color:var(--text3);font-size:12px;">Non disponible</div>')+
+        renderValResult(d.valIA)+
       '</div>'
-    )+
+    :'')+
 
-    '<div style="height:20px;"></div>';
+    '<div style="height:30px;"></div>';
 }
 
-function renderDiseaseTags(current){
-  var diseases=['Paludisme','Typhoïde','Méningite','Tuberculose','VIH','Dengue','Choléra','Pneumonie','Gastroentérite','Infection urinaire','Infection gynécologique','Helminthiase'];
-  return diseases.map(function(d){
-    var on=current&&current.toLowerCase().includes(d.toLowerCase());
-    return '<div class="dtag'+(on?' on':'')+'" onclick="selectDisease(\''+d+'\')">'+d+'</div>';
-  }).join('');
+async function envoyerPrescription(){
+  var diag=(document.getElementById('diagMedInput')||{}).value||'';
+  if(!diag){toast('⚠️ Renseignez le diagnostic');return;}
+  if(!MEDICAMENTS.length){toast('⚠️ Ajoutez au moins un médicament');return;}
+
+  // Révéler la section validation
+  var valSection=document.getElementById('valSection');
+  valSection.style.display='block';
+  valSection.scrollIntoView({behavior:'smooth',block:'start'});
+
+  // Désactiver bouton
+  var btn=document.getElementById('btnEnvoyer');
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span> Validation IA en cours...';}
+
+  // Lancer validation
+  await lancerValidation();
 }
 
-function selectDisease(name){
-  var input=document.getElementById('diagMedInput');
-  if(input)input.value=name;
-  document.querySelectorAll('.dtag').forEach(function(t){
-    t.classList.toggle('on',t.textContent===name);
-  });
+async function lancerValidation(){
+  var diag=(document.getElementById('diagMedInput')||{}).value||'';
+  var traitementTxt=MEDICAMENTS.map(function(m){return m.nom+' '+m.dose+' — '+m.poso+' — '+m.duree;}).join('\n');
+  var prompt='Tu es un expert en validation de prescriptions médicales selon les protocoles OMS pour l\'Afrique subsaharienne.\n\nDiagnostic médecin: '+diag+'\nPatient: '+CURRENT_DOSSIER.patient.nom+', '+CURRENT_DOSSIER.patient.age+' ans\n\nTraitement prescrit:\n'+traitementTxt+'\n\nAnalyse IA initiale:\n'+CURRENT_DOSSIER.diagIA+'\n\nRéponds en 3 parties COURTES:\n1. VERDICT: CONFORME ou NON CONFORME\n2. ANALYSE: 2-3 lignes maximum\n3. Si NON CONFORME: RECOMMANDATION OMS (molécule, dosage, durée)\n\nSois direct et précis.';
+
+  try{
+    var ah=(RA_KEY.includes(':'))?RA_KEY:(RA_RP+':'+RA_KEY);
+    var turl='https://api-'+RA_RG+'.stack.tryrelevance.com/latest/agents/trigger';
+    var body={message:{role:'user',content:prompt},agent_id:RA_AGENT};
+    if(CID_VAL)body.conversation_id=CID_VAL;
+    var r=await fetch(turl,{method:'POST',headers:{'Content-Type':'application/json','Authorization':ah},body:JSON.stringify(body)});
+    var data=await r.json();
+    if(data.conversation_id)CID_VAL=data.conversation_id;
+    var sid=data.job_info&&data.job_info.studio_id?data.job_info.studio_id:null;
+    var jid=data.job_info&&data.job_info.job_id?data.job_info.job_id:null;
+    if(sid&&jid){
+      var rep=await pollVal(sid,jid);
+      afficherValidation(rep||'Erreur de validation');
+    }
+  }catch(e){
+    afficherValidation('Erreur: '+e.message);
+  }
 }
 
-function renderMedList(readonly){
-  if(!MEDICAMENTS.length)return '<div style="color:var(--text3);font-size:12px;text-align:center;padding:12px;">Aucun médicament ajouté</div>';
-  return MEDICAMENTS.map(function(m,i){
-    return '<div class="med-item">'+
-      '<div class="med-item-info">'+
-        '<div class="med-item-name">'+m.nom+'</div>'+
-        '<div class="med-item-detail">'+m.dose+' — '+m.poso+' — '+m.duree+'</div>'+
-      '</div>'+
-      (!readonly?'<button class="med-item-del" onclick="removeMed('+i+')">×</button>':'')+
+async function pollVal(sid,jid){
+  var ah=(RA_KEY.includes(':'))?RA_KEY:(RA_RP+':'+RA_KEY);
+  var pu='https://api-'+RA_RG+'.stack.tryrelevance.com/latest/studios/'+sid+'/async_poll/'+jid;
+  for(var i=0;i<60;i++){
+    await new Promise(function(r){setTimeout(r,2000);});
+    try{
+      var r=await fetch(pu,{headers:{'Authorization':ah}});
+      var d=await r.json();
+      var ups=d.updates||[];
+      for(var u of ups){
+        if(u.type==='agent-complete'){if(u.output&&u.output.answer)return u.output.answer;if(u.message&&u.message.content)return u.message.content;}
+      }
+      if(d.status==='complete'||d.status==='failed')break;
+    }catch(e){}
+  }
+  return null;
+}
+
+function afficherValidation(rep){
+  var estConforme=rep.toLowerCase().includes('conforme')&&!rep.toLowerCase().includes('non conforme');
+  var result={statut:estConforme?'conforme':'nonconforme',texte:rep};
+  CURRENT_DOSSIER.valIA=result;
+
+  var valBox=document.getElementById('valBox');
+  if(!valBox)return;
+
+  valBox.innerHTML=
+    '<div class="val-box '+(estConforme?'conforme':'nonconforme')+'">'+
+      '<div class="val-title">'+(estConforme?'✅ Traitement CONFORME aux recommandations OMS':'⚠️ Traitement NON CONFORME')+'</div>'+
+      '<div class="val-text">'+rep.replace(/\n/g,'<br>')+'</div>'+
+    '</div>'+
+    '<div class="val-actions">'+
+      '<button class="val-btn accept" onclick="finaliserDossier(false)">'+
+        (estConforme?'✅ Envoyer au patient':'✅ Corriger & envoyer')+
+      '</button>'+
+      (!estConforme?'<button class="val-btn refer" onclick="finaliserDossier(true)">🔄 Maintenir & référer</button>':'')+
     '</div>';
-  }).join('');
+
+  // Si conforme → box verte + envoi auto après 2s
+  if(estConforme){
+    setTimeout(function(){finaliserDossier(false);},2000);
+    toast('✅ Traitement validé — envoi dans 2s...');
+  }
 }
 
-function renderValResult(val){
-  if(!val)return '';
-  var cls=val.statut==='conforme'?'conforme':'nonconforme';
-  var ico=val.statut==='conforme'?'✅':'⚠️';
-  return '<div class="val-box '+cls+'">'+
-    '<div class="val-title">'+ico+' '+(val.statut==='conforme'?'Traitement CONFORME':'Traitement NON CONFORME')+'</div>'+
-    '<div class="val-text">'+val.texte+'</div>'+
-  '</div>';
-}
 
 // ═══════════════════════════════════════
 // MÉDICAMENTS MODAL
