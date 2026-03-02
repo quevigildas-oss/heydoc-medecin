@@ -479,6 +479,46 @@ function openDossier(id){
   showScreen('consultScreen');
 }
 
+
+function renderDiseaseTags(current){
+  var diseases=['Paludisme','Typhoïde','Méningite','Tuberculose','VIH','Dengue','Choléra','Pneumonie','Gastroentérite','Infection urinaire','Infection gynécologique','Helminthiase'];
+  return diseases.map(function(d){
+    var on=current&&current.toLowerCase().includes(d.toLowerCase());
+    return '<div class="dtag'+(on?' on':'')+'" onclick="selectDisease(this.textContent)">'+d+'</div>';
+  }).join('');
+}
+
+function selectDisease(name){
+  var input=document.getElementById('diagMedInput');
+  if(input)input.value=name;
+  document.querySelectorAll('.dtag').forEach(function(t){
+    t.classList.toggle('on',t.textContent===name);
+  });
+}
+
+function renderMedList(readonly){
+  if(!MEDICAMENTS.length)return '<div style="color:var(--text3);font-size:12px;text-align:center;padding:12px;">Aucun médicament ajouté</div>';
+  return MEDICAMENTS.map(function(m,i){
+    return '<div class="med-item">'+
+      '<div class="med-item-info">'+
+        '<div class="med-item-name">'+m.nom+'</div>'+
+        '<div class="med-item-detail">'+m.dose+' — '+m.poso+' — '+m.duree+'</div>'+
+      '</div>'+
+      (!readonly?'<button class="med-item-del" onclick="removeMed('+i+')">×</button>':'')+
+    '</div>';
+  }).join('');
+}
+
+function renderValResult(val){
+  if(!val)return '';
+  var cls=val.statut==='conforme'?'conforme':'nonconforme';
+  var ico=val.statut==='conforme'?'✅':'⚠️';
+  return '<div class="val-box '+cls+'">'+
+    '<div class="val-title">'+ico+' '+(val.statut==='conforme'?'Traitement CONFORME':'Traitement NON CONFORME')+'</div>'+
+    '<div class="val-text">'+val.texte+'</div>'+
+  '</div>';
+}
+
 function renderConsult(){
   var d=CURRENT_DOSSIER;
   var readonly=d.statut==='traite'||d.statut==='refere';
