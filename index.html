@@ -184,6 +184,52 @@ select.finput option{background:var(--bg3);}
 .geo-search:focus{border-color:var(--accent);}
 .no-geo{text-align:center;padding:32px 16px;color:var(--text3);font-size:13px;}
 
+/* ══ ESPACE PROFIL ══ */
+.profil-home{flex:1;overflow-y:auto;padding:16px;}
+.profil-home::-webkit-scrollbar{display:none;}
+.profil-banner{background:var(--grad);border-radius:16px;padding:18px;margin-bottom:16px;display:flex;align-items:center;gap:14px;}
+.profil-banner-av{width:52px;height:52px;border-radius:15px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#fff;flex-shrink:0;}
+.profil-banner-nom{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:#fff;}
+.profil-banner-info{font-size:12px;color:rgba(255,255,255,.75);margin-top:2px;}
+.menu-section{margin-bottom:18px;}
+.menu-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:13px;cursor:pointer;transition:all .2s;}
+.menu-card:active{transform:scale(.98);border-color:var(--accent);}
+.menu-ico{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.menu-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text);}
+.menu-sub{font-size:11px;color:var(--text2);margin-top:1px;}
+.menu-arr{margin-left:auto;color:var(--text3);font-size:18px;}
+
+/* ══ DOSSIER MÉDICAL ══ */
+.dossier-list{flex:1;overflow-y:auto;padding:16px;}
+.dossier-list::-webkit-scrollbar{display:none;}
+.doss-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:13px;cursor:pointer;transition:all .2s;}
+.doss-card:active{transform:scale(.98);}
+.doss-ico{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.doss-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text);}
+.doss-sub{font-size:11px;color:var(--text2);margin-top:1px;}
+.doss-count{margin-left:auto;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:2px 8px;font-size:11px;font-weight:600;color:var(--text2);}
+
+/* ══ DETAIL DOSSIER ══ */
+.detail-body{flex:1;overflow-y:auto;padding:16px;}
+.detail-body::-webkit-scrollbar{display:none;}
+.detail-empty{text-align:center;padding:40px 20px;color:var(--text3);font-size:13px;}
+.detail-item{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;}
+.detail-item-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;}
+.detail-item-val{font-size:12px;color:var(--text2);line-height:1.6;}
+.detail-item-date{font-size:10px;color:var(--text3);margin-top:6px;}
+.add-item-btn{background:var(--bg3);border:1px dashed var(--border);border-radius:14px;padding:13px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-family:'Syne',sans-serif;font-size:13px;font-weight:600;color:var(--text2);width:100%;margin-bottom:10px;}
+.add-item-btn:active{border-color:var(--accent);}
+
+/* ══ HISTORIQUE ══ */
+.histo-list{flex:1;overflow-y:auto;padding:16px;}
+.histo-list::-webkit-scrollbar{display:none;}
+.histo-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all .2s;}
+.histo-card:active{transform:scale(.98);}
+.histo-date{font-size:10px;color:var(--text3);margin-bottom:4px;}
+.histo-diag{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;}
+.histo-symp{font-size:11px;color:var(--text2);line-height:1.4;}
+.histo-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.2);border-radius:6px;padding:2px 8px;font-size:10px;color:var(--accent);margin-top:6px;}
+
 /* ══ TOAST ══ */
 .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,.1);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:9px 16px;font-size:12px;color:#fff;z-index:999;white-space:nowrap;}
 
@@ -278,7 +324,7 @@ select.finput option{background:var(--bg3);}
   <div class="profil-list" id="profilList"></div>
   <div class="consult-footer">
     <button class="btn-eph" onclick="nav('ephemereScreen')">⚡ Éphémère</button>
-    <button class="btn-consult" id="btnConsult" disabled onclick="lancerConsult()">Consulter →</button>
+    <button class="btn-consult" id="btnConsult" disabled style="opacity:.4">Sélectionnez un profil</button>
   </div>
 </div>
 
@@ -333,7 +379,7 @@ select.finput option{background:var(--bg3);}
 
 <!-- ══ CHAT ══ -->
 <div class="screen" id="chatScreen">
-  <div class="hdr"><div class="hdr-back" onclick="nav('profilsScreen')">←</div><div class="hdr-ico">🤖</div><div style="flex:1"><div class="hdr-title">Dokita IA</div><div class="hdr-sub" id="chatSub">Assistant médical</div></div></div>
+  <div class="hdr"><div class="hdr-back" onclick="sauvegarderSession();nav('espaceProfilScreen')">←</div><div class="hdr-ico">🤖</div><div style="flex:1"><div class="hdr-title">Dokita IA</div><div class="hdr-sub" id="chatSub">Assistant médical</div></div></div>
   <div class="chat-profil" id="chatPBar" style="display:none;">
     <div class="cp-av" id="chatPAv"></div>
     <div><div class="cp-nom" id="chatPNom"></div><div class="cp-info" id="chatPInfo"></div></div>
@@ -349,6 +395,93 @@ select.finput option{background:var(--bg3);}
       <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
     </button>
   </div>
+</div>
+
+<!-- ══ ESPACE PROFIL ══ -->
+<div class="screen" id="espaceProfilScreen">
+  <div class="hdr">
+    <div class="hdr-back" onclick="nav('profilsScreen')">←</div>
+    <div class="hdr-ico" id="epIco"></div>
+    <div style="flex:1"><div class="hdr-title" id="epNom"></div><div class="hdr-sub" id="epInfo"></div></div>
+  </div>
+  <div class="profil-home">
+    <div class="profil-banner">
+      <div class="profil-banner-av" id="epBannerAv"></div>
+      <div>
+        <div class="profil-banner-nom" id="epBannerNom"></div>
+        <div class="profil-banner-info" id="epBannerInfo"></div>
+      </div>
+    </div>
+    <div class="menu-section">
+      <div class="sec-lbl">Consultation</div>
+      <div class="menu-card" onclick="lancerConsult()">
+        <div class="menu-ico" style="background:rgba(0,200,150,.12);">➕</div>
+        <div><div class="menu-title">Nouvelle consultation</div><div class="menu-sub">Décrivez vos symptômes, obtenez un diagnostic</div></div>
+        <div class="menu-arr">›</div>
+      </div>
+      <div class="menu-card" onclick="nav('historiqueScreen');renderHistorique()">
+        <div class="menu-ico" style="background:rgba(74,158,255,.12);">📋</div>
+        <div><div class="menu-title">Reprendre une consultation</div><div class="menu-sub">Historique de vos sessions</div></div>
+        <div class="menu-arr">›</div>
+      </div>
+    </div>
+    <div class="menu-section">
+      <div class="sec-lbl">Dossier médical</div>
+      <div class="menu-card" onclick="ouvrirDossier('ordonnances_med','📋','Ordonnances médicaments','Prescriptions médicamenteuses')">
+        <div class="menu-ico" style="background:rgba(255,77,77,.12);">📋</div>
+        <div><div class="menu-title">Ordonnances médicaments</div><div class="menu-sub">Prescriptions médicamenteuses</div></div>
+        <div class="menu-arr">›</div>
+      </div>
+      <div class="menu-card" onclick="ouvrirDossier('ordonnances_bio','🧪','Ordonnances biologiques','Analyses et bilans')">
+        <div class="menu-ico" style="background:rgba(180,100,255,.12);">🧪</div>
+        <div><div class="menu-title">Ordonnances biologiques</div><div class="menu-sub">Analyses et bilans</div></div>
+        <div class="menu-arr">›</div>
+      </div>
+      <div class="menu-card" onclick="ouvrirDossier('traitements','💊','Traitements réguliers','Médicaments chroniques')">
+        <div class="menu-ico" style="background:rgba(0,200,150,.12);">💊</div>
+        <div><div class="menu-title">Traitements réguliers</div><div class="menu-sub">Médicaments chroniques</div></div>
+        <div class="menu-arr">›</div>
+      </div>
+      <div class="menu-card" onclick="ouvrirDossier('allergies','⚠️','Allergies','Allergies connues')">
+        <div class="menu-ico" style="background:rgba(245,166,35,.12);">⚠️</div>
+        <div><div class="menu-title">Allergies</div><div class="menu-sub">Allergies connues</div></div>
+        <div class="menu-arr">›</div>
+      </div>
+      <div class="menu-card" onclick="ouvrirDossier('vaccins','💉','Vaccins','Carnet de vaccination')">
+        <div class="menu-ico" style="background:rgba(74,158,255,.12);">💉</div>
+        <div><div class="menu-title">Vaccins</div><div class="menu-sub">Carnet de vaccination</div></div>
+        <div class="menu-arr">›</div>
+      </div>
+      <div class="menu-card" onclick="ouvrirDossier('chirurgie','🏥','Opérations chirurgicales','Antécédents chirurgicaux')">
+        <div class="menu-ico" style="background:rgba(255,77,77,.08);">🏥</div>
+        <div><div class="menu-title">Opérations chirurgicales</div><div class="menu-sub">Antécédents chirurgicaux</div></div>
+        <div class="menu-arr">›</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DETAIL DOSSIER ══ -->
+<div class="screen" id="dossierDetailScreen">
+  <div class="hdr">
+    <div class="hdr-back" onclick="nav('espaceProfilScreen')">←</div>
+    <div class="hdr-ico" id="ddIco"></div>
+    <div style="flex:1"><div class="hdr-title" id="ddTitle"></div><div class="hdr-sub" id="ddSub"></div></div>
+  </div>
+  <div class="detail-body">
+    <div class="add-item-btn" onclick="ajouterEntree()" id="ddAddBtn">＋ Ajouter une entrée</div>
+    <div id="ddList"></div>
+  </div>
+</div>
+
+<!-- ══ HISTORIQUE ══ -->
+<div class="screen" id="historiqueScreen">
+  <div class="hdr">
+    <div class="hdr-back" onclick="nav('espaceProfilScreen')">←</div>
+    <div class="hdr-ico">📋</div>
+    <div style="flex:1"><div class="hdr-title">Historique</div><div class="hdr-sub">Consultations précédentes</div></div>
+  </div>
+  <div class="histo-list" id="histoList"></div>
 </div>
 
 <!-- ══ CLINIQUE / HÔPITAL ══ -->
@@ -565,7 +698,7 @@ function renderProfils(){
   } else {
     PROFILS.forEach(function(p,i){
       var a=calcAge(p.naiss);
-      h+='<div class="p-card'+(SEL===i?' sel':'')+'" onclick="selP('+i+')">'+
+      h+='<div class="p-card'+(SEL===i?' sel':'')+'" onclick="ouvrirEspaceProfil('+i+')">'+
         '<div class="p-av '+AVC[i%8]+'">'+p.prenom.charAt(0).toUpperCase()+'</div>'+
         '<div style="flex:1">'+
           '<div class="p-nom">'+p.prenom+' '+p.nom+'</div>'+
@@ -584,7 +717,7 @@ function renderProfils(){
   }
   el.innerHTML=h;
   var btn=document.getElementById('btnConsult');
-  btn.disabled=SEL<0;
+  btn.disabled=true; // on passe par l'espace profil maintenant
 }
 
 function selP(i){SEL=i;renderProfils();}
@@ -835,8 +968,205 @@ async function envoyerDossier(email,nomMed){
 }
 
 // ══════════════════════════════
-// UTILS
+// ESPACE PROFIL
 // ══════════════════════════════
+var DOSSIER_TYPE=''; // type de dossier en cours
+
+function ouvrirEspaceProfil(i){
+  SEL=i;
+  var p=PROFILS[i];
+  var a=calcAge(p.naiss);
+  var nom=p.prenom+' '+p.nom;
+  var info=(a!==null?a+' ans':'')+
+    (p.sx?' · '+(p.sx==='H'?'Masculin':'Féminin'):'')+
+    (p.poids?' · '+p.poids+'kg':'');
+
+  document.getElementById('epIco').textContent=p.prenom.charAt(0).toUpperCase();
+  document.getElementById('epIco').style.background='var(--grad)';
+  document.getElementById('epIco').style.fontFamily="'Syne',sans-serif";
+  document.getElementById('epIco').style.fontWeight='800';
+  document.getElementById('epIco').style.color='#fff';
+  document.getElementById('epNom').textContent=nom;
+  document.getElementById('epInfo').textContent=info;
+
+  document.getElementById('epBannerAv').textContent=p.prenom.charAt(0).toUpperCase();
+  document.getElementById('epBannerNom').textContent=nom;
+  document.getElementById('epBannerInfo').textContent=info+' · Espace de santé Dokita';
+
+  CURRENT=Object.assign({},p,{_idx:i,_eph:false});
+  nav('espaceProfilScreen');
+}
+
+// ══════════════════════════════
+// DOSSIER MÉDICAL
+// ══════════════════════════════
+function getDossierKey(type){return 'dossier_'+PROFILS[SEL].prenom+'_'+SEL+'_'+type;}
+
+function ouvrirDossier(type,ico,title,sub){
+  DOSSIER_TYPE=type;
+  document.getElementById('ddIco').textContent=ico;
+  document.getElementById('ddIco').style.background='var(--bg3)';
+  document.getElementById('ddTitle').textContent=title;
+  document.getElementById('ddSub').textContent=sub;
+  renderDossierDetail(type);
+  nav('dossierDetailScreen');
+}
+
+function renderDossierDetail(type){
+  var key=getDossierKey(type);
+  var items=[];
+  try{var s=localStorage.getItem(key);if(s)items=JSON.parse(s);}catch(e){}
+  var el=document.getElementById('ddList');
+  if(!items.length){
+    el.innerHTML='<div class="detail-empty">📂 Aucune entrée pour l\'instant.<br>Appuyez sur + pour ajouter.</div>';
+    return;
+  }
+  el.innerHTML=items.map(function(it,i){
+    return '<div class="detail-item">'+
+      '<div class="detail-item-title">'+escHtml(it.titre)+'</div>'+
+      '<div class="detail-item-val">'+escHtml(it.valeur).replace(/\n/g,'<br>')+'</div>'+
+      '<div class="detail-item-date" style="display:flex;justify-content:space-between;align-items:center;">'+
+        '<span>'+it.date+'</span>'+
+        '<span onclick="supprimerEntree('+i+')" style="color:var(--danger);cursor:pointer;font-size:12px;">🗑 Supprimer</span>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function ajouterEntree(){
+  var type=DOSSIER_TYPE;
+  var labels={
+    ordonnances_med:'Ex: Amoxicilline 500mg — 3x/jour — 7 jours',
+    ordonnances_bio:'Ex: NFS, Glycémie, Créatinine',
+    traitements:'Ex: Metformine 850mg — 2x/jour (chronique)',
+    allergies:'Ex: Pénicilline — réaction urticaire',
+    vaccins:'Ex: Vaccin Fièvre jaune — 12/03/2024',
+    chirurgie:'Ex: Appendicectomie — Clinique du Plateau — 2019'
+  };
+  var titreLabels={
+    ordonnances_med:'Médicament / Posologie',
+    ordonnances_bio:'Examen demandé',
+    traitements:'Traitement',
+    allergies:'Allergie',
+    vaccins:'Vaccin',
+    chirurgie:'Opération'
+  };
+
+  // Modal inline simple
+  var modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:flex;align-items:flex-end;';
+  modal.innerHTML='<div style="background:var(--bg2);border-radius:20px 20px 0 0;padding:24px;width:100%;padding-bottom:calc(24px + var(--sb));">'+
+    '<div style="font-family:\'Syne\',sans-serif;font-size:16px;font-weight:800;color:var(--text);margin-bottom:16px;">Nouvelle entrée</div>'+
+    '<div style="margin-bottom:12px;"><label style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:6px;">'+titreLabels[type]+'</label>'+
+    '<input id="modalTitre" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:11px 13px;font-family:\'DM Sans\',sans-serif;font-size:14px;color:var(--text);outline:none;" placeholder="'+titreLabels[type]+'..."/></div>'+
+    '<div style="margin-bottom:16px;"><label style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:6px;">Détails</label>'+
+    '<textarea id="modalVal" rows="3" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:11px 13px;font-family:\'DM Sans\',sans-serif;font-size:13px;color:var(--text);outline:none;resize:none;" placeholder="'+labels[type]+'"></textarea></div>'+
+    '<div style="display:flex;gap:10px;">'+
+    '<button onclick="this.closest(\'div[style]\').remove()" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:12px;font-family:\'Syne\',sans-serif;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;">Annuler</button>'+
+    '<button id="modalOk" style="flex:1;background:var(--grad);border:none;border-radius:11px;padding:12px;font-family:\'Syne\',sans-serif;font-size:13px;font-weight:700;color:#fff;cursor:pointer;">Enregistrer</button>'+
+    '</div></div>';
+  document.body.appendChild(modal);
+  document.getElementById('modalTitre').focus();
+  document.getElementById('modalOk').onclick=function(){
+    var titre=(document.getElementById('modalTitre').value||'').trim();
+    var valeur=(document.getElementById('modalVal').value||'').trim();
+    if(!titre){document.getElementById('modalTitre').style.borderColor='var(--danger)';return;}
+    var key=getDossierKey(type);
+    var items=[];
+    try{var s=localStorage.getItem(key);if(s)items=JSON.parse(s);}catch(e){}
+    items.unshift({titre:titre,valeur:valeur,date:new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'})});
+    try{localStorage.setItem(key,JSON.stringify(items));}catch(e){}
+    modal.remove();
+    renderDossierDetail(type);
+    toast('✅ Entrée ajoutée');
+  };
+}
+
+function supprimerEntree(i){
+  if(!confirm('Supprimer cette entrée ?'))return;
+  var key=getDossierKey(DOSSIER_TYPE);
+  var items=[];
+  try{var s=localStorage.getItem(key);if(s)items=JSON.parse(s);}catch(e){}
+  items.splice(i,1);
+  try{localStorage.setItem(key,JSON.stringify(items));}catch(e){}
+  renderDossierDetail(DOSSIER_TYPE);
+  toast('🗑 Entrée supprimée');
+}
+
+// ══════════════════════════════
+// HISTORIQUE CONSULTATIONS
+// ══════════════════════════════
+function getHistoKey(){return 'histo_'+PROFILS[SEL].prenom+'_'+SEL;}
+
+function sauvegarderSession(){
+  if(!CURRENT||CURRENT._eph||!msgs.length)return;
+  var key=getHistoKey();
+  var sessions=[];
+  try{var s=localStorage.getItem(key);if(s)sessions=JSON.parse(s);}catch(e){}
+  var userMsgs=msgs.filter(function(m){return m.role==='user';}).map(function(m){return m.text;});
+  var aiMsgs=msgs.filter(function(m){return m.role==='ai'&&m.text.length>80;});
+  var diag=aiMsgs.length?aiMsgs[aiMsgs.length-1].text.slice(0,150):'';
+  var symp=userMsgs.slice(0,3).join(', ').slice(0,120);
+  sessions.unshift({
+    date:new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}),
+    symptomes:symp,
+    diagnostic:diag,
+    messages:msgs.slice(0,30)
+  });
+  if(sessions.length>20)sessions=sessions.slice(0,20);
+  try{localStorage.setItem(key,JSON.stringify(sessions));}catch(e){}
+}
+
+function renderHistorique(){
+  var el=document.getElementById('histoList');
+  var key=getHistoKey();
+  var sessions=[];
+  try{var s=localStorage.getItem(key);if(s)sessions=JSON.parse(s);}catch(e){}
+  if(!sessions.length){
+    el.innerHTML='<div class="detail-empty">📋 Aucune consultation enregistrée.<br>Vos sessions apparaîtront ici.</div>';
+    return;
+  }
+  el.innerHTML=sessions.map(function(s,i){
+    return '<div class="histo-card" onclick="reprendreSession('+i+')">'+
+      '<div class="histo-date">'+s.date+'</div>'+
+      (s.symptomes?'<div class="histo-symp">🤒 '+escHtml(s.symptomes)+'</div>':'')+
+      (s.diagnostic?'<div class="histo-diag" style="margin-top:6px;font-size:12px;">'+escHtml(s.diagnostic.slice(0,100))+'...</div>':'')+
+      '<div class="histo-badge">Voir la consultation →</div>'+
+    '</div>';
+  }).join('');
+}
+
+function reprendreSession(i){
+  var key=getHistoKey();
+  var sessions=[];
+  try{var s=localStorage.getItem(key);if(s)sessions=JSON.parse(s);}catch(e){}
+  var session=sessions[i];
+  if(!session)return;
+  CID=null;msgs=[];BEST_MED=null;NOTION_MEDS=[];MEDS_LOADED=false;
+  document.getElementById('msgsList').innerHTML='';
+  document.getElementById('recoBox').style.display='none';
+  document.getElementById('chatInp').value='';
+
+  var p=CURRENT;
+  var a=calcAge(p.naiss);
+  var nom=p.prenom+(p.nom?' '+p.nom:'');
+  document.getElementById('chatPBar').style.display='flex';
+  var av=document.getElementById('chatPAv');
+  av.textContent=p.prenom.charAt(0).toUpperCase();
+  av.className='cp-av '+(p._idx>=0?AVC[p._idx%8]:'av0');
+  document.getElementById('chatPNom').textContent=nom;
+  document.getElementById('chatPInfo').textContent='Consultation du '+session.date;
+  document.getElementById('chatSub').textContent='Session du '+session.date;
+
+  // Recharger les messages de la session
+  session.messages.forEach(function(m){addMsg(m.role,m.text);});
+  addMsg('ai','_Session reprise. Vous pouvez continuer cette consultation ou poser de nouvelles questions._');
+  nav('chatScreen');
+}
+
+function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+
 function toast(msg){
   var t=document.createElement('div');t.className='toast';t.textContent=msg;
   document.body.appendChild(t);
