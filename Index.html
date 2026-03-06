@@ -300,16 +300,26 @@ async function chargerNotion(){
   var btn=document.getElementById('refreshBtn');
   if(btn)btn.classList.add('spin');
   setNotionStatus('sync','Chargement...');
+  dbg('chargerNotion: debut appel /api/notion');
   document.getElementById('dList').innerHTML='<div class="loading-state"><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span><br><br>Chargement depuis Notion...</div>';
   try{
+    dbg('requete DB: '+NOTION_DB);
     var data=await notionRequest('/databases/'+NOTION_DB+'/query','POST',{
       sorts:[{property:'Date',direction:'descending'}],
       page_size:50
     });
-    DOSSIERS=data.results.map(parseDossierNotion);
-    renderDash();
-    setNotionStatus('ok',DOSSIERS.length+' dossiers — '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
+    dbg('reponse OK: '+JSON.stringify(Object.keys(data)));
+    if(data.results){
+      dbg('nb resultats: '+data.results.length);
+      DOSSIERS=data.results.map(parseDossierNotion);
+      renderDash();
+      setNotionStatus('ok',DOSSIERS.length+' dossiers — '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
+    } else {
+      dbg('ERREUR: '+JSON.stringify(data));
+      setNotionStatus('err','Erreur: '+(data.message||JSON.stringify(data)));
+    }
   }catch(e){
+    dbg('EXCEPTION: '+e.message);
     setNotionStatus('err','Erreur: '+e.message);
     document.getElementById('dList').innerHTML='<div class="empty"><div class="empty-ico">⚠️</div><div class="empty-txt">Impossible de charger les dossiers<br><span style="font-size:11px;color:var(--text3)">'+e.message+'</span></div></div>';
   }
@@ -877,6 +887,25 @@ function toast(msg){
   document.body.appendChild(t);
   setTimeout(function(){t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(function(){t.remove();},300);},2500);
 }
+function dbg(msg){
+  var panel=document.getElementById('debugPanel');
+  var log=document.getElementById('debugLog');
+  if(!panel||!log)return;
+  panel.style.display='flex';
+  var line=document.createElement('div');
+  line.style.borderBottom='1px solid #1a1a1a';
+  line.style.padding='2px 0';
+  line.textContent=new Date().toLocaleTimeString()+' '+msg;
+  log.appendChild(line);
+  log.scrollTop=log.scrollHeight;
+}
 </script>
+<div id="debugPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#0a0a0a;border-top:1px solid #333;flex-direction:column;z-index:9999;max-height:160px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-bottom:1px solid #222;">
+    <span style="color:#666;font-size:9px;font-family:monospace;">DEBUG</span>
+    <span onclick="document.getElementById('debugPanel').style.display='none'" style="color:#666;cursor:pointer;font-size:14px;padding:0 4px;">X</span>
+  </div>
+  <div id="debugLog" style="flex:1;overflow-y:auto;padding:6px 8px;font-family:monospace;font-size:9px;color:#00ff88;line-height:1.6;"></div>
+</div>
 </body>
 </html>
