@@ -7,11 +7,18 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 :root{
+  --bg:#0D1B2A;--bg2:#162232;--bg3:#1E2E40;--card:#1A2B3C;--border:#253D54;
+  --accent:#00C896;--accent2:#4A9EFF;--warn:#F5A623;--danger:#FF4D4D;
+  --text:#F0F6FF;--text2:#8BA8C4;--text3:#4A6A8A;--white:#FFFFFF;
+  --grad:linear-gradient(135deg,#00C896,#4A9EFF);
+  --sb:env(safe-area-inset-bottom,0px);--st:env(safe-area-inset-top,0px);
+}
+/* ══ THÈME CLAIR ══ */
+body.light{
   --bg:#EEF4F0;--bg2:#FFFFFF;--bg3:#F4F8F5;--card:#FFFFFF;--border:#D6E8DF;
   --accent:#00A878;--accent2:#2D7DD2;--warn:#E8920A;--danger:#D93025;
   --text:#0D2318;--text2:#4A6B5A;--text3:#9DBDAD;--white:#FFFFFF;
   --grad:linear-gradient(135deg,#00A878,#2D7DD2);
-  --sb:env(safe-area-inset-bottom,0px);--st:env(safe-area-inset-top,0px);
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;overflow:hidden;}
@@ -243,6 +250,12 @@ select.finput option{background:var(--bg3);}
 .doss-tile-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px;}
 .doss-tile-sub{font-size:10px;color:var(--text2);}
 
+/* ══ TOGGLE THÈME ══ */
+.theme-toggle{width:46px;height:26px;border-radius:13px;background:var(--bg3);border:2px solid var(--border);position:relative;cursor:pointer;transition:all .3s;flex-shrink:0;}
+.theme-toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--text3);transition:all .3s;}
+.theme-toggle.on{background:var(--accent);border-color:var(--accent);}
+.theme-toggle.on::after{left:22px;background:#fff;}
+
 /* ══ TOAST ══ */
 .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,.1);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:9px 16px;font-size:12px;color:#fff;z-index:999;white-space:nowrap;}
 
@@ -256,8 +269,13 @@ select.finput option{background:var(--bg3);}
 <!-- ══ ACCUEIL ══ -->
 <div class="screen on" id="accueilScreen">
   <div class="hero">
-    <div class="logo">Dokita</div>
-    <div class="logo-tag">Plateforme médicale • Afrique & Maladies tropicales</div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div>
+        <div class="logo">Dokita</div>
+        <div class="logo-tag">Plateforme médicale • Afrique & Maladies tropicales</div>
+      </div>
+      <div onclick="openParametres()" style="width:36px;height:36px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0;margin-top:4px;">⚙️</div>
+    </div>
     <div class="hero-badges">
       <div class="hbadge">🌍 Afrique</div>
       <div class="hbadge">📋 OMS</div>
@@ -541,6 +559,54 @@ select.finput option{background:var(--bg3);}
   <div class="sbody">
     <input class="geo-search" id="pharmacieSearch" placeholder="Rechercher une pharmacie..." oninput="filterGeo('pharmacie',this.value)"/>
     <div id="pharmacieList"><div class="no-geo">📍 Activation de la géolocalisation...</div></div>
+  </div>
+</div>
+
+<!-- ══ PARAMÈTRES ══ -->
+<div class="screen" id="parametresScreen">
+  <div class="hdr">
+    <div class="hdr-back" onclick="nav('accueilScreen')">←</div>
+    <div class="hdr-ico">⚙️</div>
+    <div style="flex:1"><div class="hdr-title">Paramètres</div></div>
+  </div>
+  <div class="sbody">
+    <div class="sec-lbl" style="margin-bottom:12px;">Apparence</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;">
+      <div style="padding:16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--text);">🌙 Mode sombre</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px;">Fond foncé — confort nocturne</div>
+        </div>
+        <div class="theme-toggle" id="toggleSombre" onclick="setTheme('dark')"></div>
+      </div>
+      <div style="padding:16px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--text);">☀️ Mode clair</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px;">Fond clair — utilisation en journée</div>
+        </div>
+        <div class="theme-toggle" id="toggleClair" onclick="setTheme('light')"></div>
+      </div>
+    </div>
+
+    <div class="sec-lbl" style="margin-top:20px;margin-bottom:12px;">Données</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;">
+      <div style="padding:16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--text);">👥 Profils enregistrés</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px;" id="paramProfilCount">Chargement...</div>
+        </div>
+      </div>
+      <div style="padding:16px;cursor:pointer;" onclick="clearAllData()">
+        <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--danger);">🗑 Effacer toutes les données</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px;">Profils, historique, dossiers médicaux</div>
+      </div>
+    </div>
+
+    <div class="sec-lbl" style="margin-top:20px;margin-bottom:12px;">À propos</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;">
+      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;">Dokita v1.0</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;">Plateforme médicale IA pour l'Afrique.<br>Spécialisée maladies tropicales & OMS.<br>Outil d'aide à la décision — ne remplace pas un médecin.</div>
+    </div>
   </div>
 </div>
 
@@ -1346,6 +1412,47 @@ function dbg(msg){
   log.appendChild(line);
   log.scrollTop=log.scrollHeight;
 }
+
+// ══════════════════════════════
+// THÈME
+// ══════════════════════════════
+function initTheme(){
+  var t=localStorage.getItem('dokita_theme')||'dark';
+  applyTheme(t,false);
+}
+function setTheme(t){
+  applyTheme(t,true);
+  localStorage.setItem('dokita_theme',t);
+}
+function applyTheme(t,save){
+  if(t==='light'){
+    document.body.classList.add('light');
+    document.getElementById('toggleClair').classList.add('on');
+    document.getElementById('toggleSombre').classList.remove('on');
+  } else {
+    document.body.classList.remove('light');
+    document.getElementById('toggleSombre').classList.add('on');
+    document.getElementById('toggleClair').classList.remove('on');
+  }
+}
+function openParametres(){
+  // Mettre à jour le compte de profils
+  var n=PROFILS.length;
+  var el=document.getElementById('paramProfilCount');
+  if(el)el.textContent=n+' profil'+(n>1?'s':'')+(n?' : '+PROFILS.map(function(p){return p.prenom;}).join(', '):'');
+  nav('parametresScreen');
+  // Sync toggles avec thème actuel
+  var t=localStorage.getItem('dokita_theme')||'dark';
+  applyTheme(t,false);
+}
+function clearAllData(){
+  if(!confirm('Effacer TOUTES les données Dokita ?\nProfils, historique, dossiers médicaux.\nCette action est irréversible.'))return;
+  localStorage.clear();
+  PROFILS=[];SEL=-1;CURRENT=null;KEY='';
+  toast('🗑 Toutes les données effacées');
+  setTimeout(function(){nav('accueilScreen');},1000);
+}
+initTheme();
 
 // ══════════════════════════════
 // DICTÉE VOCALE
