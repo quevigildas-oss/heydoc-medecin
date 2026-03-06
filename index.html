@@ -968,20 +968,73 @@ async function envoyerDossier(email,nomMed){
   var nom=p.prenom+(p.nom?' '+p.nom:'');
   var dateISO=new Date().toISOString().split('T')[0];
   var id='DOS-'+Date.now().toString().slice(-6);
-  var symptomes=msgs.filter(function(m){return m.role==='user';}).map(function(m){return m.text;}).join(' | ').slice(0,500);
-  var diagIA=msgs.filter(function(m){return m.role==='ai'&&m.text.length>80;}).slice(-2).map(function(m){return m.text;}).join(' ').slice(0,800);
-  var payload={id:id,patient_nom:nom,patient_age:String(a||''),
-    patient_poids:String(p.poids||''),patient_ville:'Non renseignée',patient_voyage:'Aucun',
-    symptomes:symptomes,diagnostic_ia:diagIA,recommandations_oms:'',examens_recommandes:'',
-    statut:'en_attente',medecin:nomMed,date:dateISO};
+
+  toast('⏳ Résumé en cours...');
+
+  // ── ÉTAPE 1 : demander le résumé JSON à l'agent ──
+  var resume={};
+  try{
+    var ah=RP+':'+KEY;
+    // Envoyer dans la même conversation (CID) pour que l'agent ait le contexte
+    var b={message:{role:'user',content:'RESUME_CONSULTATION'},agent_id:RA};
+    if(CID)b.conversation_id=CID;
+    var r=await fetch(TURL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':ah},body:JSON.stringify(b)});
+    var d=await r.json();
+    var sid=d.job_info&&d.job_info.studio_id;
+    var jid=d.job_info&&d.job_info.job_id;
+    if(sid&&jid){
+      var rep=await poll(sid,jid,ah);
+      if(rep){
+        // Nettoyer et parser le JSON
+        var clean=rep.replace(/```json|```/g,'').trim();
+        var start=clean.indexOf('{');
+        if(start>=0)clean=clean.slice(start);
+        resume=JSON.parse(clean);
+      }
+    }
+  }catch(e){
+    // Fallback : extraction depuis les messages si l'agent ne répond pas en JSON
+    resume={
+      nom:nom,
+      age:String(a||''),
+      poids:String(p.poids||''),
+      ville:'Non renseignée',
+      voyage:'Aucun',
+      symptomes:msgs.filter(function(m){return m.role==='user';}).map(function(m){return m.text;}).join(' | ').slice(0,500),
+      diagnostic:msgs.filter(function(m){return m.role==='ai'&&m.text.length>80;}).slice(-1).map(function(m){return m.text;}).join('').slice(0,800),
+      recommandations:'',
+      examens:''
+    };
+  }
+
+  // ── ÉTAPE 2 : construire le payload Notion ──
+  var payload={
+    id:id,
+    patient_nom:resume.nom||nom,
+    patient_age:String(resume.age||a||''),
+    patient_poids:String(resume.poids||p.poids||''),
+    patient_ville:resume.ville||'Non renseignée',
+    patient_voyage:resume.voyage||'Aucun',
+    symptomes:(resume.symptomes||'').slice(0,500),
+    diagnostic_ia:(resume.diagnostic||'').slice(0,800),
+    recommandations_oms:(resume.recommandations||'').slice(0,500),
+    examens_recommandes:(resume.examens||'').slice(0,500),
+    statut:'en_attente',
+    medecin:nomMed,
+    date:dateISO
+  };
+
+  // ── ÉTAPE 3 : envoyer à Make → Notion ──
   try{
     await fetch(MAKE_WEBHOOK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     toast('✅ Dossier envoyé à '+nomMed);
-  }catch(e){toast('⚠️ Erreur: '+e.message);}
+  }catch(e){toast('⚠️ Erreur Notion: '+e.message);}
+
+  // ── ÉTAPE 4 : email au médecin ──
   var ds=new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'});
-  var resume=msgs.map(function(m){return '['+m.time+'] '+(m.role==='user'?'Patient':'IA')+': '+m.text;}).join('\n');
+  var emailResume='SYMPTÔMES:\n'+(resume.symptomes||'')+'\n\nDIAGNOSTIC IA:\n'+(resume.diagnostic||'')+'\n\nRECOMMANDATIONS OMS:\n'+(resume.recommandations||'')+'\n\nEXAMENS:\n'+(resume.examens||'');
   var sub=encodeURIComponent('[Dokita] Dossier — '+nom+' — '+ds);
-  var body=encodeURIComponent('Bonjour Dr. '+nomMed+',\n\nNouveau dossier patient Dokita!\n\nPatient: '+nom+'\nÂge: '+a+' ans\nSexe: '+(p.sx==='H'?'Masculin':p.sx==='F'?'Féminin':'—')+'\nPoids: '+(p.poids||'—')+'kg\n\nConsultation:\n'+resume+'\n\n---\nDokita — Outil d\'aide à la décision médicale');
+  var body=encodeURIComponent('Bonjour Dr. '+nomMed+',\n\nNouveau dossier patient Dokita.\n\n=== PATIENT ===\nNom: '+(resume.nom||nom)+'\nÂge: '+(resume.age||a)+' ans\nSexe: '+(p.sx==='H'?'Masculin':p.sx==='F'?'Féminin':'—')+'\nPoids: '+(resume.poids||p.poids||'—')+'kg\nVille: '+(resume.ville||'—')+'\n\n=== CONSULTATION ===\n'+emailResume+'\n\n---\nDokita — Outil d\'aide à la décision médicale');
   window.location.href='mailto:'+email+'?subject='+sub+'&body='+body;
 }
 
