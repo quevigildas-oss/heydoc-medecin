@@ -926,17 +926,22 @@ async function poll(sid,jid,ah){
         }
         // Format 2 : chain-success (format Relevance AI agent)
         if(up.type==='chain-success'){
-          dbg('chain-success output keys: '+Object.keys(up.output||{}).join(','));
-          if(up.output&&up.output.answer)return up.output.answer;
-          if(up.output&&up.output.output)return up.output.output;
-          if(up.output&&up.output.response)return up.output.response;
-          if(up.output&&up.output.text)return up.output.text;
-          if(up.output&&up.output.message)return up.output.message;
-          // Chercher récursivement la première string longue dans output
-          if(up.output){
-            for(var k in up.output){
-              if(typeof up.output[k]==='string'&&up.output[k].length>30)return up.output[k];
-            }
+          var o=up.output||{};
+          // La réponse est dans output.output (imbriqué)
+          var inner=o.output||{};
+          dbg('inner keys: '+Object.keys(inner).join(','));
+          if(typeof inner==='string'&&inner.length>10)return inner;
+          if(inner.answer&&typeof inner.answer==='string')return inner.answer;
+          if(inner.response&&typeof inner.response==='string')return inner.response;
+          if(inner.text&&typeof inner.text==='string')return inner.text;
+          if(inner.message&&typeof inner.message==='string')return inner.message;
+          // Chercher récursivement la première string longue
+          for(var k in inner){
+            if(typeof inner[k]==='string'&&inner[k].length>30)return inner[k];
+          }
+          // Fallback : chercher directement dans o
+          for(var k2 in o){
+            if(typeof o[k2]==='string'&&o[k2].length>30)return o[k2];
           }
         }
         // Format 3 : message assistant
