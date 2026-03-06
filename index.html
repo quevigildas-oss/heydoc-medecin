@@ -392,7 +392,7 @@ select.finput option{background:var(--bg3);}
 
 <!-- ══ CHAT ══ -->
 <div class="screen" id="chatScreen">
-  <div class="hdr"><div class="hdr-back" onclick="sauvegarderSession();nav('espaceProfilScreen')">←</div><div class="hdr-ico">🤖</div><div style="flex:1"><div class="hdr-title">Dokita IA</div><div class="hdr-sub" id="chatSub">Assistant médical</div></div></div>
+  <div class="hdr"><div class="hdr-back" onclick="nav('espaceProfilScreen')">←</div><div class="hdr-ico">🤖</div><div style="flex:1"><div class="hdr-title">Dokita IA</div><div class="hdr-sub" id="chatSub">Assistant médical</div></div></div>
   <div class="chat-profil" id="chatPBar" style="display:none;">
     <div class="cp-av" id="chatPAv"></div>
     <div><div class="cp-nom" id="chatPNom"></div><div class="cp-info" id="chatPInfo"></div></div>
@@ -880,7 +880,8 @@ async function sendMsg(){
     (p.sx?', '+(p.sx==='H'?'Homme':'Femme'):'')+
     (p.poids?', '+p.poids+'kg':'')+'] ';
   var isFirst=msgs.filter(function(m){return m.role==='user';}).length===1;
-  var fullTxt=isFirst?ctx+txt:txt;
+  // N'envoyer le contexte patient que sur le 1er message d'une NOUVELLE consultation
+  var fullTxt=(isFirst&&!CURRENT._reprise)?ctx+txt:txt;
   try{
     var ah=RP+':'+KEY;
     var b={message:{role:'user',content:fullTxt},agent_id:RA};
@@ -1027,6 +1028,8 @@ async function envoyerDossier(email,nomMed){
   // ── ÉTAPE 3 : envoyer à Make → Notion ──
   try{
     await fetch(MAKE_WEBHOOK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    // Sauvegarder la session dans l'historique uniquement si envoi réussi
+    sauvegarderSession(resume);
     toast('✅ Dossier envoyé à '+nomMed);
   }catch(e){toast('⚠️ Erreur Notion: '+e.message);}
 
@@ -1169,20 +1172,23 @@ function supprimerEntree(i){
 // ══════════════════════════════
 function getHistoKey(){return 'histo_'+PROFILS[SEL].prenom+'_'+SEL;}
 
-function sauvegarderSession(){
+function sauvegarderSession(resume){
   if(!CURRENT||CURRENT._eph||!msgs.length)return;
+  if(CURRENT._reprise)return;
   var key=getHistoKey();
   var sessions=[];
   try{var s=localStorage.getItem(key);if(s)sessions=JSON.parse(s);}catch(e){}
-  var userMsgs=msgs.filter(function(m){return m.role==='user';}).map(function(m){return m.text;});
-  var aiMsgs=msgs.filter(function(m){return m.role==='ai'&&m.text.length>80;});
-  var diag=aiMsgs.length?aiMsgs[aiMsgs.length-1].text.slice(0,150):'';
-  var symp=userMsgs.slice(0,3).join(', ').slice(0,120);
+  // Utiliser le résumé de l'agent si disponible, sinon fallback
+  var symp=resume&&resume.symptomes?resume.symptomes.slice(0,120):
+    msgs.filter(function(m){return m.role==='user';}).slice(0,3).map(function(m){return m.text;}).join(', ').slice(0,120);
+  var diag=resume&&resume.diagnostic?resume.diagnostic.slice(0,150):
+    msgs.filter(function(m){return m.role==='ai'&&m.text.length>80;}).slice(-1).map(function(m){return m.text;}).join('').slice(0,150);
   sessions.unshift({
     date:new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}),
     symptomes:symp,
     diagnostic:diag,
-    messages:msgs.slice(0,30)
+    messages:msgs.slice(0,30),
+    cid:CID||null
   });
   if(sessions.length>20)sessions=sessions.slice(0,20);
   try{localStorage.setItem(key,JSON.stringify(sessions));}catch(e){}
@@ -1213,25 +1219,43 @@ function reprendreSession(i){
   try{var s=localStorage.getItem(key);if(s)sessions=JSON.parse(s);}catch(e){}
   var session=sessions[i];
   if(!session)return;
-  CID=null;msgs=[];BEST_MED=null;NOTION_MEDS=[];MEDS_LOADED=false;
+  // Marquer comme reprise pour ne pas dupliquer dans l'historique
+  CURRENT._reprise=true;
+  CID=session.cid||null; // restaurer le CID si sauvegardé
+  msgs=[];BEST_MED=null;NOTION_MEDS=[];MEDS_LOADED=false;
   document.getElementById('msgsList').innerHTML='';
   document.getElementById('recoBox').style.display='none';
   document.getElementById('chatInp').value='';
 
   var p=CURRENT;
-  var a=calcAge(p.naiss);
   var nom=p.prenom+(p.nom?' '+p.nom:'');
   document.getElementById('chatPBar').style.display='flex';
   var av=document.getElementById('chatPAv');
   av.textContent=p.prenom.charAt(0).toUpperCase();
   av.className='cp-av '+(p._idx>=0?AVC[p._idx%8]:'av0');
   document.getElementById('chatPNom').textContent=nom;
-  document.getElementById('chatPInfo').textContent='Consultation du '+session.date;
+  document.getElementById('chatPInfo').textContent='Reprise — '+session.date;
   document.getElementById('chatSub').textContent='Session du '+session.date;
 
-  // Recharger les messages de la session
-  session.messages.forEach(function(m){addMsg(m.role,m.text);});
-  addMsg('ai','_Session reprise. Vous pouvez continuer cette consultation ou poser de nouvelles questions._');
+  // Recharger les messages sans déclencher addMsg (pour éviter de re-pousser dans msgs[])
+  session.messages.forEach(function(m){
+    msgs.push(m);
+    var d=document.createElement('div');
+    d.className='msg '+m.role;
+    d.innerHTML='<div class="msg-b">'+
+      m.text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/_(.+?)_/g,'<em>$1</em>').replace(/\n/g,'<br>')+
+    '</div><div class="msg-t">'+m.time+'</div>';
+    document.getElementById('msgsList').appendChild(d);
+  });
+  document.getElementById('msgsList').scrollTop=999999;
+
+  // Message de reprise sans le pousser dans msgs (ne pas polluer la conversation)
+  var d=document.createElement('div');
+  d.className='msg ai';
+  d.innerHTML='<div class="msg-b" style="background:rgba(0,168,120,.08);border:1px dashed var(--accent);"><em>Session reprise. Posez vos nouvelles questions.</em></div>';
+  document.getElementById('msgsList').appendChild(d);
+  document.getElementById('msgsList').scrollTop=999999;
+
   nav('chatScreen');
 }
 
