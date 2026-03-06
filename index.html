@@ -13,13 +13,7 @@
   --grad:linear-gradient(135deg,#00C896,#4A9EFF);
   --sb:env(safe-area-inset-bottom,0px);--st:env(safe-area-inset-top,0px);
 }
-/* ══ THÈME CLAIR ══ */
-body.light{
-  --bg:#EEF4F0;--bg2:#FFFFFF;--bg3:#F4F8F5;--card:#FFFFFF;--border:#D6E8DF;
-  --accent:#00A878;--accent2:#2D7DD2;--warn:#E8920A;--danger:#D93025;
-  --text:#0D2318;--text2:#4A6B5A;--text3:#9DBDAD;--white:#FFFFFF;
-  --grad:linear-gradient(135deg,#00A878,#2D7DD2);
-}
+/* ══ THÈME — géré dynamiquement par JS ══ */
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;overflow:hidden;}
 #app{height:100%;position:relative;}
@@ -1414,31 +1408,44 @@ function dbg(msg){
 // ══════════════════════════════
 // THÈME
 // ══════════════════════════════
+var THEMES={
+  dark:{
+    '--bg':'#0D1B2A','--bg2':'#162232','--bg3':'#1E2E40','--card':'#1A2B3C',
+    '--border':'#253D54','--accent':'#00C896','--accent2':'#4A9EFF',
+    '--warn':'#F5A623','--danger':'#FF4D4D',
+    '--text':'#F0F6FF','--text2':'#8BA8C4','--text3':'#4A6A8A',
+    '--grad':'linear-gradient(135deg,#00C896,#4A9EFF)'
+  },
+  light:{
+    '--bg':'#EEF4F0','--bg2':'#FFFFFF','--bg3':'#F4F8F5','--card':'#FFFFFF',
+    '--border':'#D6E8DF','--accent':'#00A878','--accent2':'#2D7DD2',
+    '--warn':'#E8920A','--danger':'#D93025',
+    '--text':'#0D2318','--text2':'#4A6B5A','--text3':'#9DBDAD',
+    '--grad':'linear-gradient(135deg,#00A878,#2D7DD2)'
+  }
+};
 function initTheme(){
   var t=localStorage.getItem('dokita_theme')||'dark';
-  if(t==='light')document.body.classList.add('light');
-  else document.body.classList.remove('light');
+  applyThemeVars(t);
 }
 function setTheme(t){
   localStorage.setItem('dokita_theme',t);
-  if(t==='light'){
-    document.body.classList.add('light');
-  } else {
-    document.body.classList.remove('light');
-  }
+  applyThemeVars(t);
   syncToggles(t);
+}
+function applyThemeVars(t){
+  var vars=THEMES[t]||THEMES.dark;
+  var root=document.documentElement;
+  for(var k in vars)root.style.setProperty(k,vars[k]);
 }
 function syncToggles(t){
   var ts=document.getElementById('toggleSombre');
   var tc=document.getElementById('toggleClair');
   if(!ts||!tc)return;
-  if(t==='light'){
-    tc.classList.add('on');ts.classList.remove('on');
-  } else {
-    ts.classList.add('on');tc.classList.remove('on');
-  }
+  if(t==='light'){tc.classList.add('on');ts.classList.remove('on');}
+  else{ts.classList.add('on');tc.classList.remove('on');}
 }
-function applyTheme(t,save){}
+function applyTheme(){}
 function openParametres(){
   var n=PROFILS.length;
   var el=document.getElementById('paramProfilCount');
