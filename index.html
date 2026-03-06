@@ -1058,8 +1058,8 @@ async function envoyerDossier(email,nomMed){
     patient_nom:resume.nom||nom,
     patient_age:String(resume.age||a||''),
     patient_poids:String(resume.poids||p.poids||''),
-    patient_ville:resume.ville||'Non renseignée',
-    patient_voyage:resume.voyage||'Aucun',
+    patient_ville:(resume.ville||'Non renseignée').replace(/,/g,' -').slice(0,50),
+    patient_voyage:(resume.voyage||'Aucun').replace(/,/g,' -').slice(0,80),
     symptomes:(resume.symptomes||'').slice(0,500),
     diagnostic_ia:(resume.diagnostic||'').slice(0,800),
     recommandations_oms:(resume.recommandations||'').slice(0,500),
@@ -1251,17 +1251,40 @@ function renderHistorique(){
   var sessions=[];
   try{var s=localStorage.getItem(key);if(s)sessions=JSON.parse(s);}catch(e){}
   if(!sessions.length){
-    el.innerHTML='<div class="detail-empty">📋 Aucune consultation enregistrée.<br>Vos sessions apparaîtront ici.</div>';
+    el.innerHTML='<div class="detail-empty">📋 Aucune consultation enregistrée.<br>Vos sessions apparaîtront ici après envoi d\'un dossier.</div>';
     return;
   }
-  el.innerHTML=sessions.map(function(s,i){
-    return '<div class="histo-card" onclick="reprendreSession('+i+')">'+
-      '<div class="histo-date">'+s.date+'</div>'+
+  var h='<div style="display:flex;justify-content:flex-end;margin-bottom:12px;">'+
+    '<div onclick="viderHistorique()" style="background:rgba(217,48,37,.08);border:1px solid rgba(217,48,37,.2);border-radius:10px;padding:7px 14px;font-size:12px;font-weight:600;color:var(--danger);cursor:pointer;">🗑 Tout effacer</div>'+
+  '</div>';
+  h+=sessions.map(function(s,i){
+    return '<div class="histo-card">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'+
+        '<div class="histo-date">'+s.date+'</div>'+
+        '<span onclick="supprimerSession('+i+')" style="font-size:11px;color:var(--danger);cursor:pointer;padding:2px 6px;">✕</span>'+
+      '</div>'+
       (s.symptomes?'<div class="histo-symp">🤒 '+escHtml(s.symptomes)+'</div>':'')+
       (s.diagnostic?'<div class="histo-diag" style="margin-top:6px;font-size:12px;">'+escHtml(s.diagnostic.slice(0,100))+'...</div>':'')+
-      '<div class="histo-badge">Voir la consultation →</div>'+
+      '<div class="histo-badge" onclick="reprendreSession('+i+')">Voir la consultation →</div>'+
     '</div>';
   }).join('');
+  el.innerHTML=h;
+}
+
+function viderHistorique(){
+  if(!confirm('Effacer tout l\'historique des consultations ?'))return;
+  try{localStorage.removeItem(getHistoKey());}catch(e){}
+  renderHistorique();
+  toast('🗑 Historique effacé');
+}
+
+function supprimerSession(i){
+  var key=getHistoKey();
+  var sessions=[];
+  try{var s=localStorage.getItem(key);if(s)sessions=JSON.parse(s);}catch(e){}
+  sessions.splice(i,1);
+  try{localStorage.setItem(key,JSON.stringify(sessions));}catch(e){}
+  renderHistorique();
 }
 
 function reprendreSession(i){
