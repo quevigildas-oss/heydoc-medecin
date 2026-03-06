@@ -268,14 +268,12 @@ select.finput option{background:var(--bg3);}
 
 <!-- ══ ACCUEIL ══ -->
 <div class="screen on" id="accueilScreen">
+  <div style="background:var(--bg2);border-bottom:1px solid var(--border);padding:10px 16px;padding-top:calc(10px + var(--st));display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+    <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Dokita</div>
+    <button onclick="openParametres()" style="width:36px;height:36px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0;">⚙️</button>
+  </div>
   <div class="hero">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-      <div>
-        <div class="logo">Dokita</div>
-        <div class="logo-tag">Plateforme médicale • Afrique & Maladies tropicales</div>
-      </div>
-      <div onclick="openParametres()" style="width:36px;height:36px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0;margin-top:4px;">⚙️</div>
-    </div>
+    <div class="logo-tag">Plateforme médicale • Afrique & Maladies tropicales</div>
     <div class="hero-badges">
       <div class="hbadge">🌍 Afrique</div>
       <div class="hbadge">📋 OMS</div>
@@ -1418,32 +1416,35 @@ function dbg(msg){
 // ══════════════════════════════
 function initTheme(){
   var t=localStorage.getItem('dokita_theme')||'dark';
-  applyTheme(t,false);
+  if(t==='light')document.body.classList.add('light');
+  else document.body.classList.remove('light');
 }
 function setTheme(t){
-  applyTheme(t,true);
   localStorage.setItem('dokita_theme',t);
-}
-function applyTheme(t,save){
   if(t==='light'){
     document.body.classList.add('light');
-    document.getElementById('toggleClair').classList.add('on');
-    document.getElementById('toggleSombre').classList.remove('on');
   } else {
     document.body.classList.remove('light');
-    document.getElementById('toggleSombre').classList.add('on');
-    document.getElementById('toggleClair').classList.remove('on');
+  }
+  syncToggles(t);
+}
+function syncToggles(t){
+  var ts=document.getElementById('toggleSombre');
+  var tc=document.getElementById('toggleClair');
+  if(!ts||!tc)return;
+  if(t==='light'){
+    tc.classList.add('on');ts.classList.remove('on');
+  } else {
+    ts.classList.add('on');tc.classList.remove('on');
   }
 }
+function applyTheme(t,save){}
 function openParametres(){
-  // Mettre à jour le compte de profils
   var n=PROFILS.length;
   var el=document.getElementById('paramProfilCount');
   if(el)el.textContent=n+' profil'+(n>1?'s':'')+(n?' : '+PROFILS.map(function(p){return p.prenom;}).join(', '):'');
   nav('parametresScreen');
-  // Sync toggles avec thème actuel
-  var t=localStorage.getItem('dokita_theme')||'dark';
-  applyTheme(t,false);
+  syncToggles(localStorage.getItem('dokita_theme')||'dark');
 }
 function clearAllData(){
   if(!confirm('Effacer TOUTES les données Dokita ?\nProfils, historique, dossiers médicaux.\nCette action est irréversible.'))return;
