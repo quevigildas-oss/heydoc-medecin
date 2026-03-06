@@ -1017,40 +1017,38 @@ async function envoyerDossier(email,nomMed){
   var id='DOS-'+Date.now().toString().slice(-6);
 
   toast('⏳ Résumé en cours...');
+  dbg('Étape 1 : appel RESUME_CONSULTATION...');
 
   // ── ÉTAPE 1 : demander le résumé JSON à l'agent ──
   var resume={};
   try{
     var ah=RP+':'+KEY;
-    // Envoyer dans la même conversation (CID) pour que l'agent ait le contexte
     var b={message:{role:'user',content:'RESUME_CONSULTATION'},agent_id:RA};
     if(CID)b.conversation_id=CID;
     var r=await fetch(TURL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':ah},body:JSON.stringify(b)});
     var d=await r.json();
     var sid=d.job_info&&d.job_info.studio_id;
     var jid=d.job_info&&d.job_info.job_id;
+    dbg('Étape 1 : sid='+sid+' jid='+jid);
     if(sid&&jid){
       var rep=await poll(sid,jid,ah);
+      dbg('Étape 1 : réponse agent = '+(rep?rep.slice(0,80):'null'));
       if(rep){
-        // Nettoyer et parser le JSON
         var clean=rep.replace(/```json|```/g,'').trim();
         var start=clean.indexOf('{');
         if(start>=0)clean=clean.slice(start);
         resume=JSON.parse(clean);
+        dbg('Étape 1 : JSON parsé OK — nom='+resume.nom);
       }
     }
   }catch(e){
-    // Fallback : extraction depuis les messages si l'agent ne répond pas en JSON
+    dbg('Étape 1 ERREUR: '+e.message+' → fallback');
     resume={
-      nom:nom,
-      age:String(a||''),
-      poids:String(p.poids||''),
-      ville:'Non renseignée',
-      voyage:'Aucun',
+      nom:nom,age:String(a||''),poids:String(p.poids||''),
+      ville:'Non renseignée',voyage:'Aucun',
       symptomes:msgs.filter(function(m){return m.role==='user';}).map(function(m){return m.text;}).join(' | ').slice(0,500),
       diagnostic:msgs.filter(function(m){return m.role==='ai'&&m.text.length>80;}).slice(-1).map(function(m){return m.text;}).join('').slice(0,800),
-      recommandations:'',
-      examens:''
+      recommandations:'',examens:''
     };
   }
 
@@ -1070,16 +1068,23 @@ async function envoyerDossier(email,nomMed){
     medecin:nomMed,
     date:dateISO
   };
+  dbg('Étape 2 : payload prêt — symptomes='+(payload.symptomes?'OK':'VIDE'));
 
-  // ── ÉTAPE 3 : envoyer à Make → Notion ──
+  // ── ÉTAPE 3 : envoyer à Make → Notion (AVANT le mailto) ──
   try{
-    await fetch(MAKE_WEBHOOK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    // Sauvegarder la session dans l'historique uniquement si envoi réussi
+    dbg('Étape 3 : envoi Make webhook...');
+    var resp=await fetch(MAKE_WEBHOOK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    dbg('Étape 3 : réponse Make status='+resp.status);
     sauvegarderSession(resume);
     toast('✅ Dossier envoyé à '+nomMed);
-  }catch(e){toast('⚠️ Erreur Notion: '+e.message);}
+  }catch(e){
+    dbg('Étape 3 ERREUR: '+e.message);
+    toast('⚠️ Erreur Notion: '+e.message);
+  }
 
-  // ── ÉTAPE 4 : email au médecin ──
+  // ── ÉTAPE 4 : email au médecin — délai pour laisser le fetch se terminer ──
+  await new Promise(function(r){setTimeout(r,800);});
+  dbg('Étape 4 : ouverture email...');
   var ds=new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'});
   var emailResume='SYMPTÔMES:\n'+(resume.symptomes||'')+'\n\nDIAGNOSTIC IA:\n'+(resume.diagnostic||'')+'\n\nRECOMMANDATIONS OMS:\n'+(resume.recommandations||'')+'\n\nEXAMENS:\n'+(resume.examens||'');
   var sub=encodeURIComponent('[Dokita] Dossier — '+nom+' — '+ds);
