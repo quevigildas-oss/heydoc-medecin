@@ -3,7 +3,13 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>Dokita — Espace Médecin</title>
+<title>Dokita Pro</title>
+<link rel="manifest" href="/manifest.json"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Dokita Pro"/>
+<meta name="theme-color" content="#00C896"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -197,7 +203,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 <div class="screen on" id="loginScreen">
   <div class="login-logo">
     <div class="login-ico">🩺</div>
-    <h1>Dokita</h1>
+    <h1>Dokita Pro</h1>
     <p>Espace Médecin — Accès sécurisé</p>
   </div>
   <div class="login-box">
@@ -300,26 +306,20 @@ async function chargerNotion(){
   var btn=document.getElementById('refreshBtn');
   if(btn)btn.classList.add('spin');
   setNotionStatus('sync','Chargement...');
-  dbg('chargerNotion: debut appel /api/notion');
   document.getElementById('dList').innerHTML='<div class="loading-state"><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span><br><br>Chargement depuis Notion...</div>';
   try{
-    dbg('requete DB: '+NOTION_DB);
     var data=await notionRequest('/databases/'+NOTION_DB+'/query','POST',{
       sorts:[{property:'Date',direction:'descending'}],
       page_size:50
     });
-    dbg('reponse OK: '+JSON.stringify(Object.keys(data)));
     if(data.results){
-      dbg('nb resultats: '+data.results.length);
       DOSSIERS=data.results.map(parseDossierNotion);
       renderDash();
       setNotionStatus('ok',DOSSIERS.length+' dossiers — '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
     } else {
-      dbg('ERREUR: '+JSON.stringify(data));
       setNotionStatus('err','Erreur: '+(data.message||JSON.stringify(data)));
     }
   }catch(e){
-    dbg('EXCEPTION: '+e.message);
     setNotionStatus('err','Erreur: '+e.message);
     document.getElementById('dList').innerHTML='<div class="empty"><div class="empty-ico">⚠️</div><div class="empty-txt">Impossible de charger les dossiers<br><span style="font-size:11px;color:var(--text3)">'+e.message+'</span></div></div>';
   }
@@ -600,8 +600,8 @@ function renderConsult(){
       sympToList(d.symptomes)+
     '</div>'+
 
-    // 4. Diagnostic IA patient
-    '<div class="fsec">'+
+    // 4. Diagnostic IA patient — masqué, révélé après validation
+    '<div class="fsec" id="iaPatientSec" style="display:none">'+
       '<div class="fsec-title"><div class="fsec-ico bl">🤖</div><div class="fsec-label">Analyse IA patient</div></div>'+
       '<div class="ia-box"><div class="ia-tag">IA MÉDICALE</div><div class="ia-txt">'+escHtml(d.diagIA||'Non renseigné').replace(/\n/g,'<br>')+'</div></div>'+
       (d.recommandationsOMS?'<div style="margin-top:10px;"><div class="ia-tag" style="background:rgba(0,200,150,.15);border-color:rgba(0,200,150,.3);color:var(--accent);">OMS</div><div class="ia-txt" style="margin-top:6px;">'+escHtml(d.recommandationsOMS).replace(/\n/g,'<br>')+'</div></div>':'')+
@@ -779,6 +779,9 @@ async function pollVal(sid,jid,ah){
 }
 
 function afficherValidation(rep,diag,examens,notes){
+  // Révéler l'analyse IA patient maintenant que le médecin a soumis sa décision
+  var iaSection=document.getElementById('iaPatientSec');
+  if(iaSection)iaSection.style.display='block';
   var conf=rep&&rep.toLowerCase().indexOf('non conforme')<0&&rep.toLowerCase().indexOf('conforme')>=0;
   CUR_DOS.valIA={statut:conf?'conforme':'nonconforme',texte:rep};
 
@@ -887,8 +890,7 @@ function toast(msg){
   document.body.appendChild(t);
   setTimeout(function(){t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(function(){t.remove();},300);},2500);
 }
-function dbg(msg){
-  var panel=document.getElementById('debugPanel');
+function
   var log=document.getElementById('debugLog');
   if(!panel||!log)return;
   panel.style.display='flex';
