@@ -340,6 +340,7 @@ async function mettreAJourDossierPatient(updates){
   if(updates.allergies)props['Allergies']={rich_text:[{text:{content:updates.allergies.slice(0,2000)}}]};
   if(updates.antecedents)props['Antécédents']={rich_text:[{text:{content:updates.antecedents.slice(0,2000)}}]};
   if(updates.traitements)props['Traitements réguliers']={rich_text:[{text:{content:updates.traitements.slice(0,2000)}}]};
+  if(updates.ordonnances)props['Ordonnances']={rich_text:[{text:{content:updates.ordonnances.slice(0,2000)}}]};
   try{
     await notionRequest('/pages/'+PATIENT_DOSSIER.notionId,'PATCH',{properties:props});
     return true;
@@ -946,6 +947,33 @@ async function finaliser(nouveauStatut){
     validationIA:CUR_DOS.valIA?CUR_DOS.valIA.texte:''
   });
 
+  // Sauvegarder ordonnance dans BDD Patients
+  if(PATIENT_DOSSIER&&nouveauStatut!=='en_attente_examen'){
+    var ordonnance={
+      date:new Date().toISOString().slice(0,10),
+      medecin:CUR_MED.nom,
+      specialite:CUR_MED.spec,
+      diagnostic:diag,
+      medicaments:MEDS.map(function(m){
+        return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' ('+m.duree+')':'');
+      }),
+      notes:notes||''
+    };
+    // Lire ordonnances existantes, ajouter la nouvelle
+    var ordsExist='';
+    try{
+      var ordsPage=await notionRequest('/pages/'+PATIENT_DOSSIER.notionId,'GET');
+      var ordsProps=ordsPage.properties||{};
+      if(ordsProps['Ordonnances']&&ordsProps['Ordonnances'].rich_text){
+        ordsExist=(ordsProps['Ordonnances'].rich_text||[]).map(function(x){return x.plain_text;}).join('');
+      }
+    }catch(e){}
+    var ordsArr=[];
+    try{if(ordsExist)ordsArr=JSON.parse(ordsExist);}catch(e){}
+    ordsArr.unshift(ordonnance); // plus récent en premier
+    await mettreAJourDossierPatient({ordonnances:JSON.stringify(ordsArr).slice(0,2000)});
+  }
+
   // Mettre à jour BDD Patients si ALD cochée
   if(ALD&&PATIENT_DOSSIER){
     var diag2=(document.getElementById('diagMedInput')||{}).value||CUR_DOS.diagMed||'';
@@ -970,23 +998,22 @@ async function finaliser(nouveauStatut){
 
   toast(ok?'✅ Notion mis à jour':'⚠️ Erreur sync Notion');
 
-  // Email patient/médecin référent
+  // Email notification patient
   var ds=new Date().toLocaleDateString('fr-FR');
-  var dest=CUR_DOS.patient.email||'patient@dokita.ci';
-  var subj=encodeURIComponent('[Dokita] Consultation '+CUR_DOS.patient.nom+' — '+ds);
-  var emailBody=encodeURIComponent(
-    'Bonjour,\n\n'+
-    (nouveauStatut==='en_attente_examen'?'Des examens complémentaires ont été demandés avant de finaliser votre traitement.\n':'Votre consultation a été traitée.\n')+
-    '\n=== PATIENT ===\n'+CUR_DOS.patient.nom+', '+CUR_DOS.patient.age+' ans'+(CUR_DOS.patient.poids?', '+CUR_DOS.patient.poids+'kg':'')+
-    '\n\n=== DIAGNOSTIC ===\n'+diag+
-    (examens?'\n\n=== EXAMENS PRESCRITS ===\n'+examens:'')+
-    (medsStr?'\n\n=== TRAITEMENT ===\n'+medsStr:'')+
-    (notes?'\n\n=== OBSERVATIONS ===\n'+notes:'')+
-    '\n\n=== VALIDATION IA ===\n'+(CUR_DOS.valIA?CUR_DOS.valIA.texte:'—')+
-    '\n\n---\nMédecin : '+CUR_MED.nom+' — Dokita'
-  );
-  await new Promise(function(r){setTimeout(r,500);});
-  window.location.href='mailto:'+dest+'?subject='+subj+'&body='+emailBody;
+  var dest=CUR_DOS.patient.email||PATIENT_DOSSIER&&PATIENT_DOSSIER.email||'';
+  if(dest){
+    var subj=encodeURIComponent('[Dokita] Votre ordonnance est disponible');
+    var emailBody=encodeURIComponent(
+      'Bonjour '+CUR_DOS.patient.nom+',\n\n'+
+      (nouveauStatut==='en_attente_examen'
+        ? 'Des examens complémentaires ont été demandés. Votre médecin vous contactera après réception des résultats.\n\n'
+        : 'Votre consultation du '+ds+' a été traitée.\n\nMerci de vous connecter à votre espace Dokita pour récupérer votre ordonnance.\n\n'
+      )+
+      '— '+CUR_MED.nom+' | Dokita'
+    );
+    await new Promise(function(r){setTimeout(r,500);});
+    window.location.href='mailto:'+dest+'?subject='+subj+'&body='+emailBody;
+  }
 
   setTimeout(function(){goBack();},1500);
 }
