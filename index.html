@@ -133,6 +133,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 /* Toggle examen */
 .exam-toggle{display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;cursor:pointer;transition:border-color .2s;}
 .exam-toggle.on{border-color:var(--exam);background:rgba(167,139,250,.05);}
+#aldToggle.on{border-color:var(--exam);background:rgba(167,139,250,.05);}
 .exam-toggle-label{font-size:13px;font-weight:600;color:var(--text);}
 .exam-toggle-sub{font-size:11px;color:var(--text3);margin-top:2px;}
 .toggle-sw{width:44px;height:24px;border-radius:12px;background:var(--border);position:relative;transition:background .3s;flex-shrink:0;}
@@ -277,6 +278,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 // CONFIG
 // ══════════════════════════════
 var NOTION_DB='319dce21-e1d3-8094-a601-fe3bb4abff3a';
+var NOTION_PATIENTS_DB='31cdce21-e1d3-80b4-a74e-e0a6417ee0fb';
 var NOTION_PROXY='/api/notion'; // proxy Vercel sécurisé — clé dans variables Vercel
 
 async function notionRequest(endpoint, method, body) {
@@ -291,6 +293,65 @@ async function notionRequest(endpoint, method, body) {
   return await r.json();
 }
 
+// ══════════════════════════════
+// BDD PATIENTS
+// ══════════════════════════════
+async function chargerDossierPatient(nomPatient){
+  PATIENT_DOSSIER=null;
+  try{
+    var data=await notionRequest('/databases/'+NOTION_PATIENTS_DB+'/query','POST',{
+      filter:{property:'Nom complet',title:{contains:nomPatient}},
+      page_size:1
+    });
+    if(data.results&&data.results.length>0){
+      var p=data.results[0];
+      var props=p.properties||{};
+      function txt(k){
+        if(!props[k])return '';
+        var t=props[k].type;
+        if(t==='title')return (props[k].title||[]).map(function(x){return x.plain_text;}).join('');
+        if(t==='rich_text')return (props[k].rich_text||[]).map(function(x){return x.plain_text;}).join('');
+        if(t==='email')return props[k].email||'';
+        if(t==='phone_number')return props[k].phone_number||'';
+        if(t==='date')return props[k].date?props[k].date.start:'';
+        return '';
+      }
+      PATIENT_DOSSIER={
+        notionId:p.id,
+        nom:txt('Nom complet'),
+        email:txt('Email'),
+        telephone:txt('Téléphone'),
+        dateNaissance:txt('Date naissance'),
+        allergies:txt('Allergies'),
+        antecedents:txt('Antécédents'),
+        traitements:txt('Traitements réguliers'),
+        idPatient:txt('ID Patient')
+      };
+      return PATIENT_DOSSIER;
+    }
+  }catch(e){console.log('Erreur BDD Patients:',e.message);}
+  return null;
+}
+
+async function mettreAJourDossierPatient(updates){
+  if(!PATIENT_DOSSIER||!PATIENT_DOSSIER.notionId)return false;
+  var props={};
+  if(updates.allergies)props['Allergies']={rich_text:[{text:{content:updates.allergies.slice(0,2000)}}]};
+  if(updates.antecedents)props['Antécédents']={rich_text:[{text:{content:updates.antecedents.slice(0,2000)}}]};
+  if(updates.traitements)props['Traitements réguliers']={rich_text:[{text:{content:updates.traitements.slice(0,2000)}}]};
+  try{
+    await notionRequest('/pages/'+PATIENT_DOSSIER.notionId,'PATCH',{properties:props});
+    return true;
+  }catch(e){return false;}
+}
+
+function mergeChamp(existant,nouveau){
+  if(!existant)return nouveau;
+  if(!nouveau)return existant;
+  if(existant.toLowerCase().indexOf(nouveau.toLowerCase())>=0)return existant; // déjà présent
+  return existant+', '+nouveau;
+}
+
 var RA_RG='d7b62b',RA_RP='428dc1d8-2fa4-46da-b226-c26a52653ed0',RA_AGENT='7d26fda3-fe2d-405c-8aed-645df10baa12',RA_KEY='';
 var RA_URL='https://api-'+RA_RG+'.stack.tryrelevance.com/latest/agents/trigger';
 
@@ -301,6 +362,8 @@ var MEDECINS={
 var CUR_MED=null,CUR_DOS=null,FILTRE='tous',MEDS=[],CID_VAL=null;
 var DOSSIERS=[];
 var EXAMENS_REQUIS=false;
+var PATIENT_DOSSIER=null; // dossier médical patient depuis BDD Patients
+var ALD=false; // affection longue durée cochée
 
 async function chargerNotion(){
   var btn=document.getElementById('refreshBtn');
@@ -492,7 +555,20 @@ function openDos(notionId){
   if(!CUR_DOS)return;
   MEDS=CUR_DOS.traitementMed?parseMedsStr(CUR_DOS.traitementMed):[];
   EXAMENS_REQUIS=CUR_DOS.statut==='en_attente_examen';
+  ALD=false;
   CID_VAL=null;
+  // Charger dossier patient depuis BDD Patients
+  PATIENT_DOSSIER=null;
+  chargerDossierPatient(CUR_DOS.patient.nom).then(function(dp){
+    if(dp){
+      // Enrichir les infos patient avec le dossier médical
+      CUR_DOS.patient.allergies=dp.allergies||CUR_DOS.patient.allergies||'';
+      CUR_DOS.patient.antecedents=dp.antecedents||CUR_DOS.patient.antecedents||'';
+      CUR_DOS.patient.traitements=dp.traitements||CUR_DOS.patient.traitements||'';
+      CUR_DOS.patient.email=dp.email||CUR_DOS.patient.email||'';
+      renderConsult(); // re-render avec le dossier complet
+    }
+  });
   var bmap={
     en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
     en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
@@ -544,6 +620,15 @@ function toggleExamen(){
   if(tog)tog.classList.toggle('on',EXAMENS_REQUIS);
   if(sw)sw.classList.toggle('on',EXAMENS_REQUIS);
   if(warn)warn.classList.toggle('on',EXAMENS_REQUIS);
+}
+
+function toggleALD(){
+  ALD=!ALD;
+  var tog=document.getElementById('aldToggle');
+  var sw=document.getElementById('aldSw');
+  if(tog)tog.classList.toggle('on',ALD);
+  if(sw){sw.classList.toggle('on',ALD);sw.style.background=ALD?'var(--exam)':'';}
+  toast(ALD?'🏥 ALD activée — médicaments tagués comme traitement permanent':'ALD désactivée');
 }
 
 function renderMeds(ro){
@@ -624,6 +709,12 @@ function renderConsult(){
         '</div>'+
         '<div class="exam-warning'+(EXAMENS_REQUIS?' on':'')+'" id="examWarn">'+
           '⚠️ Avec examens requis : seuls les médicaments symptomatiques sont autorisés (antalgiques, antipyrétiques). Le dossier restera en attente jusqu\'aux résultats.'+
+        '</div>'+
+
+        // Toggle ALD
+        '<div class="exam-toggle'+(ALD?' on':'')+'" id="aldToggle" onclick="toggleALD()">'+
+          '<div><div class="exam-toggle-label">🏥 Affection longue durée (ALD)</div><div class="exam-toggle-sub">Tague le diagnostic et les médicaments comme traitement permanent</div></div>'+
+          '<div class="toggle-sw'+(ALD?' on':'')+'" id="aldSw" style="background:'+(ALD?'var(--exam)':'')+'"></div>'+
         '</div>'+
 
         // Examens
@@ -708,7 +799,8 @@ async function lancerValidationIA(){
     'Âge: '+p.age+' ans\n'+
     'Poids: '+(p.poids||'non renseigné')+'kg\n'+
     'Voyage récent: '+(p.voyage||'Aucun')+'\n\n'+
-    '=== DOSSIER MÉDICAL PATIENT ===\n'+
+    '=== DOSSIER MÉDICAL PATIENT (historique complet) ===\n'+
+    'Source: BDD Patients Dokita'+(PATIENT_DOSSIER?' (synchronisé)':' (consultation en cours)')+'\n'+
     'Allergies connues: '+(p.allergies||'Aucune renseignée')+'\n'+
     'Traitements en cours: '+(p.traitements||'Aucun')+'\n'+
     'Antécédents: '+(p.antecedents||'Aucun')+'\n\n'+
@@ -827,6 +919,19 @@ async function finaliser(nouveauStatut){
     notes:notes,
     validationIA:CUR_DOS.valIA?CUR_DOS.valIA.texte:''
   });
+
+  // Mettre à jour BDD Patients si ALD cochée
+  if(ALD&&PATIENT_DOSSIER){
+    var diag2=(document.getElementById('diagMedInput')||{}).value||CUR_DOS.diagMed||'';
+    var medsStr2=MEDS.map(function(m){return m.nom+(m.dose?' '+m.dose:'');}).join(', ');
+    var newAntecedents=mergeChamp(PATIENT_DOSSIER.antecedents,diag2);
+    var newTraitements=mergeChamp(PATIENT_DOSSIER.traitements,medsStr2);
+    var aldOk=await mettreAJourDossierPatient({
+      antecedents:newAntecedents,
+      traitements:newTraitements
+    });
+    toast(aldOk?'🏥 Dossier patient mis à jour (ALD)':'⚠️ Erreur mise à jour dossier');
+  }
 
   // Mettre à jour le cache local
   CUR_DOS.statut=nouveauStatut;
