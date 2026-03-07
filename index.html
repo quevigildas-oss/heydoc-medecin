@@ -1000,7 +1000,13 @@ async function finaliser(nouveauStatut){
 
   // Email notification patient
   var ds=new Date().toLocaleDateString('fr-FR');
-  var dest=CUR_DOS.patient.email||PATIENT_DOSSIER&&PATIENT_DOSSIER.email||'';
+  var dest=(CUR_DOS.patient.email||'').trim();
+  if(!dest&&PATIENT_DOSSIER)dest=(PATIENT_DOSSIER.email||'').trim();
+  if(!dest){
+    toast('⚠️ Email patient non renseigné dans la BDD Patients');
+    setTimeout(function(){goBack();},1500);
+    return;
+  }
   if(dest){
     var subj=encodeURIComponent('[Dokita] Votre ordonnance est disponible');
     var emailBody=encodeURIComponent(
