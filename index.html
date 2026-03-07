@@ -174,6 +174,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .vbtn:active{opacity:.8;}
 .vbtn.ok{background:linear-gradient(135deg,var(--accent),#00A878);color:var(--bg);}
 .vbtn.ref{background:var(--card2);border:1.5px solid var(--border);color:var(--text2);}
+.vbtn.warn{background:rgba(251,191,36,.12);border:1.5px solid rgba(251,191,36,.4);color:#fbbf24;}
 .vbtn.exam{background:rgba(167,139,250,.15);border:1.5px solid var(--exam);color:var(--exam);}
 
 /* Dots */
@@ -638,19 +639,36 @@ function toggleALD(){
 function renderMeds(ro,mode){
   var list=mode==='ald'?MEDS_ALD:MEDS;
   if(!list.length)return '<div style="color:var(--text3);font-size:12px;text-align:center;padding:12px;">Aucun médicament ajouté</div>';
-  return MEDS.map(function(m,i){
+  return list.map(function(m,i){
     return '<div class="med-item">'+
       '<div class="med-info">'+
         '<div class="med-name">'+escHtml(m.nom)+'</div>'+
         (m.dose||m.poso||m.duree?'<div class="med-detail">'+(m.dose||'')+(m.poso?' — '+m.poso:'')+(m.duree?' — '+m.duree:'')+'</div>':'')+
       '</div>'+
-      (!ro?'<button class="med-del" onclick="removeMed('+i+')">×</button>':'')+
+      (!ro?'<div style="display:flex;gap:6px;">'+
+        '<button class="med-del" style="background:rgba(0,200,150,.12);color:var(--accent);" onclick="editMed('+i+',\''+( mode||'')+'\')">✏️</button>'+
+        '<button class="med-del" onclick="removeMed('+i+',\''+( mode||'')+'\')">×</button>'+
+      '</div>':'')+
     '</div>';
   }).join('');
 }
 function removeMed(i,mode){
   if(mode==='ald'){MEDS_ALD.splice(i,1);document.getElementById('aldMedList').innerHTML=renderMeds(false,'ald');}
   else{MEDS.splice(i,1);document.getElementById('medList').innerHTML=renderMeds(false);}
+}
+var MODAL_EDIT_IDX=-1;
+function editMed(i,mode){
+  var list=mode==='ald'?MEDS_ALD:MEDS;
+  var m=list[i];
+  MODAL_MODE=mode||'';
+  MODAL_EDIT_IDX=i;
+  document.getElementById('mNom').value=m.nom||'';
+  document.getElementById('mDose').value=m.dose||'';
+  document.getElementById('mDuree').value=m.duree||'';
+  document.getElementById('mPoso').value=m.poso||'';
+  var title=document.getElementById('medModalTitle');
+  if(title)title.textContent=mode==='ald'?'Modifier médicament ALD':'Modifier médicament';
+  document.getElementById('medModal').classList.add('on');
 }
 
 function renderConsult(){
@@ -842,51 +860,24 @@ async function lancerValidationIA(){
     '\nSi NON CONFORME:\nRECOMMANDATION OMS: alternative thérapeutique précise avec dosage';
 
   try{
-    var ah=RA_RP+':'+RA_KEY;
-    var r=await fetch(RA_URL,{
+    var r=await fetch('/api/claude',{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':ah},
-      body:JSON.stringify({message:{role:'user',content:prompt},agent_id:RA_AGENT})
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({prompt:prompt})
     });
     var data=await r.json();
-    if(data.conversation_id)CID_VAL=data.conversation_id;
-    var sid=data.job_info&&data.job_info.studio_id;
-    var jid=data.job_info&&data.job_info.job_id;
-    if(sid&&jid){
-      var rep=await pollVal(sid,jid,ah);
-      afficherValidation(rep||'Validation indisponible',diag,examens,notes);
-    } else {
-      afficherValidation('Erreur: réponse inattendue',diag,examens,notes);
+    if(data.error){
+      afficherValidation('Erreur API: '+data.error,diag,examens,notes);
+      return;
     }
+    afficherValidation(data.answer||'Réponse vide',diag,examens,notes);
   }catch(e){
     afficherValidation('Erreur: '+e.message,diag,examens,notes);
   }
 }
 
-async function pollVal(sid,jid,ah){
-  var url='https://api-'+RA_RG+'.stack.tryrelevance.com/latest/studios/'+sid+'/async_poll/'+jid;
-  for(var i=0;i<50;i++){
-    await new Promise(function(r){setTimeout(r,2000);});
-    try{
-      var r=await fetch(url,{headers:{'Authorization':ah}});
-      var d=await r.json();
-      var updates=d.updates||[];for(var ui=0;ui<updates.length;ui++){var up=updates[ui];
-        if(up.type==='agent-complete'){
-          if(up.output&&up.output.answer)return up.output.answer;
-          if(up.message&&up.message.content)return up.message.content;
-        }
-        if(up.type==='chain-success'){
-          var inner=up.output&&up.output.output||{};
-          if(inner.answer&&typeof inner.answer==='string')return inner.answer;
-          for(var k in inner){if(typeof inner[k]==='string'&&inner[k].length>30)return inner[k];}
-        }
-      }
-      if(d.status==='failed')break;
-      if(d.status==='complete'&&i>2)break;
-    }catch(e){}
-  }
-  return null;
-}
+function dbgLog(msg){console.log(msg);}
+
 
 function afficherValidation(rep,diag,examens,notes){
   // Révéler l'analyse IA patient maintenant que le médecin a soumis sa décision
@@ -903,16 +894,30 @@ function afficherValidation(rep,diag,examens,notes){
       '<div class="val-txt">'+(rep||'').replace(/\n/g,'<br>')+'</div>'+
     '</div>'+
     '<div class="val-actions">'+
-      '<button class="vbtn ok" onclick="finaliser(\''+(EXAMENS_REQUIS?'en_attente_examen':'valide')+'\')">'+
-        (EXAMENS_REQUIS?'🔬 Envoyer — Att. examens':'✅ Valider & envoyer')+
-      '</button>'+
-      (!conf?'<button class="vbtn ref" onclick="finaliser(\'cloture\')">📁 Clôturer dossier</button>':'')+
+      (conf?
+        '<button class="vbtn ok" onclick="finaliser(\''+(EXAMENS_REQUIS?'en_attente_examen':'valide')+'\')">'+
+          (EXAMENS_REQUIS?'🔬 Envoyer — Att. examens':'✅ Envoyer au patient')+
+        '</button>'
+      :
+        '<button class="vbtn warn" onclick="modifierPrescription()">✏️ Modifier la prescription</button>'+
+        '<button class="vbtn ref" onclick="finaliser(\'valide_override\')">📋 Valider & Référer</button>'
+      )+
     '</div>';
+}
 
-  if(conf&&!EXAMENS_REQUIS){
-    toast('✅ Prescription validée');
-    setTimeout(function(){finaliser('valide');},2000);
-  }
+// ══════════════════════════════
+// MODIFIER PRESCRIPTION
+// ══════════════════════════════
+function modifierPrescription(){
+  // Masquer la section validation, réactiver le formulaire
+  var valSec=document.getElementById('valSection');
+  if(valSec)valSec.style.display='none';
+  var btn=document.getElementById('btnSend');
+  if(btn){btn.disabled=false;btn.innerHTML='🤖 Valider avec l\'IA →';}
+  toast('✏️ Modifiez la prescription et revalidez');
+  // Scroll vers le formulaire
+  var diagInput=document.getElementById('diagMedInput');
+  if(diagInput)setTimeout(function(){diagInput.scrollIntoView({behavior:'smooth'});},100);
 }
 
 // ══════════════════════════════
@@ -929,8 +934,10 @@ async function finaliser(nouveauStatut){
   toast('⏳ Mise à jour Notion...');
 
   // Mettre à jour Notion
+  // valide_override = médecin maintient malgré non-conformité IA
+  var statutFinal=nouveauStatut==='valide_override'?'valide':nouveauStatut;
   var ok=await updateNotionDossier(CUR_DOS.notionId,{
-    statut:nouveauStatut,
+    statut:statutFinal,
     diagMed:diag,
     examensPrescrit:examens,
     traitementMed:medsStr,
@@ -952,7 +959,7 @@ async function finaliser(nouveauStatut){
   }
 
   // Mettre à jour le cache local
-  CUR_DOS.statut=nouveauStatut;
+  CUR_DOS.statut=statutFinal;
   CUR_DOS.diagMed=diag;
   CUR_DOS.examensPrescrit=examens;
   CUR_DOS.traitementMed=medsStr;
@@ -989,6 +996,7 @@ async function finaliser(nouveauStatut){
 var MODAL_MODE='';
 function openMedModal(mode){
   MODAL_MODE=mode||'';
+  MODAL_EDIT_IDX=-1;
   ['mNom','mDose','mDuree','mPoso'].forEach(function(id){document.getElementById(id).value='';
   });
   var title=document.getElementById('medModalTitle');
@@ -1005,13 +1013,14 @@ function confirmMed(){
     duree:document.getElementById('mDuree').value.trim()||'',
     poso:document.getElementById('mPoso').value.trim()||''
   };
-  if(MODAL_MODE==='ald'){
-    MEDS_ALD.push(med);
-    document.getElementById('aldMedList').innerHTML=renderMeds(false,'ald');
+  var list=MODAL_MODE==='ald'?MEDS_ALD:MEDS;
+  var listId=MODAL_MODE==='ald'?'aldMedList':'medList';
+  if(MODAL_EDIT_IDX>=0){
+    list[MODAL_EDIT_IDX]=med; // édition
   } else {
-    MEDS.push(med);
-    document.getElementById('medList').innerHTML=renderMeds(false);
+    list.push(med); // ajout
   }
+  document.getElementById(listId).innerHTML=renderMeds(false,MODAL_MODE||undefined);
   closeMedModal();
 }
 
