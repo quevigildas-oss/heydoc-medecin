@@ -259,7 +259,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 <!-- Modal médicament -->
 <div class="modal" id="medModal">
   <div class="modal-box">
-    <div class="modal-title">Ajouter un médicament</div>
+    <div class="modal-title" id="medModalTitle">Ajouter un médicament</div>
     <div class="frow"><div class="flabel">Médicament (DCI)</div><input class="finput" id="mNom" placeholder="ex: Amoxicilline" autocomplete="off"/></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div class="frow"><div class="flabel">Dosage</div><input class="finput" id="mDose" placeholder="ex: 500mg" autocomplete="off"/></div>
@@ -364,6 +364,7 @@ var DOSSIERS=[];
 var EXAMENS_REQUIS=false;
 var PATIENT_DOSSIER=null; // dossier médical patient depuis BDD Patients
 var ALD=false; // affection longue durée cochée
+var MEDS_ALD=[]; // médicaments ALD permanents
 
 async function chargerNotion(){
   var btn=document.getElementById('refreshBtn');
@@ -556,6 +557,7 @@ function openDos(notionId){
   MEDS=CUR_DOS.traitementMed?parseMedsStr(CUR_DOS.traitementMed):[];
   EXAMENS_REQUIS=CUR_DOS.statut==='en_attente_examen';
   ALD=false;
+  MEDS_ALD=[];
   CID_VAL=null;
   // Charger dossier patient depuis BDD Patients
   PATIENT_DOSSIER=null;
@@ -626,13 +628,16 @@ function toggleALD(){
   ALD=!ALD;
   var tog=document.getElementById('aldToggle');
   var sw=document.getElementById('aldSw');
+  var sec=document.getElementById('aldMedsSection');
   if(tog)tog.classList.toggle('on',ALD);
   if(sw){sw.classList.toggle('on',ALD);sw.style.background=ALD?'var(--exam)':'';}
-  toast(ALD?'🏥 ALD activée — médicaments tagués comme traitement permanent':'ALD désactivée');
+  if(sec)sec.style.display=ALD?'block':'none';
+  toast(ALD?'🏥 ALD activée — ajoutez les médicaments permanents':'ALD désactivée');
 }
 
-function renderMeds(ro){
-  if(!MEDS.length)return '<div style="color:var(--text3);font-size:12px;text-align:center;padding:12px;">Aucun médicament ajouté</div>';
+function renderMeds(ro,mode){
+  var list=mode==='ald'?MEDS_ALD:MEDS;
+  if(!list.length)return '<div style="color:var(--text3);font-size:12px;text-align:center;padding:12px;">Aucun médicament ajouté</div>';
   return MEDS.map(function(m,i){
     return '<div class="med-item">'+
       '<div class="med-info">'+
@@ -643,7 +648,10 @@ function renderMeds(ro){
     '</div>';
   }).join('');
 }
-function removeMed(i){MEDS.splice(i,1);document.getElementById('medList').innerHTML=renderMeds(false);}
+function removeMed(i,mode){
+  if(mode==='ald'){MEDS_ALD.splice(i,1);document.getElementById('aldMedList').innerHTML=renderMeds(false,'ald');}
+  else{MEDS.splice(i,1);document.getElementById('medList').innerHTML=renderMeds(false);}
+}
 
 function renderConsult(){
   var d=CUR_DOS;
@@ -708,20 +716,30 @@ function renderConsult(){
           '<div class="toggle-sw'+(EXAMENS_REQUIS?' on':'')+'" id="examSw"></div>'+
         '</div>'+
         '<div class="exam-warning'+(EXAMENS_REQUIS?' on':'')+'" id="examWarn">'+
-          '⚠️ Avec examens requis : seuls les médicaments symptomatiques sont autorisés (antalgiques, antipyrétiques). Le dossier restera en attente jusqu\'aux résultats.'+
+          '⚠️ Avec examens requis : seuls les médicaments symptomatiques sont autorisés. Le dossier restera en attente jusqu\'aux résultats.'+
         '</div>'+
 
-        // Toggle ALD
-        '<div class="exam-toggle'+(ALD?' on':'')+'" id="aldToggle" onclick="toggleALD()">'+
-          '<div><div class="exam-toggle-label">🏥 Affection longue durée (ALD)</div><div class="exam-toggle-sub">Tague le diagnostic et les médicaments comme traitement permanent</div></div>'+
-          '<div class="toggle-sw'+(ALD?' on':'')+'" id="aldSw" style="background:'+(ALD?'var(--exam)':'')+'"></div>'+
-        '</div>'+
-
-        // Examens
+        // Examens demandés
         '<div class="frow"><div class="flabel">Examens demandés</div>'+
         '<textarea class="finput" id="examensInput" rows="2" placeholder="ex: NFS, Frottis goutte épaisse, Widal...">'+escHtml(d.examensPrescrit)+'</textarea></div>'+
 
-        // Médicaments
+        // Toggle ALD
+        '<div class="exam-toggle'+(ALD?' on':'')+'" id="aldToggle" onclick="toggleALD()">'+
+          '<div><div class="exam-toggle-label">🏥 Affection longue durée (ALD)</div><div class="exam-toggle-sub">Tague le diagnostic et les traitements comme permanents dans le dossier</div></div>'+
+          '<div class="toggle-sw'+(ALD?' on':'')+'" id="aldSw" style="background:'+(ALD?'var(--exam)':'')+'"></div>'+
+        '</div>'+
+
+        // Médicaments ALD (visibles uniquement si ALD cochée)
+        '<div id="aldMedsSection" style="display:'+(ALD?'block':'none')+';">'+
+          '<div class="frow" style="margin-top:4px;">'+
+            '<div class="flabel" style="color:var(--exam);">💊 Médicaments ALD (traitement permanent)</div>'+
+            '<div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Ces médicaments seront enregistrés comme traitements réguliers dans le dossier patient.</div>'+
+            '<div id="aldMedList">'+renderMeds(false,'ald')+'</div>'+
+            '<button class="add-med" style="border-color:var(--exam);color:var(--exam);" onclick="openMedModal(\'ald\')">＋ Ajouter médicament ALD</button>'+
+          '</div>'+
+        '</div>'+
+
+        // Médicaments de la consultation
         '<div class="frow"><div class="flabel">Médicaments prescrits</div>'+
         '<div id="medList">'+renderMeds(false)+'</div>'+
         '<button class="add-med" onclick="openMedModal()">＋ Ajouter un médicament</button></div>'+
@@ -810,7 +828,7 @@ async function lancerValidationIA(){
     '=== DÉCISION MÉDECIN ===\n'+
     'Diagnostic final: '+diag+'\n'+
     'Examens requis: '+(EXAMENS_REQUIS?'OUI — '+examens:'NON')+'\n'+
-    'Médicaments prescrits:\n'+(medsStr||'Aucun')+'\n'+
+    'Médicaments prescrits (consultation):\n'+(medsStr||'Aucun')+'\n'+(MEDS_ALD.length?'Médicaments ALD (permanents):\n'+MEDS_ALD.map(function(m){return m.nom+(m.dose?' '+m.dose:'');}).join('\n')+'\n':'')+
     (notes?'Notes: '+notes+'\n':'')+'\n'+
     '=== INSTRUCTIONS ===\n'+
     'Analyse cette prescription et réponds UNIQUEMENT avec ce format:\n\n'+
@@ -923,7 +941,7 @@ async function finaliser(nouveauStatut){
   // Mettre à jour BDD Patients si ALD cochée
   if(ALD&&PATIENT_DOSSIER){
     var diag2=(document.getElementById('diagMedInput')||{}).value||CUR_DOS.diagMed||'';
-    var medsStr2=MEDS.map(function(m){return m.nom+(m.dose?' '+m.dose:'');}).join(', ');
+    var medsStr2=MEDS_ALD.map(function(m){return m.nom+(m.dose?' '+m.dose:'');}).join(', ');
     var newAntecedents=mergeChamp(PATIENT_DOSSIER.antecedents,diag2);
     var newTraitements=mergeChamp(PATIENT_DOSSIER.traitements,medsStr2);
     var aldOk=await mettreAJourDossierPatient({
@@ -968,21 +986,32 @@ async function finaliser(nouveauStatut){
 // ══════════════════════════════
 // MODAL MÉDICAMENT
 // ══════════════════════════════
-function openMedModal(){
-  ['mNom','mDose','mDuree','mPoso'].forEach(function(id){document.getElementById(id).value='';});
+var MODAL_MODE='';
+function openMedModal(mode){
+  MODAL_MODE=mode||'';
+  ['mNom','mDose','mDuree','mPoso'].forEach(function(id){document.getElementById(id).value='';
+  });
+  var title=document.getElementById('medModalTitle');
+  if(title)title.textContent=mode==='ald'?'Ajouter médicament ALD':'Ajouter un médicament';
   document.getElementById('medModal').classList.add('on');
 }
 function closeMedModal(){document.getElementById('medModal').classList.remove('on');}
 function confirmMed(){
   var nom=(document.getElementById('mNom').value||'').trim();
   if(!nom){toast('Entrez le nom du médicament');return;}
-  MEDS.push({
+  var med={
     nom:nom,
     dose:document.getElementById('mDose').value.trim()||'',
     duree:document.getElementById('mDuree').value.trim()||'',
     poso:document.getElementById('mPoso').value.trim()||''
-  });
-  document.getElementById('medList').innerHTML=renderMeds(false);
+  };
+  if(MODAL_MODE==='ald'){
+    MEDS_ALD.push(med);
+    document.getElementById('aldMedList').innerHTML=renderMeds(false,'ald');
+  } else {
+    MEDS.push(med);
+    document.getElementById('medList').innerHTML=renderMeds(false);
+  }
   closeMedModal();
 }
 
