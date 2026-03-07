@@ -423,9 +423,9 @@ function parseDossierNotion(page){
     diagIA:txt('Diagnostic IA'),
     recommandationsOMS:txt('Recommandations OMS'),
     examensRecommandes:txt('Examens recommandés'),
-    diagMed:txt('Diagnostic Med')||'',
+    diagMed:txt('Diagnostic Medecin')||'',
     examensPrescrit:txt('Examens Prescrit')||'',
-    traitementMed:txt('Traitement Med')||'',
+    traitementMed:txt('Traitement Prescrit')||'',
     notes:txt('Notes')||'',
     medecin:txt('Medecin')||'',
     valIA:null,
@@ -438,15 +438,15 @@ async function updateNotionDossier(notionId,fields){
   var props={};
   var mapping={
     'Statut':{type:'select',val:fields.statut},
-    'Diagnostic Med':{type:'rich_text',val:fields.diagMed},
+    'Diagnostic Medecin':{type:'rich_text',val:fields.diagMed},
     'Examens Prescrit':{type:'rich_text',val:fields.examensPrescrit},
-    'Traitement Med':{type:'rich_text',val:fields.traitementMed},
+    'Traitement Prescrit':{type:'rich_text',val:fields.traitementMed},
     'Notes':{type:'rich_text',val:fields.notes},
     'Validation IA':{type:'rich_text',val:fields.validationIA}
   };
   for(var k in mapping){
     var m=mapping[k];
-    if(m.val===undefined||m.val===null)continue;
+    if(m.val===undefined||m.val===null||m.val==='')continue;
     if(m.type==='select')props[k]={select:{name:m.val}};
     else props[k]={rich_text:[{text:{content:String(m.val||'').slice(0,2000)}}]};
   }
@@ -454,7 +454,8 @@ async function updateNotionDossier(notionId,fields){
     await notionRequest('/pages/'+notionId,'PATCH',{properties:props});
     return true;
   }catch(e){
-    toast('⚠️ Sync Notion: '+e.message);
+    toast('⚠️ Notion: '+e.message.slice(0,60));
+    console.log('Notion error detail:',e);
     return false;
   }
 }
