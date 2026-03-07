@@ -276,7 +276,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 // ══════════════════════════════
 // CONFIG
 // ══════════════════════════════
-var NOTION_DB='319dce21e1d38094a601fe3bb4abff3a';
+var NOTION_DB='319dce21-e1d3-8094-a601-fe3bb4abff3a';
 var NOTION_PROXY='/api/notion'; // proxy Vercel sécurisé — clé dans variables Vercel
 
 async function notionRequest(endpoint, method, body) {
@@ -889,17 +889,6 @@ function toast(msg){
   var t=document.createElement('div');t.className='toast';t.textContent=msg;
   document.body.appendChild(t);
   setTimeout(function(){t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(function(){t.remove();},300);},2500);
-}
-function
-  var log=document.getElementById('debugLog');
-  if(!panel||!log)return;
-  panel.style.display='flex';
-  var line=document.createElement('div');
-  line.style.borderBottom='1px solid #1a1a1a';
-  line.style.padding='2px 0';
-  line.textContent=new Date().toLocaleTimeString()+' '+msg;
-  log.appendChild(line);
-  log.scrollTop=log.scrollHeight;
 }
 </script>
 <div id="debugPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#0a0a0a;border-top:1px solid #333;flex-direction:column;z-index:9999;max-height:160px;">
