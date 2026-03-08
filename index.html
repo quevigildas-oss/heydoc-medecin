@@ -424,6 +424,9 @@ function parseDossierNotion(page){
     diagIA:txt('Diagnostic IA'),
     recommandationsOMS:txt('Recommandations OMS'),
     examensRecommandes:txt('Examens recommandés'),
+    medicamentsOMS:txt('Medicaments OMS'),
+    contreIndications:txt('Contre Indications'),
+    sourcesOMS:txt('Sources OMS'),
     diagMed:txt('Diagnostic Medecin')||'',
     examensPrescrit:txt('Examens Prescrit')||'',
     traitementMed:txt('Traitement Prescrit')||'',
@@ -844,7 +847,7 @@ async function lancerValidationIA(){
     'Antécédents: '+(p.antecedents||'Aucun')+'\n\n'+
     '=== SYMPTÔMES ===\n'+(d.symptomes||'Non renseignés')+'\n\n'+
     '=== DIAGNOSTIC IA PATIENT ===\n'+(d.diagIA||'Non renseigné')+'\n\n'+
-    '=== RECOMMANDATIONS OMS ===\n'+(d.recommandationsOMS||'Non renseignées')+'\n\n'+
+    '=== RECOMMANDATIONS OMS ===\n'+(d.recommandationsOMS||'Non renseignees')+'\n\n'+'=== MEDICAMENTS OMS (1ere intention) ===\n'+(d.medicamentsOMS||'Non renseignes')+'\n\n'+'=== CONTRE-INDICATIONS OMS ===\n'+(d.contreIndications||'Aucune renseignee')+'\n\n'+'=== SOURCES OMS ===\n'+(d.sourcesOMS||'Non renseignees')+'\n\n'+
     '=== DÉCISION MÉDECIN ===\n'+
     'Diagnostic final: '+diag+'\n'+
     'Examens requis: '+(EXAMENS_REQUIS?'OUI — '+examens:'NON')+'\n'+
