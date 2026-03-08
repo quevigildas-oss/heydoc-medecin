@@ -9,6 +9,12 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  // Vérifier le token Dokita
+  const dokitaToken = req.headers['x-dokita-key'];
+  if (!dokitaToken || dokitaToken !== process.env.DOKITA_SECRET) {
+    return res.status(401).json({ error: 'Non autorisé' });
+  }
+
   const apiKey = process.env.ANTHROPIC_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_KEY non configurée' });
 
