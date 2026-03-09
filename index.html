@@ -297,11 +297,14 @@ async function notionRequest(endpoint, method, body) {
 // ══════════════════════════════
 // BDD PATIENTS
 // ══════════════════════════════
-async function chargerDossierPatient(nomPatient){
+async function chargerDossierPatient(nomPatient,patientId){
   PATIENT_DOSSIER=null;
   try{
+    var filter=patientId
+      ?{property:'ID Patient',rich_text:{equals:patientId}}
+      :{property:'Nom complet',title:{contains:nomPatient}};
     var data=await notionRequest('/databases/'+NOTION_PATIENTS_DB+'/query','POST',{
-      filter:{property:'Nom complet',title:{contains:nomPatient}},
+      filter:filter,
       page_size:1
     });
     if(data.results&&data.results.length>0){
@@ -410,6 +413,7 @@ function parseDossierNotion(page){
     id:txt('ID')||page.id.slice(0,8),
     patient:{
       nom:txt('Patient Nom'),
+      patientId:txt('Patient ID')||'',
       age:txt('Patient Age'),
       poids:txt('Patient Poids'),
       ville:txt('Patient Ville'),
@@ -567,7 +571,9 @@ function openDos(notionId){
   CID_VAL=null;
   // Charger dossier patient depuis BDD Patients
   PATIENT_DOSSIER=null;
-  chargerDossierPatient(CUR_DOS.patient.nom).then(function(dp){
+  console.log('Recherche patient BDD:', CUR_DOS.patient.nom);
+  chargerDossierPatient(CUR_DOS.patient.nom, CUR_DOS.patient.patientId||null).then(function(dp){
+    console.log('PATIENT_DOSSIER trouvé:', dp?'OUI — email='+dp.email:'NON');
     if(dp){
       // Enrichir les infos patient avec le dossier médical
       CUR_DOS.patient.allergies=dp.allergies||CUR_DOS.patient.allergies||'';
