@@ -217,7 +217,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
   </div>
   <div class="login-box">
     <div class="login-title">Connexion</div>
-    <div class="lfield"><label>Email</label><input type="email" id="liEmail" placeholder="medecin@hopital.ci" autocomplete="off"/></div>
+    <div class="lfield"><label>Numéro d'ordre médical</label><input type="text" id="liOrdre" placeholder="CI-2018-00456" autocomplete="off"/></div>
     <div class="lfield"><label>Code d'accès</label><input type="password" id="liCode" placeholder="••••••"/></div>
     <button class="btn-login" onclick="doLogin()">Accéder aux dossiers →</button>
     <div class="login-err" id="liErr">Email ou code incorrect</div>
@@ -501,14 +501,14 @@ async function doLogin(){
   var ordre=(document.getElementById('liOrdre').value||'').trim();
   var code=(document.getElementById('liCode').value||'').trim();
   var errEl=document.getElementById('liErr');
-  if(!ordre||!code){errEl.textContent='Numéro d'ordre et code requis';errEl.classList.add('on');return;}
+  if(!ordre||!code){errEl.textContent='Numéro d\'ordre et code requis';errEl.classList.add('on');return;}
   errEl.textContent='Connexion en cours...';errEl.classList.add('on');
   try{
     var data=await notionRequest('/databases/'+NOTION_MEDECINS_DB+'/query','POST',{
-      filter:{property:'Numéro d'ordre médical',rich_text:{equals:ordre}},
+      filter:{property:'Numéro d\'ordre médical',rich_text:{equals:ordre}},
       page_size:1
     });
-    if(!data.results||!data.results.length){errEl.textContent='Numéro d'ordre introuvable';errEl.classList.add('on');return;}
+    if(!data.results||!data.results.length){errEl.textContent='Numéro d\'ordre introuvable';errEl.classList.add('on');return;}
     var page=data.results[0];
     var props=page.properties;
     function txt(k){var p=props[k];if(!p)return '';var t=p.type;
