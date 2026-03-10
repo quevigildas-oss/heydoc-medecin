@@ -785,9 +785,11 @@ function renderConsult(){
         '</div>'+
 
         // Médicaments de la consultation
-        '<div class="frow"><div class="flabel">Médicaments prescrits</div>'+
-        '<div id="medList">'+renderMeds(false)+'</div>'+
-        '<button class="add-med" onclick="openMedModal()">＋ Ajouter un médicament</button></div>'+
+        '<div class="frow">'+
+          '<div class="flabel">💊 Médicaments prescrits</div>'+
+          '<div id="medList">'+renderMeds(false)+'</div>'+
+          '<button class="add-med" onclick="openMedModal()">＋ Ajouter un médicament</button>'+
+        '</div>'+
 
         // Notes
         '<div class="frow"><div class="flabel">Notes / Observations</div>'+
