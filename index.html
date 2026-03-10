@@ -785,10 +785,10 @@ function renderConsult(){
         '</div>'+
 
         // Médicaments de la consultation
-        '<div class="frow">'+
-          '<div class="flabel">💊 Médicaments prescrits</div>'+
+        '<div class="exam-toggle on" style="display:block;cursor:default;border-color:var(--accent);background:rgba(0,200,150,.05);">'+
+          '<div class="exam-toggle-label" style="color:var(--accent);margin-bottom:8px;">💊 Médicaments prescrits</div>'+
           '<div id="medList">'+renderMeds(false)+'</div>'+
-          '<button class="add-med" onclick="openMedModal()">＋ Ajouter un médicament</button>'+
+          '<button class="add-med" style="margin-top:8px;" onclick="openMedModal()">＋ Ajouter un médicament</button>'+
         '</div>'+
 
         // Notes
