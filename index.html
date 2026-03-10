@@ -376,6 +376,7 @@ var MEDECINS={
   'quevi.gildas@gmail.com':{nom:'Dr. Quevi Gildas',spec:'Infectiologue',code:'1234',color:'#00C896'}
 };
 
+var NOTION_MEDECINS_DB='314dce21-e1d3-802e-88a1-fc736fb3bde9';
 var CUR_MED=null,CUR_DOS=null,FILTRE='tous',MEDS=[],CID_VAL=null;
 var DOSSIERS=[];
 var EXAMENS_REQUIS=false;
@@ -496,22 +497,47 @@ function goBack(){renderDash();showScreen('dashScreen');}
 // ══════════════════════════════
 // LOGIN
 // ══════════════════════════════
-function doLogin(){
-  var email=(document.getElementById('liEmail').value||'').trim().toLowerCase();
+async function doLogin(){
+  var ordre=(document.getElementById('liOrdre').value||'').trim();
   var code=(document.getElementById('liCode').value||'').trim();
-  var med=MEDECINS[email];
-  if(med&&med.code===code){
-    CUR_MED=Object.assign({email:email},med);
-    document.getElementById('liErr').classList.remove('on');
-    document.getElementById('dashNom').textContent=med.nom;
-    document.getElementById('dashSpec').textContent=med.spec;
+  var errEl=document.getElementById('liErr');
+  if(!ordre||!code){errEl.textContent='Numéro d'ordre et code requis';errEl.classList.add('on');return;}
+  errEl.textContent='Connexion en cours...';errEl.classList.add('on');
+  try{
+    var data=await notionRequest('/databases/'+NOTION_MEDECINS_DB+'/query','POST',{
+      filter:{property:'Numéro d'ordre médical',rich_text:{equals:ordre}},
+      page_size:1
+    });
+    if(!data.results||!data.results.length){errEl.textContent='Numéro d'ordre introuvable';errEl.classList.add('on');return;}
+    var page=data.results[0];
+    var props=page.properties;
+    function txt(k){var p=props[k];if(!p)return '';var t=p.type;
+      if(t==='rich_text')return(p.rich_text||[]).map(function(x){return x.plain_text;}).join('');
+      if(t==='title')return(p.title||[]).map(function(x){return x.plain_text;}).join('');
+      if(t==='email')return p.email||'';
+      if(t==='phone_number')return p.phone_number||'';
+      if(t==='select')return p.select?p.select.name:'';
+      if(t==='number')return p.number!=null?String(p.number):'';
+      return '';}
+    var storedCode=txt('Code');
+    if(storedCode!==code){errEl.textContent='Code incorrect';errEl.classList.add('on');return;}
+    var statut=txt('Statut');
+    if(statut&&statut!=='Actif'){errEl.textContent='Compte médecin inactif';errEl.classList.add('on');return;}
+    var prenom=txt('Prénom');
+    var nom=txt('Nom');
+    var nomComplet='Dr. '+(prenom?prenom+' ':'')+nom;
+    var spec=txt('Spécialité')||txt('Type de médecin')||'Médecin';
+    var email=txt('Email');
+    var colors=['#00C896','#0EA5E9','#F59E0B','#A78BFA','#F97316'];
+    CUR_MED={ordre:ordre,email:email,nom:nomComplet,spec:spec,color:colors[Math.floor(Math.random()*colors.length)]};
+    errEl.classList.remove('on');
+    document.getElementById('dashNom').textContent=nomComplet;
+    document.getElementById('dashSpec').textContent=spec;
     showScreen('dashScreen');
     chargerNotion();
-  } else {
-    document.getElementById('liErr').classList.add('on');
-  }
+  }catch(e){errEl.textContent='Erreur connexion: '+e.message;errEl.classList.add('on');}
 }
-function doLogout(){CUR_MED=null;document.getElementById('liEmail').value='';document.getElementById('liCode').value='';showScreen('loginScreen');}
+function doLogout(){CUR_MED=null;document.getElementById('liOrdre').value='';document.getElementById('liCode').value='';showScreen('loginScreen');}
 document.getElementById('liCode').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
 
 // ══════════════════════════════
