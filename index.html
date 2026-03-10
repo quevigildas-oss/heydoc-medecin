@@ -643,9 +643,11 @@ function toggleExamen(){
   var tog=document.getElementById('examToggle');
   var sw=document.getElementById('examSw');
   var warn=document.getElementById('examWarn');
+  var sec=document.getElementById('examensSection');
   if(tog)tog.classList.toggle('on',EXAMENS_REQUIS);
   if(sw)sw.classList.toggle('on',EXAMENS_REQUIS);
   if(warn)warn.classList.toggle('on',EXAMENS_REQUIS);
+  if(sec)sec.style.display=EXAMENS_REQUIS?'block':'none';
 }
 
 function toggleALD(){
@@ -760,9 +762,11 @@ function renderConsult(){
           '⚠️ Avec examens requis : seuls les médicaments symptomatiques sont autorisés. Le dossier restera en attente jusqu\'aux résultats.'+
         '</div>'+
 
-        // Examens demandés
-        '<div class="frow"><div class="flabel">Examens demandés</div>'+
-        '<textarea class="finput" id="examensInput" rows="2" placeholder="ex: NFS, Frottis goutte épaisse, Widal...">'+escHtml(d.examensPrescrit)+'</textarea></div>'+
+        // Section examens (masquée par défaut, révélée par toggle)
+        '<div id="examensSection" style="display:'+(EXAMENS_REQUIS?'block':'none')+';">'+
+          '<div class="frow"><div class="flabel">Examens demandés</div>'+
+          '<textarea class="finput" id="examensInput" rows="2" placeholder="ex: NFS, Frottis goutte épaisse, Widal...">'+escHtml(d.examensPrescrit)+'</textarea></div>'+
+        '</div>'+
 
         // Toggle ALD
         '<div class="exam-toggle'+(ALD?' on':'')+'" id="aldToggle" onclick="toggleALD()">'+
@@ -968,8 +972,8 @@ async function finaliser(nouveauStatut){
     validationIA:CUR_DOS.valIA?CUR_DOS.valIA.texte:''
   });
 
-  // Sauvegarder ordonnance dans BDD Patients
-  if(PATIENT_DOSSIER&&nouveauStatut!=='en_attente_examen'){
+  // Sauvegarder ordonnance dans BDD Consultations (colonne Ordonnance)
+  if(nouveauStatut!=='en_attente_examen'){
     var ordonnance={
       date:new Date().toISOString().slice(0,10),
       medecin:CUR_MED.nom,
@@ -980,19 +984,11 @@ async function finaliser(nouveauStatut){
       }),
       notes:notes||''
     };
-    // Lire ordonnances existantes, ajouter la nouvelle
-    var ordsExist='';
     try{
-      var ordsPage=await notionRequest('/pages/'+PATIENT_DOSSIER.notionId,'GET');
-      var ordsProps=ordsPage.properties||{};
-      if(ordsProps['Ordonnances']&&ordsProps['Ordonnances'].rich_text){
-        ordsExist=(ordsProps['Ordonnances'].rich_text||[]).map(function(x){return x.plain_text;}).join('');
-      }
-    }catch(e){}
-    var ordsArr=[];
-    try{if(ordsExist)ordsArr=JSON.parse(ordsExist);}catch(e){}
-    ordsArr.unshift(ordonnance); // plus récent en premier
-    await mettreAJourDossierPatient({ordonnances:JSON.stringify(ordsArr).slice(0,2000)});
+      await notionRequest('/pages/'+CUR_DOS.notionId,'PATCH',{
+        properties:{'Ordonnance':{rich_text:[{text:{content:JSON.stringify(ordonnance).slice(0,2000)}}]}}
+      });
+    }catch(e){console.log('Erreur sauvegarde ordonnance:',e.message);}
   }
 
   // Mettre à jour BDD Patients si ALD cochée
