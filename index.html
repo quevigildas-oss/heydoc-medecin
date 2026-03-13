@@ -1022,14 +1022,38 @@ async function finaliser(nouveauStatut){
   // Mettre à jour BDD Patients si ALD cochée
   if(ALD&&PATIENT_DOSSIER){
     var diag2=(document.getElementById('diagMedInput')||{}).value||CUR_DOS.diagMed||'';
-    var medsStr2=MEDS_ALD.map(function(m){return m.nom+(m.dose?' '+m.dose:'');}).join(', ');
+    var dateAujourdhui=new Date().toISOString().slice(0,10);
+
+    // ── Format enrichi standardisé (compatible app patient tuile Traitements) ──
+    // Format : "Nom Dosage — Fréquence [ALD] (Indication) — Dr. Prescripteur — Début: YYYY-MM-DD"
+    var nouvTraits=MEDS_ALD.map(function(m){
+      var ligne=m.nom+(m.dose?' '+m.dose:'');
+      if(m.poso)ligne+=' — '+m.poso;
+      ligne+=' [ALD]';
+      if(diag2)ligne+=' ('+diag2+')';
+      ligne+=' — '+CUR_MED.nom;
+      ligne+=' — Début: '+dateAujourdhui;
+      return ligne;
+    }).join('\n');
+
+    // Merger avec les traitements existants sans doublons par nom de médicament
+    var existants=(PATIENT_DOSSIER.traitements||'').split('\n').filter(function(l){return l.trim();});
+    MEDS_ALD.forEach(function(m){
+      // Supprimer l'ancienne ligne si même médicament déjà présent
+      existants=existants.filter(function(l){
+        return l.toLowerCase().indexOf(m.nom.toLowerCase())<0;
+      });
+    });
+    var traitementsFinal=nouvTraits+(existants.length?'\n'+existants.join('\n'):'');
+
+    // MAJ antécédents avec le diagnostic ALD
     var newAntecedents=mergeChamp(PATIENT_DOSSIER.antecedents,diag2);
-    var newTraitements=mergeChamp(PATIENT_DOSSIER.traitements,medsStr2);
+
     var aldOk=await mettreAJourDossierPatient({
       antecedents:newAntecedents,
-      traitements:newTraitements
+      traitements:traitementsFinal
     });
-    toast(aldOk?'🏥 Dossier patient mis à jour (ALD)':'⚠️ Erreur mise à jour dossier');
+    toast(aldOk?'🏥 Dossier patient mis à jour (ALD — '+MEDS_ALD.length+' traitement'+(MEDS_ALD.length>1?'s':'')+')':'⚠️ Erreur MAJ dossier patient');
   }
 
   // Mettre à jour le cache local
