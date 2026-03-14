@@ -485,7 +485,7 @@ function parseDossierNotion(page){
     traitementMed:txt('Traitement Prescrit')||'',
     notes:txt('Notes')||'',
     medecin:txt('Medecin')||'',
-    valIA:null,
+    valIA:txt('Validation IA')||null,
     urgent:statut==='en_attente'
   };
 }
@@ -638,10 +638,23 @@ function renderDossiers(){
 function openDos(notionId){
   CUR_DOS=DOSSIERS.find(function(d){return d.notionId===notionId;})||null;
   if(!CUR_DOS)return;
-  var parsed=CUR_DOS.traitementMed?parseMedsStr(CUR_DOS.traitementMed):{meds:[],medsAld:[]};
-  MEDS=parsed.meds;
-  MEDS_ALD=parsed.medsAld;
-  ALD=MEDS_ALD.length>0;
+  // Essayer de récupérer le brouillon JSON enrichi (stocké dans valIA)
+  var brouillonOk=false;
+  if(CUR_DOS.valIA&&CUR_DOS.valIA.indexOf('##BROUILLON##')===0){
+    try{
+      var allMeds=JSON.parse(CUR_DOS.valIA.replace('##BROUILLON##',''));
+      MEDS=allMeds.filter(function(m){return !m.ald;});
+      MEDS_ALD=allMeds.filter(function(m){return m.ald;});
+      ALD=MEDS_ALD.length>0;
+      brouillonOk=true;
+    }catch(e){brouillonOk=false;}
+  }
+  if(!brouillonOk){
+    var parsed=CUR_DOS.traitementMed?parseMedsStr(CUR_DOS.traitementMed):{meds:[],medsAld:[]};
+    MEDS=parsed.meds;
+    MEDS_ALD=parsed.medsAld;
+    ALD=MEDS_ALD.length>0;
+  }
   EXAMENS_REQUIS=CUR_DOS.statut==='en_attente_examen';
   CID_VAL=null;
   CID_VAL=null;
@@ -927,7 +940,7 @@ function renderConsult(){
         (d.traitementMed?'<div class="frow"><div class="flabel">Traitement</div><div class="ia-txt">'+escHtml(d.traitementMed).replace(/\n/g,'<br>')+'</div></div>':'')+
         (d.notes?'<div class="frow"><div class="flabel">Notes</div><div class="ia-txt">'+escHtml(d.notes)+'</div></div>':'')+
       '</div>'+
-      (d.valIA?
+      (d.valIA&&typeof d.valIA==='object'&&d.valIA.statut?
         '<div class="fsec">'+
           '<div class="fsec-title"><div class="fsec-ico pu">✦</div><div class="fsec-label">Résultat validation IA</div></div>'+
           '<div class="val-box '+(d.valIA.statut==='conforme'?'conf':'nconf')+'">'+
@@ -947,11 +960,17 @@ async function sauvegarderBrouillon(){
   var diag=(document.getElementById('diagMedInput')||{}).value||'';
   var examens=(document.getElementById('examensInput')||{}).value||'';
   var notes=(document.getElementById('notesInput')||{}).value||'';
+
+  // Format JSON enrichi — préserve tous les champs (dose, poso, duree, conditionnement, ald)
+  var allMeds=MEDS.map(function(m){return Object.assign({},m,{ald:false});})
+    .concat(MEDS_ALD.map(function(m){return Object.assign({},m,{ald:true});}));
+
+  // Format texte lisible pour Notion (Traitement Prescrit)
   var medsStr=MEDS.map(function(m){
     return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' — '+m.duree:'');
   }).join('\n');
   var medsAldStr=MEDS_ALD.map(function(m){
-    return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+' [ALD]';
+    return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' — '+m.duree:'')+' [ALD]';
   }).join('\n');
   var medsStrComplet=(medsStr+(medsAldStr?'\n'+medsAldStr:'')).trim();
 
@@ -959,13 +978,16 @@ async function sauvegarderBrouillon(){
     toast('⚠️ Rien à sauvegarder');return;
   }
 
+  // Stocker le JSON enrichi dans Notes internes pour récupération fidèle
+  var brouillonJson='##BROUILLON##'+JSON.stringify(allMeds);
+
   toast('💾 Sauvegarde...');
   var ok=await updateNotionDossier(CUR_DOS.notionId,{
     diagMed:diag,
     examensPrescrit:examens,
     traitementMed:medsStrComplet,
-    notes:notes
-    // statut inchangé — reste en_attente
+    notes:notes,
+    validationIA:brouillonJson  // réutilise ce champ pour stocker le JSON brouillon
   });
 
   // MAJ cache local
