@@ -868,7 +868,7 @@ function envoyerPrescription(){
 
   var examens=(document.getElementById('examensInput')||{}).value||'';
   if(EXAMENS_REQUIS&&!examens.trim()){toast('⚠️ Précisez les examens demandés');return;}
-  if(!EXAMENS_REQUIS&&!MEDS.length){toast('⚠️ Ajoutez au moins un médicament');return;}
+  if(!EXAMENS_REQUIS&&!MEDS.length&&!MEDS_ALD.length){toast('⚠️ Ajoutez au moins un médicament');return;}
 
   var btn=document.getElementById('btnSend');
   if(btn){btn.disabled=true;btn.innerHTML='<span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span> Validation IA en cours...';}
