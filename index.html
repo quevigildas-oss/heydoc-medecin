@@ -1007,12 +1007,16 @@ async function finaliser(nouveauStatut){
 
   // Sauvegarder ordonnance dans BDD Consultations (colonne Ordonnance)
   if(nouveauStatut!=='en_attente_examen'){
+    // Fusionner médicaments consultation + médicaments ALD
+    var tousLesMeds=MEDS.concat(MEDS_ALD.map(function(m){
+      return {nom:m.nom,dose:m.dose,poso:m.poso+'(ALD — traitement permanent)',duree:''};
+    }));
     var ordonnance={
       date:new Date().toISOString().slice(0,10),
       medecin:CUR_MED.nom,
       specialite:CUR_MED.spec,
       diagnostic:diag,
-      medicaments:MEDS.map(function(m){
+      medicaments:tousLesMeds.map(function(m){
         return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' ('+m.duree+')':'');
       }),
       notes:notes||''
