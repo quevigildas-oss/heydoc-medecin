@@ -1369,12 +1369,23 @@ function medAutocomplete(val){
   }).slice(0,8);
   if(!results.length){box.style.display='none';return;}
   box.style.display='block';
-  box.innerHTML=results.map(function(m){
+  box.innerHTML=results.map(function(m,ri){
     var hl=m.nom.replace(new RegExp('('+val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<strong>$1</strong>');
-    return '<div onclick="selectMed(\''+m.nom.replace(/'/g,'\\\'')+'\')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;" onmouseover="this.style.background=\'var(--card2)\'" onmouseout="this.style.background=\'\'">'+
+    // Utiliser l'index dans MEDS_DB pour éviter les problèmes d'encodage accent
+    var dbIdx=MEDS_DB.indexOf(m);
+    return '<div onclick="selectMedByIndex('+dbIdx+')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;" onmouseover="this.style.background=\'var(--card2)\'" onmouseout="this.style.background=\'\'">'+
       hl+'<span style="font-size:10px;color:var(--text3);margin-left:8px;">'+m.classe+'</span>'+
     '</div>';
   }).join('');
+}
+
+function selectMedByIndex(idx){
+  var m=MEDS_DB[idx];
+  if(!m)return;
+  document.getElementById('mNom').value=m.nom;
+  document.getElementById('medSuggestions').style.display='none';
+  MED_SELECTED=m;
+  updateDosages();
 }
 
 function selectMed(nom){
