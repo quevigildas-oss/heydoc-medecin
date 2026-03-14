@@ -1398,6 +1398,7 @@ function selectMed(nom){
 function updateDosages(){
   var sel=document.getElementById('mDose');
   sel.innerHTML='<option value="">-- Sélectionner --</option>';
+  document.getElementById('mCondit').innerHTML='<option value="">-- Sélectionner --</option>';
   if(!MED_SELECTED)return;
   MED_SELECTED.dosages.forEach(function(d){
     var opt=document.createElement('option');
@@ -1408,7 +1409,6 @@ function updateDosages(){
     sel.value=MED_SELECTED.dosages[0].dose;
     updateConditionnements();
   }
-  document.getElementById('mCondit').innerHTML='<option value="">-- Sélectionner --</option>';
 }
 
 function updateConditionnements(){
