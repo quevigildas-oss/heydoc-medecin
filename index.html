@@ -1,1211 +1,287 @@
 <!DOCTYPE html>
-<!-- ============================================
-     DOKITA PRO — App Médecin
-     VERSION : V1.2
-     DATE    : 2026-03-13
-     STACK   : Claude API (validation prescription) + Notion
-     STATUS  : ALD format enrichi standardisé
-     CHANGELOG:
-       V1.2 — 2026-03-13 : Format ALD enrichi dans Notion (compatible Dokita V3.2)
-                           Déduplication traitements existants
-                           Toast précis nombre de traitements ALD
-       V1.1 — 2026-03-09 : Workflow complet validé
-============================================ -->
 <html lang="fr">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>Dokita Pro</title>
-<link rel="manifest" href="/manifest.json"/>
-<meta name="mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="apple-mobile-web-app-title" content="Dokita Pro"/>
-<meta name="theme-color" content="#00C896"/>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dokita — Réponse Pharmacie</title>
 <style>
-:root{
-  --bg:#0A0F1E;--card:#111827;--card2:#161D2F;--border:#1E2D45;
-  --accent:#00C896;--accent2:#0EA5E9;--warn:#F59E0B;--danger:#EF4444;--exam:#A78BFA;
-  --text:#F0F4FF;--text2:#8B9EC7;--text3:#4A5A7A;--white:#FFFFFF;
-  --sb:env(safe-area-inset-bottom,0px);--st:env(safe-area-inset-top,0px);
-}
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;overflow:hidden;}
-#app{height:100%;display:flex;flex-direction:column;position:relative;}
-.screen{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden;}
-.screen.on{display:flex;}
-
-/* ── LOGIN ── */
-#loginScreen{background:var(--bg);justify-content:center;align-items:center;padding:30px;}
-#loginScreen::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(0,200,150,0.12),transparent 70%),radial-gradient(ellipse 60% 40% at 80% 80%,rgba(14,165,233,0.08),transparent 60%);pointer-events:none;}
-.login-logo{text-align:center;margin-bottom:40px;}
-.login-ico{width:80px;height:80px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:36px;margin:0 auto 16px;box-shadow:0 0 40px rgba(0,200,150,0.3);}
-.login-logo h1{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:var(--white);}
-.login-logo p{font-size:13px;color:var(--text2);margin-top:4px;}
-.login-box{background:var(--card);border:1px solid var(--border);border-radius:24px;padding:28px;width:100%;max-width:380px;}
-.login-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:2px;margin-bottom:20px;text-align:center;}
-.lfield{margin-bottom:14px;}
-.lfield label{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;}
-.lfield input{width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);outline:none;transition:border-color .2s;}
-.lfield input:focus{border-color:var(--accent);}
-.lfield input::placeholder{color:var(--text3);}
-.btn-login{width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:14px;padding:14px;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--bg);cursor:pointer;margin-top:6px;transition:opacity .2s;}
-.btn-login:active{opacity:.85;}
-.login-err{font-size:12px;color:var(--danger);text-align:center;margin-top:10px;display:none;}
-.login-err.on{display:block;}
-
-/* ── HEADER ── */
-.hdr{background:var(--card);border-bottom:1px solid var(--border);padding:12px 16px;padding-top:calc(12px + var(--st));display:flex;align-items:center;gap:12px;flex-shrink:0;z-index:10;}
-.hdr-back{width:36px;height:36px;background:var(--card2);border:1px solid var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;flex-shrink:0;}
-.hdr-ico{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
-.hdr-info{flex:1;}
-.hdr-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:var(--white);}
-.hdr-sub{font-size:11px;color:var(--text2);margin-top:1px;}
-.hdr-btn{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:7px 12px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;}
-.hdr-refresh{width:36px;height:36px;background:var(--card2);border:1px solid var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;flex-shrink:0;transition:transform .3s;}
-.hdr-refresh.spin{animation:spin .8s linear infinite;}
-@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
-
-/* ── DASHBOARD ── */
-#dashScreen{background:var(--bg);}
-.dash-body{flex:1;overflow-y:auto;padding:16px;}
-.dash-body::-webkit-scrollbar{display:none;}
-.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px;}
-.stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 8px;text-align:center;}
-.stat-num{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;}
-.stat-num.g{color:var(--accent);}
-.stat-num.b{color:var(--accent2);}
-.stat-num.w{color:var(--warn);}
-.stat-num.p{color:var(--exam);}
-.stat-label{font-size:9px;color:var(--text2);margin-top:3px;line-height:1.3;}
-.filter-row{display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px;}
-.filter-row::-webkit-scrollbar{display:none;}
-.ftag{background:var(--card);border:1.5px solid var(--border);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .2s;}
-.ftag.on{background:var(--accent);border-color:var(--accent);color:var(--bg);}
-.sec-title{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;}
-.dcard{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:16px;margin-bottom:10px;cursor:pointer;transition:border-color .2s,transform .1s;}
-.dcard:active{transform:scale(.98);}
-.dcard.urg{border-left:3px solid var(--danger);}
-.dcard.exam{border-left:3px solid var(--exam);}
-.dcard-top{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
-.dcard-av{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--bg);flex-shrink:0;}
-.dcard-nom{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--white);}
-.dcard-meta{font-size:11px;color:var(--text2);margin-top:2px;}
-.badge{display:inline-flex;align-items:center;gap:4px;border-radius:8px;padding:3px 9px;font-size:10px;font-weight:700;}
-.badge.a{background:rgba(245,158,11,.15);color:var(--warn);border:1px solid rgba(245,158,11,.3);}
-.badge.t{background:rgba(0,200,150,.15);color:var(--accent);border:1px solid rgba(0,200,150,.3);}
-.badge.r{background:rgba(14,165,233,.15);color:var(--accent2);border:1px solid rgba(14,165,233,.3);}
-.badge.e{background:rgba(167,139,250,.15);color:var(--exam);border:1px solid rgba(167,139,250,.3);}
-.dcard-symp{font-size:12px;color:var(--text2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.dcard-foot{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
-.dcard-id{font-size:10px;color:var(--text3);}
-.empty{text-align:center;padding:60px 20px;}
-.empty-ico{font-size:48px;margin-bottom:12px;}
-.empty-txt{font-size:14px;color:var(--text2);}
-.loading-state{text-align:center;padding:40px 20px;color:var(--text2);font-size:13px;}
-
-/* ── CONSULTATION ── */
-#consultScreen{background:var(--bg);}
-.cbody{flex:1;overflow-y:auto;padding:16px;padding-bottom:calc(16px + var(--sb));}
-.cbody::-webkit-scrollbar{display:none;}
-.fsec{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:18px;margin-bottom:14px;}
-.fsec-title{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
-.fsec-ico{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
-.fsec-ico.bl{background:rgba(14,165,233,.2);}
-.fsec-ico.gr{background:rgba(0,200,150,.2);}
-.fsec-ico.wa{background:rgba(245,158,11,.2);}
-.fsec-ico.pu{background:rgba(167,139,250,.2);}
-.fsec-ico.re{background:rgba(239,68,68,.2);}
-.fsec-label{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--white);}
-.chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px;}
-.chip{display:inline-flex;align-items:center;gap:5px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 10px;}
-.chip-k{font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
-.chip-v{font-size:12px;color:var(--text);font-weight:600;}
-.symp-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
-.symp-item{background:var(--bg);border-radius:8px;padding:7px 10px;display:flex;align-items:flex-start;gap:6px;}
-.symp-dot{color:var(--accent);font-size:10px;margin-top:2px;flex-shrink:0;}
-.symp-txt{font-size:12px;color:var(--text2);line-height:1.4;}
-.ia-box{background:linear-gradient(135deg,rgba(14,165,233,.08),rgba(0,200,150,.05));border:1px solid rgba(14,165,233,.2);border-radius:12px;padding:14px;}
-.ia-tag{display:inline-flex;align-items:center;gap:5px;background:rgba(14,165,233,.15);border:1px solid rgba(14,165,233,.3);border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;color:var(--accent2);letter-spacing:.5px;margin-bottom:8px;}
-.ia-txt{font-size:12px;color:var(--text2);line-height:1.6;}
-.dossier-box{background:rgba(167,139,250,.05);border:1px solid rgba(167,139,250,.2);border-radius:12px;padding:14px;}
-.dossier-item{margin-bottom:8px;}
-.dossier-k{font-size:10px;font-weight:700;color:var(--exam);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
-.dossier-v{font-size:12px;color:var(--text2);line-height:1.5;}
-.flabel{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:7px;}
-.finput{width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:11px 13px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;transition:border-color .2s;resize:none;}
-.finput:focus{border-color:var(--accent2);}
-.finput::placeholder{color:var(--text3);}
-.frow{margin-bottom:12px;}
-.dtags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
-.dtag{background:var(--card2);border:1.5px solid var(--border);border-radius:10px;padding:5px 11px;font-size:11px;font-weight:600;color:var(--text2);cursor:pointer;transition:all .2s;}
-.dtag.on{background:rgba(0,200,150,.15);border-color:var(--accent);color:var(--accent);}
-
-/* Toggle examen */
-.exam-toggle{display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;cursor:pointer;transition:border-color .2s;}
-.exam-toggle.on{border-color:var(--exam);background:rgba(167,139,250,.05);}
-#aldToggle.on{border-color:var(--exam);background:rgba(167,139,250,.05);}
-.exam-toggle-label{font-size:13px;font-weight:600;color:var(--text);}
-.exam-toggle-sub{font-size:11px;color:var(--text3);margin-top:2px;}
-.toggle-sw{width:44px;height:24px;border-radius:12px;background:var(--border);position:relative;transition:background .3s;flex-shrink:0;}
-.toggle-sw::after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .3s;}
-.toggle-sw.on{background:var(--exam);}
-.toggle-sw.on::after{left:22px;}
-.exam-warning{background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.25);border-radius:10px;padding:10px 13px;font-size:12px;color:var(--exam);line-height:1.5;margin-bottom:12px;display:none;}
-.exam-warning.on{display:block;}
-
-/* Médicaments */
-.med-item{background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;}
-.med-info{flex:1;}
-.med-name{font-size:13px;font-weight:600;color:var(--text);}
-.med-detail{font-size:11px;color:var(--text2);margin-top:2px;}
-.med-del{width:26px;height:26px;background:rgba(239,68,68,.1);border:none;border-radius:8px;color:var(--danger);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.add-med{background:var(--card2);border:1.5px dashed var(--border);border-radius:12px;padding:10px;font-size:12px;color:var(--text2);cursor:pointer;text-align:center;width:100%;font-family:'DM Sans',sans-serif;transition:border-color .2s;}
-.btn-send{width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:14px;padding:15px;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:var(--bg);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .2s;box-shadow:0 4px 20px rgba(0,200,150,.25);margin-bottom:14px;}
-.btn-send:active{opacity:.85;}
-.btn-send:disabled{opacity:.4;cursor:not-allowed;}
-
-/* Statut mise à jour Notion */
-.notion-sync{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);margin-bottom:4px;}
-.notion-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);flex-shrink:0;}
-.notion-dot.ok{background:var(--accent);}
-.notion-dot.err{background:var(--danger);}
-.notion-dot.sync{animation:pulse 1s infinite;}
-@keyframes pulse{0%,100%{opacity:.4;}50%{opacity:1;}}
-
-/* Validation */
-.val-box{border-radius:14px;padding:16px;}
-.val-box.conf{background:rgba(0,200,150,.08);border:1px solid rgba(0,200,150,.3);}
-.val-box.nconf{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);}
-.val-box.load{background:var(--bg);border:1px solid var(--border);text-align:center;padding:24px;}
-.val-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;margin-bottom:8px;}
-.val-txt{font-size:12px;line-height:1.6;color:var(--text2);}
-.val-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
-.vbtn{flex:1;border:none;border-radius:11px;padding:11px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:opacity .2s;min-width:120px;}
-.vbtn:active{opacity:.8;}
-.vbtn.ok{background:linear-gradient(135deg,var(--accent),#00A878);color:var(--bg);}
-.vbtn.ref{background:var(--card2);border:1.5px solid var(--border);color:var(--text2);}
-.vbtn.warn{background:rgba(251,191,36,.12);border:1.5px solid rgba(251,191,36,.4);color:#fbbf24;}
-.vbtn.exam{background:rgba(167,139,250,.15);border:1.5px solid var(--exam);color:var(--exam);}
-
-/* Dots */
-.dots{display:inline-flex;gap:4px;align-items:center;}
-.dot{width:6px;height:6px;background:var(--accent2);border-radius:50%;animation:db 1.2s infinite;}
-.dot:nth-child(2){animation-delay:.2s;}.dot:nth-child(3){animation-delay:.4s;}
-@keyframes db{0%,100%{transform:translateY(0);opacity:.4;}50%{transform:translateY(-5px);opacity:1;}}
-
-/* Toast */
-.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 18px;font-size:13px;color:var(--text);z-index:1000;box-shadow:0 8px 30px rgba(0,0,0,.4);white-space:nowrap;animation:tIn .3s ease;}
-@keyframes tIn{from{opacity:0;transform:translateX(-50%) translateY(10px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
-
-/* Modal */
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:flex-end;}
-.modal.on{display:flex;}
-.modal-box{background:var(--card);border-radius:24px 24px 0 0;padding:24px;padding-bottom:calc(24px + var(--sb));width:100%;}
-.modal-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--white);margin-bottom:18px;}
-.modal-acts{display:flex;gap:10px;margin-top:16px;}
-.mbtn{flex:1;border:none;border-radius:12px;padding:13px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer;}
-.mbtn.cancel{background:var(--card2);border:1px solid var(--border);color:var(--text2);}
-.mbtn.ok{background:linear-gradient(135deg,var(--accent2),#0284C7);color:var(--white);}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:Arial,sans-serif;background:#f0fdf4;color:#1A2B3C;min-height:100vh;}
+.hdr{background:#0A7E6A;padding:16px 20px;display:flex;align-items:center;gap:12px;}
+.hdr-logo{font-size:20px;font-weight:800;color:#fff;letter-spacing:1px;}
+.hdr-sub{font-size:11px;color:rgba(255,255,255,.8);margin-top:2px;}
+.container{max-width:600px;margin:0 auto;padding:16px;}
+.card{background:#fff;border-radius:12px;overflow:hidden;margin-bottom:14px;border:1px solid #e5e7eb;}
+.card-hdr{background:#0A7E6A;padding:10px 14px;font-size:11px;font-weight:700;color:#fff;}
+.card-body{padding:14px;}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.info-box{background:#E8F5F2;border:1px solid #0A7E6A;border-radius:8px;padding:10px;}
+.info-lbl{font-size:9px;font-weight:700;color:#0A7E6A;margin-bottom:4px;}
+.info-val{font-size:13px;font-weight:700;}
+.info-sub{font-size:11px;color:#6B7280;margin-top:2px;}
+.med-row{border-bottom:1px solid #e5e7eb;padding:14px 0;}
+.med-row:last-child{border-bottom:none;}
+.med-name{font-size:14px;font-weight:700;color:#1A2B3C;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.med-num{width:24px;height:24px;border-radius:50%;background:#0A7E6A;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;}
+.check-total{display:flex;align-items:center;gap:8px;background:#f0fdf4;border:1.5px solid #0A7E6A;border-radius:8px;padding:8px 12px;cursor:pointer;margin-bottom:10px;font-size:13px;font-weight:700;color:#0A7E6A;}
+.check-total input[type=checkbox]{width:18px;height:18px;accent-color:#0A7E6A;cursor:pointer;}
+.med-fields-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;align-items:end;}
+.field-group{display:flex;flex-direction:column;gap:3px;}
+.field-lbl{font-size:9px;font-weight:700;color:#6B7280;text-transform:uppercase;}
+.field-input{border:1px solid #D1D5DB;border-radius:6px;padding:7px 10px;font-size:13px;width:100%;outline:none;}
+.field-input:focus{border-color:#0A7E6A;}
+.field-input.total-auto{background:#f0fdf4;border-color:#86efac;color:#0A7E6A;font-weight:700;}
+.field-input:disabled{background:#f9fafb;color:#9CA3AF;}
+.btn-submit{width:100%;padding:16px;background:#0A7E6A;border:none;border-radius:12px;font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:#fff;cursor:pointer;margin-top:8px;}
+.btn-submit:active{background:#085f50;}
+.btn-submit:disabled{background:#9CA3AF;cursor:not-allowed;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1A2B3C;color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;display:none;z-index:999;}
+.loading{text-align:center;padding:60px 20px;color:#6B7280;}
+.error{background:#fef2f2;border:1px solid #fca5a5;border-radius:12px;padding:20px;text-align:center;color:#dc2626;margin:20px 0;}
+.success{background:#f0fdf4;border:1px solid #86efac;border-radius:12px;padding:30px;text-align:center;margin:20px 0;}
+.success-ico{font-size:48px;margin-bottom:12px;}
+.success-title{font-size:18px;font-weight:700;color:#0A7E6A;margin-bottom:8px;}
+.success-sub{font-size:13px;color:#6B7280;}
+.pharm-field{margin-bottom:12px;}
+.pharm-field label{display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px;text-transform:uppercase;}
+.pharm-field input{width:100%;border:1px solid #D1D5DB;border-radius:8px;padding:10px 14px;font-size:14px;outline:none;}
+.pharm-field input:focus{border-color:#0A7E6A;}
 </style>
 </head>
 <body>
-<div id="app">
-
-<!-- LOGIN -->
-<div class="screen on" id="loginScreen">
-  <div class="login-logo">
-    <div class="login-ico">🩺</div>
-    <h1>Dokita Pro</h1>
-    <p>Espace Médecin — Accès sécurisé</p>
-  </div>
-  <div class="login-box">
-    <div class="login-title">Connexion</div>
-    <div class="lfield"><label>Numéro d'ordre médical</label><input type="text" id="liOrdre" placeholder="CI-2018-00456" autocomplete="off"/></div>
-    <div class="lfield"><label>Code d'accès</label><input type="password" id="liCode" placeholder="••••••"/></div>
-    <button class="btn-login" onclick="doLogin()">Accéder aux dossiers →</button>
-    <div class="login-err" id="liErr">Email ou code incorrect</div>
+<div class="hdr">
+  <div>
+    <div class="hdr-logo">DOKITA PRO</div>
+    <div class="hdr-sub">Appel d'offre pharmacie</div>
   </div>
 </div>
 
-<!-- DASHBOARD -->
-<div class="screen" id="dashScreen">
-  <div class="hdr">
-    <div class="hdr-ico">🏥</div>
-    <div class="hdr-info"><div class="hdr-title" id="dashNom">Dr. —</div><div class="hdr-sub" id="dashSpec">Médecin</div></div>
-    <div class="hdr-refresh" id="refreshBtn" onclick="chargerNotion()" title="Actualiser">↻</div>
-    <button class="hdr-btn" onclick="doLogout()">Déconnexion</button>
-  </div>
-  <div class="dash-body">
-    <div class="stats-row">
-      <div class="stat-card"><div class="stat-num w" id="stA">0</div><div class="stat-label">En attente</div></div>
-      <div class="stat-card"><div class="stat-num p" id="stE">0</div><div class="stat-label">Att. examen</div></div>
-      <div class="stat-card"><div class="stat-num g" id="stT">0</div><div class="stat-label">Traités</div></div>
-      <div class="stat-card"><div class="stat-num b" id="stR">0</div><div class="stat-label">Clôturés</div></div>
-    </div>
-    <div class="filter-row">
-      <div class="ftag on" onclick="setFilter('tous',this)">Tous</div>
-      <div class="ftag" onclick="setFilter('en_attente',this)">⏳ En attente</div>
-      <div class="ftag" onclick="setFilter('en_attente_examen',this)">🔬 Att. examen</div>
-      <div class="ftag" onclick="setFilter('valide',this)">✅ Validés</div>
-      <div class="ftag" onclick="setFilter('cloture',this)">📁 Clôturés</div>
-    </div>
-    <div class="notion-sync"><div class="notion-dot" id="notionDot"></div><span id="notionStatus">Non synchronisé</span></div>
-    <div class="sec-title" style="margin-top:10px;">Dossiers de consultation</div>
-    <div id="dList"><div class="loading-state">Chargement des dossiers...</div></div>
+<div class="container">
+  <div id="mainContent">
+    <div class="loading">⏳ Chargement de l'ordonnance...</div>
   </div>
 </div>
 
-<!-- CONSULTATION -->
-<div class="screen" id="consultScreen">
-  <div class="hdr">
-    <div class="hdr-back" onclick="goBack()">←</div>
-    <div class="hdr-info"><div class="hdr-title" id="cTitre">Dossier</div><div class="hdr-sub" id="cSub"></div></div>
-    <div id="cBadge"></div>
-  </div>
-  <div class="cbody" id="cBody"></div>
-</div>
-
-</div>
-
-<!-- Modal médicament -->
-<div class="modal" id="medModal">
-  <div class="modal-box">
-    <div class="modal-title" id="medModalTitle">Ajouter un médicament</div>
-    <div class="frow"><div class="flabel">Médicament (DCI)</div><input class="finput" id="mNom" placeholder="ex: Amoxicilline" autocomplete="off"/></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div class="frow"><div class="flabel">Dosage</div><input class="finput" id="mDose" placeholder="ex: 500mg" autocomplete="off"/></div>
-      <div class="frow"><div class="flabel">Durée</div><input class="finput" id="mDuree" placeholder="ex: 7 jours" autocomplete="off"/></div>
-    </div>
-    <div class="frow"><div class="flabel">Posologie</div><input class="finput" id="mPoso" placeholder="ex: 3x/jour après repas" autocomplete="off"/></div>
-    <div class="modal-acts">
-      <button class="mbtn cancel" onclick="closeMedModal()">Annuler</button>
-      <button class="mbtn ok" onclick="confirmMed()">Ajouter</button>
-    </div>
-  </div>
-</div>
+<div class="toast" id="toast"></div>
 
 <script>
-// ══════════════════════════════
-// CONFIG
-// ══════════════════════════════
-var NOTION_DB='319dce21-e1d3-8094-a601-fe3bb4abff3a';
-var NOTION_PATIENTS_DB='31cdce21-e1d3-80b4-a74e-e0a6417ee0fb';
-var NOTION_PROXY='/api/notion'; // proxy Vercel sécurisé — clé dans variables Vercel
+var DOKITA_PROXY='https://heydoc-mu.vercel.app/api/notion';
+var NOTION_AO_DB='321dce21-e1d3-8002-a444-eb58cc33287f';
 
-async function notionRequest(endpoint, method, body) {
-  var url = NOTION_PROXY + '?path=' + encodeURIComponent(endpoint);
-  var opts = {
-    method: method || 'GET',
-    headers: { 'Content-Type': 'application/json' }
-  };
-  if (body) opts.body = JSON.stringify(body);
-  var r = await fetch(url, opts);
-  if (!r.ok) throw new Error('Notion ' + r.status);
+function toast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg;t.style.display='block';
+  setTimeout(function(){t.style.display='none';},3000);
+}
+
+async function notionReq(endpoint,method,body){
+  var url=DOKITA_PROXY+'?path='+encodeURIComponent(endpoint);
+  var opts={method:method||'GET',headers:{'Content-Type':'application/json'}};
+  if(body)opts.body=JSON.stringify(body);
+  var r=await fetch(url,opts);
+  if(!r.ok)throw new Error('Notion '+r.status);
   return await r.json();
 }
 
-// ══════════════════════════════
-// BDD PATIENTS
-// ══════════════════════════════
-async function chargerDossierPatient(nomPatient,patientId){
-  PATIENT_DOSSIER=null;
-  try{
-    var filter=patientId
-      ?{property:'ID Patient',rich_text:{equals:patientId}}
-      :{property:'Nom complet',title:{contains:nomPatient}};
-    var data=await notionRequest('/databases/'+NOTION_PATIENTS_DB+'/query','POST',{
-      filter:filter,
-      page_size:1
-    });
-    if(data.results&&data.results.length>0){
-      var p=data.results[0];
-      var props=p.properties||{};
-      function txt(k){
-        if(!props[k])return '';
-        var t=props[k].type;
-        if(t==='title')return (props[k].title||[]).map(function(x){return x.plain_text;}).join('');
-        if(t==='rich_text')return (props[k].rich_text||[]).map(function(x){return x.plain_text;}).join('');
-        if(t==='email')return props[k].email||'';
-        if(t==='phone_number')return props[k].phone_number||'';
-        if(t==='date')return props[k].date?props[k].date.start:'';
-        return '';
-      }
-      PATIENT_DOSSIER={
-        notionId:p.id,
-        nom:txt('Nom complet'),
-        prenom:txt('Prenom'),
-        nomSeul:txt('Nom'),
-        email:txt('Email'),
-        telephone:txt('Téléphone'),
-        ville:txt('Ville'),
-        sexe:txt('Sexe'),
-        poids:txt('Poids'),
-        dateNaissance:txt('Date naissance'),
-        allergies:txt('Allergies'),
-        antecedents:txt('Antécédents'),
-        traitements:txt('Traitements réguliers'),
-        ordonnances:txt('Ordonnances'),
-        idPatient:txt('ID Patient')
-      };
-      return PATIENT_DOSSIER;
-    }
-  }catch(e){console.log('Erreur BDD Patients:',e.message);}
-  return null;
-}
+// Lire params URL
+var params=new URLSearchParams(window.location.search);
+var aoId=params.get('id');
+var pharmTel=params.get('tel')||'';
 
-async function mettreAJourDossierPatient(updates){
-  if(!PATIENT_DOSSIER||!PATIENT_DOSSIER.notionId)return false;
-  var props={};
-  if(updates.allergies)props['Allergies']={rich_text:[{text:{content:updates.allergies.slice(0,2000)}}]};
-  if(updates.antecedents)props['Antécédents']={rich_text:[{text:{content:updates.antecedents.slice(0,2000)}}]};
-  if(updates.traitements)props['Traitements réguliers']={rich_text:[{text:{content:updates.traitements.slice(0,2000)}}]};
-  if(updates.ordonnances)props['Ordonnances']={rich_text:[{text:{content:updates.ordonnances.slice(0,2000)}}]};
-  try{
-    await notionRequest('/pages/'+PATIENT_DOSSIER.notionId,'PATCH',{properties:props});
-    return true;
-  }catch(e){return false;}
-}
+var aoData=null;
 
-function mergeChamp(existant,nouveau){
-  if(!existant)return nouveau;
-  if(!nouveau)return existant;
-  if(existant.toLowerCase().indexOf(nouveau.toLowerCase())>=0)return existant; // déjà présent
-  return existant+', '+nouveau;
-}
-
-var RA_RG='d7b62b',RA_RP='428dc1d8-2fa4-46da-b226-c26a52653ed0',RA_AGENT='7d26fda3-fe2d-405c-8aed-645df10baa12',RA_KEY='';
-var RA_URL='https://api-'+RA_RG+'.stack.tryrelevance.com/latest/agents/trigger';
-
-var MEDECINS={
-  'quevi.gildas@gmail.com':{nom:'Dr. Quevi Gildas',spec:'Infectiologue',code:'1234',color:'#00C896'}
-};
-
-var NOTION_MEDECINS_DB='314dce21-e1d3-802e-88a1-fc736fb3bde9';
-var CUR_MED=null,CUR_DOS=null,FILTRE='tous',MEDS=[],CID_VAL=null;
-var DOSSIERS=[];
-var EXAMENS_REQUIS=false;
-var PATIENT_DOSSIER=null; // dossier médical patient depuis BDD Patients
-var ALD=false; // affection longue durée cochée
-var MEDS_ALD=[]; // médicaments ALD permanents
-
-async function chargerNotion(){
-  var btn=document.getElementById('refreshBtn');
-  if(btn)btn.classList.add('spin');
-  setNotionStatus('sync','Chargement...');
-  document.getElementById('dList').innerHTML='<div class="loading-state"><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span><br><br>Chargement depuis Notion...</div>';
-  try{
-    var data=await notionRequest('/databases/'+NOTION_DB+'/query','POST',{
-      sorts:[{property:'Date',direction:'descending'}],
-      page_size:50
-    });
-    if(data.results){
-      DOSSIERS=data.results.map(parseDossierNotion);
-      renderDash();
-      setNotionStatus('ok',DOSSIERS.length+' dossiers — '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
-    } else {
-      setNotionStatus('err','Erreur: '+(data.message||JSON.stringify(data)));
-    }
-  }catch(e){
-    setNotionStatus('err','Erreur: '+e.message);
-    document.getElementById('dList').innerHTML='<div class="empty"><div class="empty-ico">⚠️</div><div class="empty-txt">Impossible de charger les dossiers<br><span style="font-size:11px;color:var(--text3)">'+e.message+'</span></div></div>';
-  }
-  if(btn)btn.classList.remove('spin');
-}
-
-function parseDossierNotion(page){
-  var p=page.properties||{};
-  function txt(prop){
-    if(!p[prop])return '';
-    var t=p[prop].type;
-    if(t==='title')return (p[prop].title||[]).map(function(x){return x.plain_text;}).join('');
-    if(t==='rich_text')return (p[prop].rich_text||[]).map(function(x){return x.plain_text;}).join('');
-    if(t==='select')return p[prop].select?p[prop].select.name:'';
-    if(t==='number')return p[prop].number!=null?String(p[prop].number):'';
-    if(t==='date')return p[prop].date?p[prop].date.start:'';
-    return '';
-  }
-  var statut=txt('Statut')||'en_attente';
-  return {
-    notionId:page.id,
-    id:txt('ID')||page.id.slice(0,8),
-    patient:{
-      nom:txt('Patient Nom'),
-      patientId:txt('Patient ID')||'',
-      age:txt('Patient Age'),
-      poids:txt('Patient Poids'),
-      ville:txt('Patient Ville'),
-      voyage:txt('Patient Voyage'),
-      allergies:txt('Allergies')||'',
-      traitements:txt('Traitements')||'',
-      antecedents:txt('Antecedents')||''
-    },
-    date:txt('Date'),
-    statut:statut,
-    symptomes:txt('Symptomes'),
-    diagIA:txt('Diagnostic IA'),
-    recommandationsOMS:txt('Recommandations OMS'),
-    examensRecommandes:txt('Examens recommandés'),
-    medicamentsOMS:txt('Medicaments OMS'),
-    contreIndications:txt('Contre Indications'),
-    sourcesOMS:txt('Sources OMS'),
-    diagMed:txt('Diagnostic Medecin')||'',
-    examensPrescrit:txt('Examens Prescrit')||'',
-    traitementMed:txt('Traitement Prescrit')||'',
-    notes:txt('Notes')||'',
-    medecin:txt('Medecin')||'',
-    valIA:null,
-    urgent:statut==='en_attente'
-  };
-}
-
-async function updateNotionDossier(notionId,fields){
-  // Construire les properties Notion selon le type
-  var props={};
-  var mapping={
-    'Statut':{type:'select',val:fields.statut},
-    'Diagnostic Medecin':{type:'rich_text',val:fields.diagMed},
-    'Examens Prescrit':{type:'rich_text',val:fields.examensPrescrit},
-    'Traitement Prescrit':{type:'rich_text',val:fields.traitementMed},
-    'Notes':{type:'rich_text',val:fields.notes},
-    'Validation IA':{type:'rich_text',val:fields.validationIA}
-  };
-  for(var k in mapping){
-    var m=mapping[k];
-    if(m.val===undefined||m.val===null||m.val==='')continue;
-    if(m.type==='select')props[k]={select:{name:m.val}};
-    else props[k]={rich_text:[{text:{content:String(m.val||'').slice(0,2000)}}]};
-  }
-  try{
-    await notionRequest('/pages/'+notionId,'PATCH',{properties:props});
-    return true;
-  }catch(e){
-    toast('⚠️ Notion: '+e.message.slice(0,60));
-    console.log('Notion error detail:',e);
-    return false;
-  }
-}
-
-function setNotionStatus(state,msg){
-  var dot=document.getElementById('notionDot');
-  var st=document.getElementById('notionStatus');
-  if(dot){dot.className='notion-dot'+(state==='ok'?' ok':state==='err'?' err':' sync');}
-  if(st)st.textContent=msg;
-}
-
-// ══════════════════════════════
-// NAVIGATION
-// ══════════════════════════════
-function showScreen(id){document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on');});document.getElementById(id).classList.add('on');}
-function goBack(){renderDash();showScreen('dashScreen');}
-
-// ══════════════════════════════
-// LOGIN
-// ══════════════════════════════
-async function doLogin(){
-  var ordre=(document.getElementById('liOrdre').value||'').trim();
-  var code=(document.getElementById('liCode').value||'').trim();
-  var errEl=document.getElementById('liErr');
-  if(!ordre||!code){errEl.textContent='Numéro d\'ordre et code requis';errEl.classList.add('on');return;}
-  errEl.textContent='Connexion en cours...';errEl.classList.add('on');
-  try{
-    var data=await notionRequest('/databases/'+NOTION_MEDECINS_DB+'/query','POST',{
-      filter:{property:'Numéro d\'ordre médical',rich_text:{equals:ordre}},
-      page_size:1
-    });
-    if(!data.results||!data.results.length){errEl.textContent='Numéro d\'ordre introuvable';errEl.classList.add('on');return;}
-    var page=data.results[0];
-    var props=page.properties;
-    function txt(k){var p=props[k];if(!p)return '';var t=p.type;
-      if(t==='rich_text')return(p.rich_text||[]).map(function(x){return x.plain_text;}).join('');
-      if(t==='title')return(p.title||[]).map(function(x){return x.plain_text;}).join('');
-      if(t==='email')return p.email||'';
-      if(t==='phone_number')return p.phone_number||'';
-      if(t==='select')return p.select?p.select.name:'';
-      if(t==='number')return p.number!=null?String(p.number):'';
-      return '';}
-    var storedCode=txt('Code');
-    if(storedCode!==code){errEl.textContent='Code incorrect';errEl.classList.add('on');return;}
-    var statut=txt('Statut');
-    if(statut&&statut!=='Actif'){errEl.textContent='Compte médecin inactif';errEl.classList.add('on');return;}
-    var prenom=txt('Prénom');
-    var nom=txt('Nom');
-    var nomComplet='Dr. '+(prenom?prenom+' ':'')+nom;
-    var spec=txt('Spécialité')||txt('Type de médecin')||'Médecin';
-    var email=txt('Email');
-    var colors=['#00C896','#0EA5E9','#F59E0B','#A78BFA','#F97316'];
-    CUR_MED={ordre:ordre,email:email,nom:nomComplet,spec:spec,color:colors[Math.floor(Math.random()*colors.length)]};
-    errEl.classList.remove('on');
-    document.getElementById('dashNom').textContent=nomComplet;
-    document.getElementById('dashSpec').textContent=spec;
-    showScreen('dashScreen');
-    chargerNotion();
-  }catch(e){errEl.textContent='Erreur connexion: '+e.message;errEl.classList.add('on');}
-}
-function doLogout(){CUR_MED=null;document.getElementById('liOrdre').value='';document.getElementById('liCode').value='';showScreen('loginScreen');}
-document.getElementById('liCode').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
-
-// ══════════════════════════════
-// DASHBOARD
-// ══════════════════════════════
-function setFilter(f,el){FILTRE=f;document.querySelectorAll('.ftag').forEach(function(t){t.classList.remove('on');});el.classList.add('on');renderDossiers();}
-
-function renderDash(){
-  document.getElementById('stA').textContent=DOSSIERS.filter(function(d){return d.statut==='en_attente';}).length;
-  document.getElementById('stE').textContent=DOSSIERS.filter(function(d){return d.statut==='en_attente_examen';}).length;
-  document.getElementById('stT').textContent=DOSSIERS.filter(function(d){return d.statut==='valide';}).length;
-  document.getElementById('stR').textContent=DOSSIERS.filter(function(d){return d.statut==='cloture';}).length;
-  renderDossiers();
-}
-
-function renderDossiers(){
-  var ds=DOSSIERS;
-  if(FILTRE!=='tous')ds=ds.filter(function(d){return d.statut===FILTRE;});
-  var list=document.getElementById('dList');
-  if(!ds.length){
-    list.innerHTML='<div class="empty"><div class="empty-ico">📂</div><div class="empty-txt">Aucun dossier</div></div>';
+async function init(){
+  var el=document.getElementById('mainContent');
+  if(!aoId){
+    el.innerHTML='<div class="error">❌ Lien invalide — paramètre manquant.</div>';
     return;
   }
-  var colors=['#00C896','#0EA5E9','#F59E0B','#A78BFA','#F97316'];
-  var bmap={
-    en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
-    en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
-    valide:'<span class="badge t">✅ VALIDÉ</span>',
-    cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
-  };
-  list.innerHTML='';
-  ds.forEach(function(d){
-    var nom=d.patient.nom||'Patient';
-    var ci=nom.charCodeAt(0)%colors.length;
-    var isExam=d.statut==='en_attente_examen';
-    var el=document.createElement('div');
-    el.className='dcard'+(d.urgent&&d.statut==='en_attente'?' urg':isExam?' exam':'');
-    el.innerHTML=
-      '<div class="dcard-top">'+
-        '<div class="dcard-av" style="background:'+colors[ci]+'">'+nom.charAt(0).toUpperCase()+'</div>'+
-        '<div style="flex:1">'+
-          '<div class="dcard-nom">'+escHtml(nom)+
-            '<span style="font-size:11px;color:var(--text2);font-weight:400"> • '+d.patient.age+' ans'+(d.patient.poids?' • '+d.patient.poids+'kg':'')+'</span>'+
-          '</div>'+
-          '<div class="dcard-meta">'+d.date+(d.patient.ville?' • '+escHtml(d.patient.ville):'')+'</div>'+
-        '</div>'+
-        (bmap[d.statut]||'')+
-      '</div>'+
-      '<div class="dcard-symp">'+escHtml((d.symptomes||'').slice(0,150))+'</div>'+
-      '<div class="dcard-foot">'+
-        '<span class="dcard-id">'+d.id+'</span>'+
-        '<span style="font-size:12px;color:var(--text3)">Ouvrir →</span>'+
-      '</div>';
-    el.onclick=function(){openDos(d.notionId);};
-    list.appendChild(el);
-  });
-}
-
-// ══════════════════════════════
-// CONSULTATION
-// ══════════════════════════════
-function openDos(notionId){
-  CUR_DOS=DOSSIERS.find(function(d){return d.notionId===notionId;})||null;
-  if(!CUR_DOS)return;
-  MEDS=CUR_DOS.traitementMed?parseMedsStr(CUR_DOS.traitementMed):[];
-  EXAMENS_REQUIS=CUR_DOS.statut==='en_attente_examen';
-  ALD=false;
-  MEDS_ALD=[];
-  CID_VAL=null;
-  // Charger dossier patient depuis BDD Patients
-  PATIENT_DOSSIER=null;
-  console.log('Recherche patient BDD:', CUR_DOS.patient.nom);
-  chargerDossierPatient(CUR_DOS.patient.nom, CUR_DOS.patient.patientId||null).then(function(dp){
-    console.log('PATIENT_DOSSIER trouvé:', dp?'OUI — email='+dp.email:'NON');
-    if(dp){
-      // Enrichir les infos patient avec le dossier médical
-      CUR_DOS.patient.allergies=dp.allergies||CUR_DOS.patient.allergies||'';
-      CUR_DOS.patient.antecedents=dp.antecedents||CUR_DOS.patient.antecedents||'';
-      CUR_DOS.patient.traitements=dp.traitements||CUR_DOS.patient.traitements||'';
-      CUR_DOS.patient.email=dp.email||CUR_DOS.patient.email||'';
-      renderConsult(); // re-render avec le dossier complet
+  try{
+    // Chercher l'appel d'offre dans Notion
+    var res=await notionReq('/databases/'+NOTION_AO_DB+'/query','POST',{
+      filter:{property:'ID',title:{equals:aoId}}
+    });
+    if(!res.results||!res.results.length){
+      el.innerHTML='<div class="error">❌ Appel d\'offre introuvable ou expiré.</div>';
+      return;
     }
-  });
-  var bmap={
-    en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
-    en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
-    valide:'<span class="badge t">✅ VALIDÉ</span>',
-    cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
-  };
-  document.getElementById('cTitre').textContent=(CUR_DOS.patient.nom||'Patient')+' • '+(CUR_DOS.patient.age||'?')+' ans';
-  document.getElementById('cSub').textContent=CUR_DOS.id+' • '+CUR_DOS.date;
-  document.getElementById('cBadge').innerHTML=bmap[CUR_DOS.statut]||'';
-  renderConsult();
-  showScreen('consultScreen');
+    var page=res.results[0];
+    var props=page.properties;
+    function txt(k){var p=props[k];if(!p)return '';
+      if(p.type==='rich_text')return(p.rich_text||[]).map(function(x){return x.plain_text;}).join('');
+      if(p.type==='title')return(p.title||[]).map(function(x){return x.plain_text;}).join('');
+      if(p.type==='select')return p.select?p.select.name:'';
+      if(p.type==='number')return p.number!=null?String(p.number):'';
+      return '';}
+    
+    var statut=txt('Statut');
+    if(statut==='repondu'||statut==='selectionne'){
+      el.innerHTML='<div class="success"><div class="success-ico">✅</div><div class="success-title">Déjà soumis</div><div class="success-sub">Vous avez déjà répondu à cet appel d\'offre.</div></div>';
+      return;
+    }
+
+    aoData={
+      notionPageId: page.id,
+      aoId: aoId,
+      pharmTel: pharmTel,
+      consultId: txt('Consultation ID'),
+      patientId: txt('Patient ID'),
+      pharmNom: txt('Pharmacie Nom'),
+      meds: JSON.parse(txt('Medicaments')||'[]')
+    };
+
+    renderForm(aoData);
+  }catch(e){
+    el.innerHTML='<div class="error">❌ Erreur : '+e.message+'</div>';
+  }
 }
 
-function parseMedsStr(str){
-  if(!str)return[];
-  return str.split('\n').filter(function(l){return l.trim();}).map(function(l){
-    return{nom:l,dose:'',duree:'',poso:''};
-  });
+// Quantités recommandées par défaut (1 boîte, 0 comprimé)
+// → sera remplacé par calcul Claude ultérieurement
+function getQteRecommandee(med){
+  return {boites:1, comprimes:0};
 }
 
-function sympToList(txt){
-  if(!txt)return '<div style="color:var(--text3);font-size:12px;">Aucun symptôme renseigné</div>';
-  var items=txt.split(/[,|]/).map(function(s){return s.trim();}).filter(function(s){return s.length>2;});
-  if(!items.length)return '<div class="ia-txt">'+escHtml(txt)+'</div>';
-  return '<div class="symp-grid">'+items.map(function(s){
-    return '<div class="symp-item"><span class="symp-dot">●</span><span class="symp-txt">'+escHtml(s)+'</span></div>';
-  }).join('')+'</div>';
-}
-
-function renderDiseaseTags(current){
-  var diseases=['Paludisme','Typhoïde','Trypanosomiase','Méningite','Tuberculose','VIH','Dengue','Choléra','Pneumonie','Gastroentérite','Infection urinaire','Infection gynécologique','Helminthiase','Diabète','Hypertension'];
-  return diseases.map(function(d){
-    var on=current&&current.toLowerCase().indexOf(d.toLowerCase())>=0;
-    return '<div class="dtag'+(on?' on':'')+'" onclick="selectDisease(this)">'+d+'</div>';
-  }).join('');
-}
-function selectDisease(el){
-  document.querySelectorAll('.dtag').forEach(function(t){t.classList.remove('on');});
-  el.classList.add('on');
-  var inp=document.getElementById('diagMedInput');
-  if(inp)inp.value=el.textContent;
-}
-
-function toggleExamen(){
-  EXAMENS_REQUIS=!EXAMENS_REQUIS;
-  var tog=document.getElementById('examToggle');
-  var sw=document.getElementById('examSw');
-  var warn=document.getElementById('examWarn');
-  var sec=document.getElementById('examensSection');
-  if(tog)tog.classList.toggle('on',EXAMENS_REQUIS);
-  if(sw)sw.classList.toggle('on',EXAMENS_REQUIS);
-  if(warn)warn.classList.toggle('on',EXAMENS_REQUIS);
-  if(sec)sec.style.display=EXAMENS_REQUIS?'block':'none';
-}
-
-function toggleALD(){
-  ALD=!ALD;
-  var tog=document.getElementById('aldToggle');
-  var sw=document.getElementById('aldSw');
-  var sec=document.getElementById('aldMedsSection');
-  if(tog)tog.classList.toggle('on',ALD);
-  if(sw){sw.classList.toggle('on',ALD);sw.style.background=ALD?'var(--exam)':'';}
-  if(sec)sec.style.display=ALD?'block':'none';
-  toast(ALD?'🏥 ALD activée — ajoutez les médicaments permanents':'ALD désactivée');
-}
-
-function renderMeds(ro,mode){
-  var list=mode==='ald'?MEDS_ALD:MEDS;
-  if(!list.length)return '<div style="color:var(--text3);font-size:12px;text-align:center;padding:12px;">Aucun médicament ajouté</div>';
-  return list.map(function(m,i){
-    return '<div class="med-item">'+
-      '<div class="med-info">'+
-        '<div class="med-name">'+escHtml(m.nom)+'</div>'+
-        (m.dose||m.poso||m.duree?'<div class="med-detail">'+(m.dose||'')+(m.poso?' — '+m.poso:'')+(m.duree?' — '+m.duree:'')+'</div>':'')+
+function renderForm(d){
+  var medsHtml=d.meds.map(function(m,i){
+    return '<div class="med-row" id="med_row_'+i+'">'+
+      '<div class="med-name"><div class="med-num">'+(i+1)+'</div>'+escHtml(m)+'</div>'+
+      // Check "Totalité disponible"
+      '<label class="check-total">'+
+        '<input type="checkbox" id="total_'+i+'" onchange="toggleTotal('+i+')">'+
+        '✅ Totalité disponible — remplir automatiquement'+
+      '</label>'+
+      // Grille 4 colonnes : Boîtes | Comprimés | Prix/boîte | Total
+      '<div class="med-fields-grid">'+
+        '<div class="field-group">'+
+          '<div class="field-lbl">📦 Boîtes</div>'+
+          '<input class="field-input" type="number" id="boites_'+i+'" min="0" placeholder="0" oninput="calcTotal('+i+')">'+
+        '</div>'+
+        '<div class="field-group">'+
+          '<div class="field-lbl">💊 Comprimés (partiel)</div>'+
+          '<input class="field-input" type="number" id="comprimes_'+i+'" min="0" placeholder="0">'+
+        '</div>'+
+        '<div class="field-group">'+
+          '<div class="field-lbl">💰 Prix / boîte (FCFA)</div>'+
+          '<input class="field-input" type="number" id="prix_'+i+'" min="0" placeholder="0" oninput="calcTotal('+i+')">'+
+        '</div>'+
+        '<div class="field-group">'+
+          '<div class="field-lbl">🟰 Total (FCFA)</div>'+
+          '<input class="field-input total-auto" type="text" id="total_fcfa_'+i+'" placeholder="—" readonly>'+
+        '</div>'+
       '</div>'+
-      (!ro?'<div style="display:flex;gap:6px;">'+
-        '<button class="med-del" style="background:rgba(0,200,150,.12);color:var(--accent);" onclick="editMed('+i+',\''+( mode||'')+'\')">✏️</button>'+
-        '<button class="med-del" onclick="removeMed('+i+',\''+( mode||'')+'\')">×</button>'+
-      '</div>':'')+
     '</div>';
   }).join('');
-}
-function removeMed(i,mode){
-  if(mode==='ald'){MEDS_ALD.splice(i,1);document.getElementById('aldMedList').innerHTML=renderMeds(false,'ald');}
-  else{MEDS.splice(i,1);document.getElementById('medList').innerHTML=renderMeds(false);}
-}
-var MODAL_EDIT_IDX=-1;
-function editMed(i,mode){
-  var list=mode==='ald'?MEDS_ALD:MEDS;
-  var m=list[i];
-  MODAL_MODE=mode||'';
-  MODAL_EDIT_IDX=i;
-  document.getElementById('mNom').value=m.nom||'';
-  document.getElementById('mDose').value=m.dose||'';
-  document.getElementById('mDuree').value=m.duree||'';
-  document.getElementById('mPoso').value=m.poso||'';
-  var title=document.getElementById('medModalTitle');
-  if(title)title.textContent=mode==='ald'?'Modifier médicament ALD':'Modifier médicament';
-  document.getElementById('medModal').classList.add('on');
-}
 
-function renderConsult(){
-  var d=CUR_DOS;
-  var ro=d.statut==='valide'||d.statut==='cloture';
-  var p=d.patient;
-
-  // Dossier médical patient (allergies, traitements, antécédents)
-  var hasDossier=p.allergies||p.traitements||p.antecedents;
-
-  document.getElementById('cBody').innerHTML=
-
-    // 1. Infos patient
-    '<div class="fsec">'+
-      '<div class="fsec-title"><div class="fsec-ico bl">👤</div><div class="fsec-label">Patient</div></div>'+
-      '<div class="chips">'+
-        (p.nom?'<div class="chip"><span class="chip-k">Nom</span><span class="chip-v">'+escHtml(p.nom)+'</span></div>':'')+
-        (p.age?'<div class="chip"><span class="chip-k">Âge</span><span class="chip-v">'+p.age+' ans</span></div>':'')+
-        (p.poids?'<div class="chip"><span class="chip-k">Poids</span><span class="chip-v">'+p.poids+'kg</span></div>':'')+
-        (p.ville?'<div class="chip"><span class="chip-k">Ville</span><span class="chip-v">'+escHtml(p.ville)+'</span></div>':'')+
-        (p.voyage&&p.voyage!=='Aucun'?'<div class="chip"><span class="chip-k">Voyage</span><span class="chip-v">'+escHtml(p.voyage)+'</span></div>':'')+
+  document.getElementById('mainContent').innerHTML=
+    '<div class="card">'+
+      '<div class="card-hdr">📋 ORDONNANCE — Appel d\'offre #'+d.aoId+'</div>'+
+      '<div class="card-body">'+
+        '<div class="info-grid">'+
+          '<div class="info-box"><div class="info-lbl">CONSULTATION</div><div class="info-val">'+escHtml(d.consultId)+'</div></div>'+
+          '<div class="info-box"><div class="info-lbl">PATIENT</div><div class="info-val">'+escHtml(d.patientId)+'</div></div>'+
+        '</div>'+
       '</div>'+
     '</div>'+
-
-    // 2. Dossier médical (si renseigné)
-    (hasDossier?
-      '<div class="fsec">'+
-        '<div class="fsec-title"><div class="fsec-ico pu">📋</div><div class="fsec-label">Dossier médical patient</div></div>'+
-        '<div class="dossier-box">'+
-          (p.allergies?'<div class="dossier-item"><div class="dossier-k">⚠️ Allergies</div><div class="dossier-v">'+escHtml(p.allergies)+'</div></div>':'')+
-          (p.traitements?'<div class="dossier-item"><div class="dossier-k">💊 Traitements en cours</div><div class="dossier-v">'+escHtml(p.traitements)+'</div></div>':'')+
-          (p.antecedents?'<div class="dossier-item"><div class="dossier-k">🏥 Antécédents</div><div class="dossier-v">'+escHtml(p.antecedents)+'</div></div>':'')+
-        '</div>'+
-      '</div>'
-    :'')+
-
-    // 3. Symptômes
-    '<div class="fsec">'+
-      '<div class="fsec-title"><div class="fsec-ico wa">🤒</div><div class="fsec-label">Symptômes</div></div>'+
-      sympToList(d.symptomes)+
-    '</div>'+
-
-    // 4. Diagnostic IA patient — masqué, révélé après validation
-    '<div class="fsec" id="iaPatientSec" style="display:none">'+
-      '<div class="fsec-title"><div class="fsec-ico bl">🤖</div><div class="fsec-label">Analyse IA patient</div></div>'+
-      '<div class="ia-box"><div class="ia-tag">IA MÉDICALE</div><div class="ia-txt">'+escHtml(d.diagIA||'Non renseigné').replace(/\n/g,'<br>')+'</div></div>'+
-      (d.recommandationsOMS?'<div style="margin-top:10px;"><div class="ia-tag" style="background:rgba(0,200,150,.15);border-color:rgba(0,200,150,.3);color:var(--accent);">OMS</div><div class="ia-txt" style="margin-top:6px;">'+escHtml(d.recommandationsOMS).replace(/\n/g,'<br>')+'</div></div>':'')+
-    '</div>'+
-
-    // 5. Formulaire médecin (si pas encore traité)
-    (!ro?
-      '<div class="fsec">'+
-        '<div class="fsec-title"><div class="fsec-ico gr">🩺</div><div class="fsec-label">Décision médicale</div></div>'+
-
-        // Diagnostic
-        '<div class="frow"><div class="flabel">Diagnostic final</div>'+
-        '<div class="dtags">'+renderDiseaseTags(d.diagMed)+'</div>'+
-        '<textarea class="finput" id="diagMedInput" rows="2" placeholder="Diagnostic précis...">'+escHtml(d.diagMed)+'</textarea></div>'+
-
-        // Toggle examens
-        '<div class="exam-toggle'+(EXAMENS_REQUIS?' on':'')+'" id="examToggle" onclick="toggleExamen()">'+
-          '<div><div class="exam-toggle-label">🔬 Examens complémentaires requis</div><div class="exam-toggle-sub">Active si des examens sont nécessaires avant traitement</div></div>'+
-          '<div class="toggle-sw'+(EXAMENS_REQUIS?' on':'')+'" id="examSw"></div>'+
-        '</div>'+
-        '<div class="exam-warning'+(EXAMENS_REQUIS?' on':'')+'" id="examWarn">'+
-          '⚠️ Avec examens requis : seuls les médicaments symptomatiques sont autorisés. Le dossier restera en attente jusqu\'aux résultats.'+
-        '</div>'+
-
-        // Section examens (masquée par défaut, révélée par toggle)
-        '<div id="examensSection" style="display:'+(EXAMENS_REQUIS?'block':'none')+';">'+
-          '<div class="frow"><div class="flabel">Examens demandés</div>'+
-          '<textarea class="finput" id="examensInput" rows="2" placeholder="ex: NFS, Frottis goutte épaisse, Widal...">'+escHtml(d.examensPrescrit)+'</textarea></div>'+
-        '</div>'+
-
-        // Toggle ALD
-        '<div class="exam-toggle'+(ALD?' on':'')+'" id="aldToggle" onclick="toggleALD()">'+
-          '<div><div class="exam-toggle-label">🏥 Affection longue durée (ALD)</div><div class="exam-toggle-sub">Tague le diagnostic et les traitements comme permanents dans le dossier</div></div>'+
-          '<div class="toggle-sw'+(ALD?' on':'')+'" id="aldSw" style="background:'+(ALD?'var(--exam)':'')+'"></div>'+
-        '</div>'+
-
-        // Médicaments ALD (visibles uniquement si ALD cochée)
-        '<div id="aldMedsSection" style="display:'+(ALD?'block':'none')+';">'+
-          '<div class="frow" style="margin-top:4px;">'+
-            '<div class="flabel" style="color:var(--exam);">💊 Médicaments ALD (traitement permanent)</div>'+
-            '<div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Ces médicaments seront enregistrés comme traitements réguliers dans le dossier patient.</div>'+
-            '<div id="aldMedList">'+renderMeds(false,'ald')+'</div>'+
-            '<button class="add-med" style="border-color:var(--exam);color:var(--exam);" onclick="openMedModal(\'ald\')">＋ Ajouter médicament ALD</button>'+
-          '</div>'+
-        '</div>'+
-
-        // Médicaments de la consultation
-        '<div class="exam-toggle on" style="display:block;cursor:default;border-color:var(--accent);background:rgba(0,200,150,.05);">'+
-          '<div class="exam-toggle-label" style="color:var(--accent);margin-bottom:8px;">💊 Médicaments prescrits</div>'+
-          '<div id="medList">'+renderMeds(false)+'</div>'+
-          '<button class="add-med" style="margin-top:8px;" onclick="openMedModal()">＋ Ajouter un médicament</button>'+
-        '</div>'+
-
-        // Notes
-        '<div class="frow"><div class="flabel">Notes / Observations</div>'+
-        '<textarea class="finput" id="notesInput" rows="2" placeholder="Observations cliniques...">'+escHtml(d.notes)+'</textarea></div>'+
-
-        // Bouton valider
-        '<button class="btn-send" id="btnSend" onclick="envoyerPrescription()">🤖 Valider avec l\'IA →</button>'+
+    '<div class="card">'+
+      '<div class="card-hdr">🏪 VOS INFORMATIONS</div>'+
+      '<div class="card-body">'+
+        '<div class="pharm-field"><label>Nom de la pharmacie</label><input id="pharmNom" type="text" placeholder="Pharmacie du Plateau" value="'+escHtml(d.pharmNom)+'"></div>'+
+        '<div class="pharm-field"><label>Téléphone</label><input id="pharmTel" type="tel" placeholder="+225 07 00 00 00 00" value="'+escHtml(d.pharmTel)+'"></div>'+
       '</div>'+
-
-      // Section validation (cachée au départ)
-      '<div id="valSection" style="display:none;">'+
-        '<div class="fsec">'+
-          '<div class="fsec-title"><div class="fsec-ico pu">✦</div><div class="fsec-label">Validation IA prescription</div></div>'+
-          '<div id="valBox"><div class="val-box load"><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span><div style="margin-top:8px;font-size:12px;color:var(--text2)">Vérification en cours...</div></div></div>'+
-        '</div>'+
-      '</div>'
-    :
-    // Dossier traité — lecture seule
-      '<div class="fsec">'+
-        '<div class="fsec-title"><div class="fsec-ico gr">🩺</div><div class="fsec-label">Décision médicale</div></div>'+
-        (d.diagMed?'<div class="frow"><div class="flabel">Diagnostic</div><div class="ia-txt">'+escHtml(d.diagMed)+'</div></div>':'')+
-        (d.examensPrescrit?'<div class="frow"><div class="flabel">Examens prescrits</div><div class="ia-txt">'+escHtml(d.examensPrescrit).replace(/\n/g,'<br>')+'</div></div>':'')+
-        (d.traitementMed?'<div class="frow"><div class="flabel">Traitement</div><div class="ia-txt">'+escHtml(d.traitementMed).replace(/\n/g,'<br>')+'</div></div>':'')+
-        (d.notes?'<div class="frow"><div class="flabel">Notes</div><div class="ia-txt">'+escHtml(d.notes)+'</div></div>':'')+
-      '</div>'+
-      (d.valIA?
-        '<div class="fsec">'+
-          '<div class="fsec-title"><div class="fsec-ico pu">✦</div><div class="fsec-label">Résultat validation IA</div></div>'+
-          '<div class="val-box '+(d.valIA.statut==='conforme'?'conf':'nconf')+'">'+
-            '<div class="val-title">'+(d.valIA.statut==='conforme'?'✅ Traitement CONFORME':'⚠️ Non conforme')+'</div>'+
-            '<div class="val-txt">'+escHtml(d.valIA.texte).replace(/\n/g,'<br>')+'</div>'+
-          '</div>'+
-        '</div>'
-      :'')
-    )+
+    '</div>'+
+    '<div class="card">'+
+      '<div class="card-hdr">💊 MÉDICAMENTS PRESCRITS</div>'+
+      '<div class="card-body">'+medsHtml+'</div>'+
+    '</div>'+
+    '<button class="btn-submit" onclick="soumettre()">✅ Soumettre mon offre</button>'+
     '<div style="height:30px;"></div>';
 }
 
-// ══════════════════════════════
-// ENVOI PRESCRIPTION
-// ══════════════════════════════
-function envoyerPrescription(){
-  var diag=(document.getElementById('diagMedInput')||{}).value||'';
-  if(!diag.trim()){toast('⚠️ Renseignez le diagnostic');return;}
+function escHtml(t){return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
-  var examens=(document.getElementById('examensInput')||{}).value||'';
-  if(EXAMENS_REQUIS&&!examens.trim()){toast('⚠️ Précisez les examens demandés');return;}
-  if(!EXAMENS_REQUIS&&!MEDS.length&&!MEDS_ALD.length){toast('⚠️ Ajoutez au moins un médicament');return;}
-
-  var btn=document.getElementById('btnSend');
-  if(btn){btn.disabled=true;btn.innerHTML='<span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span> Validation IA en cours...';}
-  var valSec=document.getElementById('valSection');
-  if(valSec){valSec.style.display='block';setTimeout(function(){valSec.scrollIntoView({behavior:'smooth'});},100);}
-  lancerValidationIA();
+function toggleTotal(i){
+  var checked=document.getElementById('total_'+i).checked;
+  if(checked){
+    // Remplir avec quantités recommandées
+    var qte=getQteRecommandee(aoData.meds[i]);
+    document.getElementById('boites_'+i).value=qte.boites;
+    document.getElementById('comprimes_'+i).value=qte.comprimes||0;
+    calcTotal(i);
+  } else {
+    document.getElementById('boites_'+i).value='';
+    document.getElementById('comprimes_'+i).value='';
+    document.getElementById('total_fcfa_'+i).value='';
+  }
 }
 
-// ══════════════════════════════
-// VALIDATION IA
-// ══════════════════════════════
-async function lancerValidationIA(){
-  var d=CUR_DOS;
-  var p=d.patient;
-  var diag=(document.getElementById('diagMedInput')||{}).value||'';
-  var examens=(document.getElementById('examensInput')||{}).value||'';
-  var notes=(document.getElementById('notesInput')||{}).value||'';
-  var medsStr=MEDS.map(function(m){return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' — '+m.duree:'');}).join('\n');
+function calcTotal(i){
+  var boites=parseInt(document.getElementById('boites_'+i).value||'0')||0;
+  var prix=parseInt(document.getElementById('prix_'+i).value||'0')||0;
+  var total=boites*prix;
+  var el=document.getElementById('total_fcfa_'+i);
+  if(total>0){
+    el.value=total.toLocaleString('fr-FR')+' FCFA';
+  } else {
+    el.value='';
+  }
+}
 
-  var prompt=
-    'Tu es un expert en pharmacologie clinique et protocoles OMS Afrique subsaharienne.\n\n'+
-    '=== PATIENT ===\n'+
-    'Nom: '+p.nom+'\n'+
-    'Âge: '+p.age+' ans\n'+
-    'Poids: '+(p.poids||'non renseigné')+'kg\n'+
-    'Voyage récent: '+(p.voyage||'Aucun')+'\n\n'+
-    '=== DOSSIER MÉDICAL PATIENT (historique complet) ===\n'+
-    'Source: BDD Patients Dokita'+(PATIENT_DOSSIER?' (synchronisé)':' (consultation en cours)')+'\n'+
-    'Allergies connues: '+(p.allergies||'Aucune renseignée')+'\n'+
-    'Traitements en cours: '+(p.traitements||'Aucun')+'\n'+
-    'Antécédents: '+(p.antecedents||'Aucun')+'\n\n'+
-    '=== SYMPTÔMES ===\n'+(d.symptomes||'Non renseignés')+'\n\n'+
-    '=== DIAGNOSTIC IA PATIENT ===\n'+(d.diagIA||'Non renseigné')+'\n\n'+
-    '=== RECOMMANDATIONS OMS ===\n'+(d.recommandationsOMS||'Non renseignees')+'\n\n'+'=== MEDICAMENTS OMS (1ere intention) ===\n'+(d.medicamentsOMS||'Non renseignes')+'\n\n'+'=== CONTRE-INDICATIONS OMS ===\n'+(d.contreIndications||'Aucune renseignee')+'\n\n'+'=== SOURCES OMS ===\n'+(d.sourcesOMS||'Non renseignees')+'\n\n'+
-    '=== DÉCISION MÉDECIN ===\n'+
-    'Diagnostic final: '+diag+'\n'+
-    'Examens requis: '+(EXAMENS_REQUIS?'OUI — '+examens:'NON')+'\n'+
-    'Médicaments prescrits (consultation):\n'+(medsStr||'Aucun')+'\n'+(MEDS_ALD.length?'Médicaments ALD (permanents):\n'+MEDS_ALD.map(function(m){return m.nom+(m.dose?' '+m.dose:'');}).join('\n')+'\n':'')+
-    (notes?'Notes: '+notes+'\n':'')+'\n'+
-    '=== INSTRUCTIONS ===\n'+
-    'Analyse cette prescription et réponds UNIQUEMENT avec ce format:\n\n'+
-    'VERDICT: CONFORME ou NON CONFORME\n\n'+
-    'ANALYSE:\n'+
-    '- Adéquation diagnostic/traitement vs recommandations OMS\n'+
-    '- Dosages adaptés à l\'âge ('+p.age+' ans) et poids ('+(p.poids||'?')+'kg)\n'+
-    '- Interactions médicamenteuses avec traitements en cours\n'+
-    '- Contre-indications liées aux allergies et antécédents\n'+
-    (EXAMENS_REQUIS?'- Vérifier que seuls médicaments symptomatiques sont prescrits (pas de traitement curatif avant résultats)\n':'')+
-    '\nSi NON CONFORME:\nRECOMMANDATION OMS: alternative thérapeutique précise avec dosage';
+async function soumettre(){
+  if(!aoData)return;
+  var nom=document.getElementById('pharmNom').value.trim();
+  var tel=document.getElementById('pharmTel').value.trim();
+  if(!nom||!tel){toast('⚠️ Remplissez le nom et téléphone');return;}
+
+  // Vérifier qu'au moins un médicament a une réponse
+  var auMoinsUn=aoData.meds.some(function(m,i){
+    return parseInt(document.getElementById('boites_'+i).value||'0')>0;
+  });
+  if(!auMoinsUn){toast('⚠️ Renseignez la disponibilité d\'au moins un médicament');return;}
+
+  // Collecter les réponses
+  var offre=aoData.meds.map(function(m,i){
+    var boites=parseInt(document.getElementById('boites_'+i).value||'0')||0;
+    var comprimes=parseInt(document.getElementById('comprimes_'+i).value||'0')||0;
+    var prix=parseInt(document.getElementById('prix_'+i).value||'0')||0;
+    return {
+      medicament:m,
+      disponible:boites>0,
+      boites:boites,
+      comprimes:comprimes,
+      prixUnitaire:prix,
+      total:boites*prix
+    };
+  });
+
+  var btn=document.querySelector('.btn-submit');
+  btn.disabled=true;btn.textContent='⏳ Envoi en cours...';
 
   try{
-    var r=await fetch('/api/claude',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-dokita-key':'dk-2026-prod-x9f7m'},
-      body:JSON.stringify({prompt:prompt})
+    var now=new Date().toISOString();
+    await notionReq('/pages/'+aoData.notionPageId,'PATCH',{
+      properties:{
+        'Pharmacie Nom':{rich_text:[{text:{content:nom}}]},
+        'Pharmacie Tel':{rich_text:[{text:{content:tel}}]},
+        'Offre JSON':{rich_text:[{text:{content:JSON.stringify(offre).slice(0,2000)}}]},
+        'Statut':{select:{name:'repondu'}},
+        'Date reponse':{date:{start:now}}
+      }
     });
-    var data=await r.json();
-    if(data.error){
-      afficherValidation('Erreur API: '+data.error,diag,examens,notes);
-      return;
-    }
-    afficherValidation(data.answer||'Réponse vide',diag,examens,notes);
+
+    document.getElementById('mainContent').innerHTML=
+      '<div class="success">'+
+        '<div class="success-ico">🎉</div>'+
+        '<div class="success-title">Offre soumise avec succès !</div>'+
+        '<div class="success-sub">Merci '+escHtml(nom)+'. Votre offre a bien été transmise à Dokita.<br>Le patient sera notifié.</div>'+
+      '</div>';
   }catch(e){
-    afficherValidation('Erreur: '+e.message,diag,examens,notes);
+    btn.disabled=false;btn.textContent='✅ Soumettre mon offre';
+    toast('❌ Erreur : '+e.message);
   }
 }
 
-function dbgLog(msg){console.log(msg);}
-
-
-function afficherValidation(rep,diag,examens,notes){
-  // Révéler l'analyse IA patient maintenant que le médecin a soumis sa décision
-  var iaSection=document.getElementById('iaPatientSec');
-  if(iaSection)iaSection.style.display='block';
-  var conf=rep&&rep.toLowerCase().indexOf('non conforme')<0&&rep.toLowerCase().indexOf('conforme')>=0;
-  CUR_DOS.valIA={statut:conf?'conforme':'nonconforme',texte:rep};
-
-  var vb=document.getElementById('valBox');
-  if(!vb)return;
-  vb.innerHTML=
-    '<div class="val-box '+(conf?'conf':'nconf')+'">'+
-      '<div class="val-title">'+(conf?'✅ Prescription CONFORME':'⚠️ Prescription NON CONFORME')+'</div>'+
-      '<div class="val-txt">'+(rep||'').replace(/\n/g,'<br>')+'</div>'+
-    '</div>'+
-    '<div class="val-actions">'+
-      (conf?
-        '<button class="vbtn ok" onclick="finaliser(\''+(EXAMENS_REQUIS?'en_attente_examen':'valide')+'\')">'+
-          (EXAMENS_REQUIS?'🔬 Envoyer — Att. examens':'✅ Envoyer au patient')+
-        '</button>'
-      :
-        '<button class="vbtn warn" onclick="modifierPrescription()">✏️ Modifier la prescription</button>'+
-        '<button class="vbtn ref" onclick="finaliser(\'valide_override\')">📋 Valider & Référer</button>'
-      )+
-    '</div>';
-}
-
-// ══════════════════════════════
-// MODIFIER PRESCRIPTION
-// ══════════════════════════════
-function modifierPrescription(){
-  // Masquer la section validation, réactiver le formulaire
-  var valSec=document.getElementById('valSection');
-  if(valSec)valSec.style.display='none';
-  var btn=document.getElementById('btnSend');
-  if(btn){btn.disabled=false;btn.innerHTML='🤖 Valider avec l\'IA →';}
-  toast('✏️ Modifiez la prescription et revalidez');
-  // Scroll vers le formulaire
-  var diagInput=document.getElementById('diagMedInput');
-  if(diagInput)setTimeout(function(){diagInput.scrollIntoView({behavior:'smooth'});},100);
-}
-
-// ══════════════════════════════
-// FINALISER → NOTION
-// ══════════════════════════════
-async function finaliser(nouveauStatut){
-  var diag=(document.getElementById('diagMedInput')||{}).value||CUR_DOS.diagMed||'';
-  var examens=(document.getElementById('examensInput')||{}).value||CUR_DOS.examensPrescrit||'';
-  var notes=(document.getElementById('notesInput')||{}).value||CUR_DOS.notes||'';
-  var medsStr=MEDS.map(function(m){
-    return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' — '+m.duree:'');
-  }).join('\n');
-  // Inclure les médicaments ALD dans Traitement Prescrit
-  var medsAldStr=MEDS_ALD.map(function(m){
-    return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+' [ALD]';
-  }).join('\n');
-  var medsStrComplet=(medsStr+(medsAldStr?'\n'+medsAldStr:'')).trim();
-
-  toast('⏳ Mise à jour Notion...');
-
-  // Mettre à jour Notion
-  // valide_override = médecin maintient malgré non-conformité IA
-  var statutFinal=nouveauStatut==='valide_override'?'valide':nouveauStatut;
-  var ok=await updateNotionDossier(CUR_DOS.notionId,{
-    statut:statutFinal,
-    diagMed:diag,
-    examensPrescrit:examens,
-    traitementMed:medsStrComplet,
-    notes:notes,
-    validationIA:CUR_DOS.valIA?CUR_DOS.valIA.texte:''
-  });
-
-  // Sauvegarder ordonnance dans BDD Consultations (colonne Ordonnance)
-  if(nouveauStatut!=='en_attente_examen'){
-    // Fusionner médicaments consultation + médicaments ALD
-    var tousLesMeds=MEDS.concat(MEDS_ALD.map(function(m){
-      return {nom:m.nom,dose:m.dose,poso:m.poso+'(ALD — traitement permanent)',duree:''};
-    }));
-    var ordonnance={
-      date:new Date().toISOString().slice(0,10),
-      medecin:CUR_MED.nom,
-      specialite:CUR_MED.spec,
-      diagnostic:diag,
-      medicaments:tousLesMeds.map(function(m){
-        return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' ('+m.duree+')':'');
-      }),
-      notes:notes||''
-    };
-    try{
-      await notionRequest('/pages/'+CUR_DOS.notionId,'PATCH',{
-        properties:{'Ordonnance':{rich_text:[{text:{content:JSON.stringify(ordonnance).slice(0,2000)}}]}}
-      });
-    }catch(e){console.log('Erreur sauvegarde ordonnance:',e.message);}
-  }
-
-  // Mettre à jour BDD Patients si ALD cochée
-  if(ALD&&PATIENT_DOSSIER){
-    var diag2=(document.getElementById('diagMedInput')||{}).value||CUR_DOS.diagMed||'';
-    var dateAujourdhui=new Date().toISOString().slice(0,10);
-
-    // ── Format enrichi standardisé (compatible app patient tuile Traitements) ──
-    // Format : "Nom Dosage — Fréquence [ALD] (Indication) — Dr. Prescripteur — Début: YYYY-MM-DD"
-    var nouvTraits=MEDS_ALD.map(function(m){
-      var ligne=m.nom+(m.dose?' '+m.dose:'');
-      if(m.poso)ligne+=' — '+m.poso;
-      ligne+=' [ALD]';
-      if(diag2)ligne+=' ('+diag2+')';
-      ligne+=' — '+CUR_MED.nom;
-      ligne+=' — Début: '+dateAujourdhui;
-      return ligne;
-    }).join('\n');
-
-    // Merger avec les traitements existants sans doublons par nom de médicament
-    var existants=(PATIENT_DOSSIER.traitements||'').split('\n').filter(function(l){return l.trim();});
-    MEDS_ALD.forEach(function(m){
-      // Supprimer l'ancienne ligne si même médicament déjà présent
-      existants=existants.filter(function(l){
-        return l.toLowerCase().indexOf(m.nom.toLowerCase())<0;
-      });
-    });
-    var traitementsFinal=nouvTraits+(existants.length?'\n'+existants.join('\n'):'');
-
-    // MAJ antécédents avec le diagnostic ALD
-    var newAntecedents=mergeChamp(PATIENT_DOSSIER.antecedents,diag2);
-
-    var aldOk=await mettreAJourDossierPatient({
-      antecedents:newAntecedents,
-      traitements:traitementsFinal
-    });
-    toast(aldOk?'🏥 Dossier patient mis à jour (ALD — '+MEDS_ALD.length+' traitement'+(MEDS_ALD.length>1?'s':'')+')':'⚠️ Erreur MAJ dossier patient');
-
-    // ── Remplir colonne Ordonnances dans BDD Patients (JSON cumulatif) ──
-    if(aldOk&&nouveauStatut!=='en_attente_examen'){
-      try{
-        // Lire les ordonnances existantes
-        var ordosExistantes=[];
-        try{
-          var ordRaw=PATIENT_DOSSIER.ordonnances||'';
-          if(ordRaw)ordosExistantes=JSON.parse(ordRaw);
-          if(!Array.isArray(ordosExistantes))ordosExistantes=[];
-        }catch(e){ordosExistantes=[];}
-
-        // Construire la nouvelle ordonnance complète
-        var nouvelleOrdonnance={
-          date:new Date().toISOString().slice(0,10),
-          consultationId:CUR_DOS.id||CUR_DOS.notionId.slice(0,8),
-          medecin:CUR_MED.nom,
-          specialite:CUR_MED.spec,
-          diagnostic:diag2,
-          medicaments:MEDS.map(function(m){
-            return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' ('+m.duree+')':'');
-          }).concat(MEDS_ALD.map(function(m){
-            return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+' [ALD — permanent]';
-          })),
-          notes:notes||''
-        };
-
-        // Ajouter en tête (plus récent en premier) et limiter à 20 ordonnances
-        ordosExistantes.unshift(nouvelleOrdonnance);
-        if(ordosExistantes.length>20)ordosExistantes=ordosExistantes.slice(0,20);
-
-        await notionRequest('/pages/'+PATIENT_DOSSIER.notionId,'PATCH',{
-          properties:{'Ordonnances':{rich_text:[{text:{content:JSON.stringify(ordosExistantes).slice(0,2000)}}]}}
-        });
-        dbg('Ordonnances BDD Patients mise à jour: '+ordosExistantes.length+' ordo(s)');
-      }catch(e){console.log('Erreur MAJ Ordonnances patient:',e.message);}
-    }
-  }
-
-  // Mettre à jour le cache local
-  CUR_DOS.statut=statutFinal;
-  CUR_DOS.diagMed=diag;
-  CUR_DOS.examensPrescrit=examens;
-  CUR_DOS.traitementMed=medsStrComplet;
-  CUR_DOS.notes=notes;
-  var idx=DOSSIERS.findIndex(function(d){return d.notionId===CUR_DOS.notionId;});
-  if(idx>=0)DOSSIERS[idx]=CUR_DOS;
-
-  toast(ok?'✅ Notion mis à jour':'⚠️ Erreur sync Notion');
-
-  // Email notification patient
-  var ds=new Date().toLocaleDateString('fr-FR');
-  var dest=(CUR_DOS.patient.email||'').trim();
-  if(!dest&&PATIENT_DOSSIER)dest=(PATIENT_DOSSIER.email||'').trim();
-  if(!dest){
-    toast('⚠️ Email patient non renseigné dans la BDD Patients');
-    setTimeout(function(){goBack();},1500);
-    return;
-  }
-  if(dest){
-    var subj=encodeURIComponent('[Dokita] Votre ordonnance est disponible');
-    var emailBody=encodeURIComponent(
-      'Bonjour '+CUR_DOS.patient.nom+',\n\n'+
-      (nouveauStatut==='en_attente_examen'
-        ? 'Des examens complémentaires ont été demandés. Votre médecin vous contactera après réception des résultats.\n\n'
-        : 'Votre consultation du '+ds+' a été traitée.\n\nMerci de vous connecter à votre espace Dokita pour récupérer votre ordonnance.\n\n'
-      )+
-      '— '+CUR_MED.nom+' | Dokita'
-    );
-    await new Promise(function(r){setTimeout(r,500);});
-    window.location.href='mailto:'+dest+'?subject='+subj+'&body='+emailBody;
-  }
-
-  setTimeout(function(){goBack();},1500);
-}
-
-// ══════════════════════════════
-// MODAL MÉDICAMENT
-// ══════════════════════════════
-var MODAL_MODE='';
-function openMedModal(mode){
-  MODAL_MODE=mode||'';
-  MODAL_EDIT_IDX=-1;
-  ['mNom','mDose','mDuree','mPoso'].forEach(function(id){document.getElementById(id).value='';
-  });
-  var title=document.getElementById('medModalTitle');
-  if(title)title.textContent=mode==='ald'?'Ajouter médicament ALD':'Ajouter un médicament';
-  document.getElementById('medModal').classList.add('on');
-}
-function closeMedModal(){document.getElementById('medModal').classList.remove('on');}
-function confirmMed(){
-  var nom=(document.getElementById('mNom').value||'').trim();
-  if(!nom){toast('Entrez le nom du médicament');return;}
-  var med={
-    nom:nom,
-    dose:document.getElementById('mDose').value.trim()||'',
-    duree:document.getElementById('mDuree').value.trim()||'',
-    poso:document.getElementById('mPoso').value.trim()||''
-  };
-  var list=MODAL_MODE==='ald'?MEDS_ALD:MEDS;
-  var listId=MODAL_MODE==='ald'?'aldMedList':'medList';
-  if(MODAL_EDIT_IDX>=0){
-    list[MODAL_EDIT_IDX]=med; // édition
-  } else {
-    list.push(med); // ajout
-  }
-  document.getElementById(listId).innerHTML=renderMeds(false,MODAL_MODE||undefined);
-  closeMedModal();
-}
-
-// ══════════════════════════════
-// UTILS
-// ══════════════════════════════
-function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function toast(msg){
-  var t=document.createElement('div');t.className='toast';t.textContent=msg;
-  document.body.appendChild(t);
-  setTimeout(function(){t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(function(){t.remove();},300);},2500);
-}
-</script>
-<div id="debugPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#0a0a0a;border-top:1px solid #333;flex-direction:column;z-index:9999;max-height:160px;">
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-bottom:1px solid #222;">
-    <span style="color:#666;font-size:9px;font-family:monospace;">DEBUG</span>
-    <span onclick="document.getElementById('debugPanel').style.display='none'" style="color:#666;cursor:pointer;font-size:14px;padding:0 4px;">X</span>
-  </div>
-  <div id="debugLog" style="flex:1;overflow-y:auto;padding:6px 8px;font-family:monospace;font-size:9px;color:#00ff88;line-height:1.6;"></div>
-</div>
-
-<script>
-if('serviceWorker' in navigator){
-  window.addEventListener('load',function(){
-    navigator.serviceWorker.register('/sw.js').then(function(reg){
-      // Vérifier les mises à jour à chaque ouverture
-      reg.update();
-    });
-  });
-}
+init();
 </script>
 </body>
 </html>
