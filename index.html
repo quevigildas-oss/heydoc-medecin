@@ -297,7 +297,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div class="frow"><div class="flabel">Durée</div><input class="finput" id="mDuree" placeholder="ex: 7 jours" autocomplete="off"/></div>
+      <div class="frow">
+        <div class="flabel">Durée</div>
+        <div style="display:flex;gap:6px;">
+          <input class="finput" id="mDuree" type="number" min="1" placeholder="ex: 6" autocomplete="off" style="flex:1;min-width:0;"/>
+          <select class="finput" id="mDureeUnite" style="flex:1;min-width:0;">
+            <option value="jours">Jours</option>
+            <option value="semaines">Semaines</option>
+            <option value="mois">Mois</option>
+          </select>
+        </div>
+      </div>
       <div class="frow"><div class="flabel">Posologie</div><input class="finput" id="mPoso" placeholder="ex: 3x/jour" autocomplete="off"/></div>
     </div>
     <div class="modal-acts">
@@ -741,9 +751,30 @@ function editMed(i,mode){
   MODAL_MODE=mode||'';
   MODAL_EDIT_IDX=i;
   document.getElementById('mNom').value=m.nom||'';
-  document.getElementById('mDose').value=m.dose||'';
-  document.getElementById('mDuree').value=m.duree||'';
+  // Parser durée + unité
+  var dureeRaw=m.duree||'';
+  var dureeNum='',dureeUnite='jours';
+  var dureeMatch=dureeRaw.match(/^(\d+)\s*(jours?|semaines?|mois)$/i);
+  if(dureeMatch){dureeNum=dureeMatch[1];dureeUnite=dureeMatch[2].toLowerCase().replace(/s$/,'')+'s';}
+  else if(dureeRaw){dureeNum=dureeRaw;}
+  document.getElementById('mDuree').value=dureeNum;
+  document.getElementById('mDureeUnite').value=['jours','semaines','mois'].indexOf(dureeUnite)>=0?dureeUnite:'jours';
   document.getElementById('mPoso').value=m.poso||'';
+  document.getElementById('medSuggestions').style.display='none';
+  // Recharger dosages et conditionnements depuis MEDS_DB
+  MED_SELECTED=MEDS_DB.find(function(x){return x.nom===(m.nom||'');})||null;
+  if(MED_SELECTED){
+    updateDosages();
+    document.getElementById('mDose').value=m.dose||'';
+    updateConditionnements();
+    document.getElementById('mCondit').value=m.conditionnement?(parseInt(m.conditionnement)||''):'';
+  } else {
+    resetDosageCondit();
+    // Fallback : injecter la valeur texte dans le select si non trouvée
+    var doseEl=document.getElementById('mDose');
+    doseEl.innerHTML='<option value="'+(m.dose||'')+'">'+(m.dose||'-- Saisir --')+'</option>';
+    doseEl.value=m.dose||'';
+  }
   var title=document.getElementById('medModalTitle');
   if(title)title.textContent=mode==='ald'?'Modifier médicament ALD':'Modifier médicament';
   document.getElementById('medModal').classList.add('on');
@@ -848,8 +879,11 @@ function renderConsult(){
         '<div class="frow"><div class="flabel">Notes / Observations</div>'+
         '<textarea class="finput" id="notesInput" rows="2" placeholder="Observations cliniques...">'+escHtml(d.notes)+'</textarea></div>'+
 
-        // Bouton valider
-        '<button class="btn-send" id="btnSend" onclick="envoyerPrescription()">🤖 Valider avec l\'IA →</button>'+
+        // Boutons action
+        '<div style="display:flex;gap:10px;margin-bottom:14px;">'+
+          '<button class="btn-send" id="btnSend" onclick="envoyerPrescription()" style="flex:1;margin-bottom:0;">🤖 Valider avec l\'IA →</button>'+
+          '<button onclick="sauvegarderBrouillon()" title="Sauvegarder sans valider" style="width:52px;height:52px;background:var(--card2);border:1.5px solid var(--border);border-radius:14px;cursor:pointer;font-size:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .2s;" onmouseover="this.style.borderColor=\'var(--accent2)\'" onmouseout="this.style.borderColor=\'var(--border)\'">💾</button>'+
+        '</div>'+
       '</div>'+
 
       // Section validation (cachée au départ)
@@ -879,6 +913,45 @@ function renderConsult(){
       :'')
     )+
     '<div style="height:30px;"></div>';
+}
+
+// ══════════════════════════════
+// SAUVEGARDE BROUILLON
+// ══════════════════════════════
+async function sauvegarderBrouillon(){
+  var diag=(document.getElementById('diagMedInput')||{}).value||'';
+  var examens=(document.getElementById('examensInput')||{}).value||'';
+  var notes=(document.getElementById('notesInput')||{}).value||'';
+  var medsStr=MEDS.map(function(m){
+    return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' — '+m.duree:'');
+  }).join('\n');
+  var medsAldStr=MEDS_ALD.map(function(m){
+    return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+' [ALD]';
+  }).join('\n');
+  var medsStrComplet=(medsStr+(medsAldStr?'\n'+medsAldStr:'')).trim();
+
+  if(!diag&&!medsStrComplet&&!notes){
+    toast('⚠️ Rien à sauvegarder');return;
+  }
+
+  toast('💾 Sauvegarde...');
+  var ok=await updateNotionDossier(CUR_DOS.notionId,{
+    diagMed:diag,
+    examensPrescrit:examens,
+    traitementMed:medsStrComplet,
+    notes:notes
+    // statut inchangé — reste en_attente
+  });
+
+  // MAJ cache local
+  CUR_DOS.diagMed=diag;
+  CUR_DOS.examensPrescrit=examens;
+  CUR_DOS.traitementMed=medsStrComplet;
+  CUR_DOS.notes=notes;
+  var idx=DOSSIERS.findIndex(function(d){return d.notionId===CUR_DOS.notionId;});
+  if(idx>=0)DOSSIERS[idx]=CUR_DOS;
+
+  toast(ok?'✅ Brouillon sauvegardé':'⚠️ Erreur sauvegarde');
 }
 
 // ══════════════════════════════
@@ -1362,6 +1435,7 @@ function openMedModal(mode){
   MODAL_EDIT_IDX=-1;
   document.getElementById('mNom').value='';
   document.getElementById('mDuree').value='';
+  document.getElementById('mDureeUnite').value='jours';
   document.getElementById('mPoso').value='';
   document.getElementById('medSuggestions').style.display='none';
   MED_SELECTED=null;
@@ -1377,10 +1451,13 @@ function confirmMed(){
   if(!nom){toast('Entrez le nom du médicament');return;}
   var dose=document.getElementById('mDose').value||'';
   var condit=document.getElementById('mCondit').value||'';
+  var dureeVal=(document.getElementById('mDuree').value||'').trim();
+  var dureeUnite=document.getElementById('mDureeUnite').value||'jours';
+  var dureeStr=dureeVal?(dureeVal+' '+dureeUnite):'';
   var med={
     nom:nom,
     dose:dose,
-    duree:document.getElementById('mDuree').value.trim()||'',
+    duree:dureeStr,
     poso:document.getElementById('mPoso').value.trim()||'',
     conditionnement:condit?condit+' cp/unités':''
   };
