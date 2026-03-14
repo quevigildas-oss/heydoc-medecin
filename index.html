@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- ============================================
-     DOKITA PRO — App Médecin 
+     DOKITA PRO — App Médecin
      VERSION : V1.2
      DATE    : 2026-03-13
      STACK   : Claude API (validation prescription) + Notion
@@ -273,12 +273,33 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 <div class="modal" id="medModal">
   <div class="modal-box">
     <div class="modal-title" id="medModalTitle">Ajouter un médicament</div>
-    <div class="frow"><div class="flabel">Médicament (DCI)</div><input class="finput" id="mNom" placeholder="ex: Amoxicilline" autocomplete="off"/></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div class="frow"><div class="flabel">Dosage</div><input class="finput" id="mDose" placeholder="ex: 500mg" autocomplete="off"/></div>
-      <div class="frow"><div class="flabel">Durée</div><input class="finput" id="mDuree" placeholder="ex: 7 jours" autocomplete="off"/></div>
+    <!-- Nom avec autocomplete -->
+    <div class="frow">
+      <div class="flabel">Médicament (DCI)</div>
+      <div style="position:relative;">
+        <input class="finput" id="mNom" placeholder="Tapez pour rechercher..." autocomplete="off" oninput="medAutocomplete(this.value)"/>
+        <div id="medSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:0 0 12px 12px;max-height:200px;overflow-y:auto;z-index:200;"></div>
+      </div>
     </div>
-    <div class="frow"><div class="flabel">Posologie</div><input class="finput" id="mPoso" placeholder="ex: 3x/jour après repas" autocomplete="off"/></div>
+    <!-- Dosage avec select dynamique -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="frow">
+        <div class="flabel">Dosage</div>
+        <select class="finput" id="mDose" onchange="updateConditionnements()">
+          <option value="">-- Sélectionner --</option>
+        </select>
+      </div>
+      <div class="frow">
+        <div class="flabel">Conditionnement</div>
+        <select class="finput" id="mCondit">
+          <option value="">-- Sélectionner --</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="frow"><div class="flabel">Durée</div><input class="finput" id="mDuree" placeholder="ex: 7 jours" autocomplete="off"/></div>
+      <div class="frow"><div class="flabel">Posologie</div><input class="finput" id="mPoso" placeholder="ex: 3x/jour" autocomplete="off"/></div>
+    </div>
     <div class="modal-acts">
       <button class="mbtn cancel" onclick="closeMedModal()">Annuler</button>
       <button class="mbtn ok" onclick="confirmMed()">Ajouter</button>
@@ -700,7 +721,7 @@ function renderMeds(ro,mode){
     return '<div class="med-item">'+
       '<div class="med-info">'+
         '<div class="med-name">'+escHtml(m.nom)+'</div>'+
-        (m.dose||m.poso||m.duree?'<div class="med-detail">'+(m.dose||'')+(m.poso?' — '+m.poso:'')+(m.duree?' — '+m.duree:'')+'</div>':'')+
+        (m.dose||m.poso||m.duree||m.conditionnement?'<div class="med-detail">'+(m.dose||'')+(m.poso?' — '+m.poso:'')+(m.duree?' — '+m.duree:'')+(m.conditionnement?' · 📦 '+m.conditionnement:'')+'</div>':'')+
       '</div>'+
       (!ro?'<div style="display:flex;gap:6px;">'+
         '<button class="med-del" style="background:rgba(0,200,150,.12);color:var(--accent);" onclick="editMed('+i+',\''+( mode||'')+'\')">✏️</button>'+
@@ -1146,34 +1167,229 @@ async function finaliser(nouveauStatut){
 }
 
 // ══════════════════════════════
+// BASE DE DONNÉES MÉDICAMENTS
+// ══════════════════════════════
+var MEDS_DB=[
+  {nom:'Artéméther + Luméfantrine',classe:'Antipaludéen',dosages:[{dose:'20mg/120mg',conditionnements:[24]},{dose:'40mg/240mg',conditionnements:[24]}]},
+  {nom:'Artésunate',classe:'Antipaludéen',dosages:[{dose:'50mg',conditionnements:[12,30]},{dose:'200mg',conditionnements:[12]}]},
+  {nom:'Quinine',classe:'Antipaludéen',dosages:[{dose:'300mg',conditionnements:[30]},{dose:'500mg',conditionnements:[30]}]},
+  {nom:'Chloroquine',classe:'Antipaludéen',dosages:[{dose:'100mg',conditionnements:[30]},{dose:'250mg',conditionnements:[30]}]},
+  {nom:'Méfloquine',classe:'Antipaludéen',dosages:[{dose:'250mg',conditionnements:[8]}]},
+  {nom:'Dihydroartémisinine + Pipéraquine',classe:'Antipaludéen',dosages:[{dose:'40mg/320mg',conditionnements:[12]}]},
+  {nom:'Amoxicilline',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[21,30]},{dose:'500mg',conditionnements:[21,30]},{dose:'1000mg',conditionnements:[14,21]}]},
+  {nom:'Amoxicilline + Acide clavulanique',classe:'Antibiotique',dosages:[{dose:'500mg/125mg',conditionnements:[14,21]},{dose:'875mg/125mg',conditionnements:[14]}]},
+  {nom:'Ampicilline',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[24]},{dose:'500mg',conditionnements:[24]}]},
+  {nom:'Azithromycine',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[6]},{dose:'500mg',conditionnements:[3,6]}]},
+  {nom:'Ciprofloxacine',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[10,20]},{dose:'500mg',conditionnements:[10,20]}]},
+  {nom:'Cotrimoxazole',classe:'Antibiotique',dosages:[{dose:'400mg/80mg',conditionnements:[20,30]},{dose:'800mg/160mg',conditionnements:[20,30]}]},
+  {nom:'Doxycycline',classe:'Antibiotique',dosages:[{dose:'100mg',conditionnements:[10,30]}]},
+  {nom:'Érythromycine',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[16,30]},{dose:'500mg',conditionnements:[16,30]}]},
+  {nom:'Métronidazole',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[20,30]},{dose:'500mg',conditionnements:[20,30]}]},
+  {nom:'Pénicilline V',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[30]},{dose:'500mg',conditionnements:[30]}]},
+  {nom:'Clindamycine',classe:'Antibiotique',dosages:[{dose:'150mg',conditionnements:[16,24]},{dose:'300mg',conditionnements:[16,24]}]},
+  {nom:'Ceftriaxone',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[1]},{dose:'500mg',conditionnements:[1]},{dose:'1g',conditionnements:[1]}]},
+  {nom:'Céfixime',classe:'Antibiotique',dosages:[{dose:'200mg',conditionnements:[10,20]},{dose:'400mg',conditionnements:[7,10]}]},
+  {nom:'Nitrofurantoïne',classe:'Antibiotique',dosages:[{dose:'50mg',conditionnements:[30]},{dose:'100mg',conditionnements:[30]}]},
+  {nom:'Levofloxacine',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[10,14]},{dose:'500mg',conditionnements:[7,10]}]},
+  {nom:'Isoniazide',classe:'Antituberculeux',dosages:[{dose:'100mg',conditionnements:[30,100]},{dose:'300mg',conditionnements:[30,100]}]},
+  {nom:'Rifampicine',classe:'Antituberculeux',dosages:[{dose:'150mg',conditionnements:[100]},{dose:'300mg',conditionnements:[100]}]},
+  {nom:'Pyrazinamide',classe:'Antituberculeux',dosages:[{dose:'400mg',conditionnements:[100]},{dose:'500mg',conditionnements:[100]}]},
+  {nom:'Éthambutol',classe:'Antituberculeux',dosages:[{dose:'100mg',conditionnements:[100]},{dose:'400mg',conditionnements:[100]}]},
+  {nom:'Fluconazole',classe:'Antifongique',dosages:[{dose:'50mg',conditionnements:[7,14]},{dose:'150mg',conditionnements:[1,7]},{dose:'200mg',conditionnements:[7,14]}]},
+  {nom:'Kétoconazole',classe:'Antifongique',dosages:[{dose:'200mg',conditionnements:[20,30]}]},
+  {nom:'Nystatine',classe:'Antifongique',dosages:[{dose:'500 000 UI',conditionnements:[20,30]}]},
+  {nom:'Aciclovir',classe:'Antiviral',dosages:[{dose:'200mg',conditionnements:[25,30]},{dose:'400mg',conditionnements:[30]},{dose:'800mg',conditionnements:[30]}]},
+  {nom:'Lamivudine',classe:'Antirétroviral',dosages:[{dose:'150mg',conditionnements:[60]},{dose:'300mg',conditionnements:[30,60]}]},
+  {nom:'Zidovudine',classe:'Antirétroviral',dosages:[{dose:'300mg',conditionnements:[60]}]},
+  {nom:'Ténofovir',classe:'Antirétroviral',dosages:[{dose:'300mg',conditionnements:[30,60]}]},
+  {nom:'Efavirenz',classe:'Antirétroviral',dosages:[{dose:'200mg',conditionnements:[30,90]},{dose:'600mg',conditionnements:[30,90]}]},
+  {nom:'Lopinavir + Ritonavir',classe:'Antirétroviral',dosages:[{dose:'200mg/50mg',conditionnements:[60,120]}]},
+  {nom:'Névirapine',classe:'Antirétroviral',dosages:[{dose:'200mg',conditionnements:[60]}]},
+  {nom:'Amlodipine',classe:'Antihypertenseur',dosages:[{dose:'5mg',conditionnements:[30,60,90]},{dose:'10mg',conditionnements:[30,60,90]}]},
+  {nom:'Captopril',classe:'Antihypertenseur',dosages:[{dose:'25mg',conditionnements:[30,60]},{dose:'50mg',conditionnements:[30,60]}]},
+  {nom:'Énalapril',classe:'Antihypertenseur',dosages:[{dose:'5mg',conditionnements:[28,30]},{dose:'10mg',conditionnements:[28,30]},{dose:'20mg',conditionnements:[28,30]}]},
+  {nom:'Losartan',classe:'Antihypertenseur',dosages:[{dose:'25mg',conditionnements:[28,30]},{dose:'50mg',conditionnements:[28,30]},{dose:'100mg',conditionnements:[28,30]}]},
+  {nom:'Hydrochlorothiazide',classe:'Antihypertenseur',dosages:[{dose:'12.5mg',conditionnements:[30]},{dose:'25mg',conditionnements:[30]}]},
+  {nom:'Furosémide',classe:'Diurétique',dosages:[{dose:'20mg',conditionnements:[30]},{dose:'40mg',conditionnements:[30]}]},
+  {nom:'Spironolactone',classe:'Diurétique',dosages:[{dose:'25mg',conditionnements:[30]},{dose:'50mg',conditionnements:[30]},{dose:'100mg',conditionnements:[30]}]},
+  {nom:'Aténolol',classe:'Bêtabloquant',dosages:[{dose:'50mg',conditionnements:[28,30]},{dose:'100mg',conditionnements:[28,30]}]},
+  {nom:'Bisoprolol',classe:'Bêtabloquant',dosages:[{dose:'2.5mg',conditionnements:[28,30]},{dose:'5mg',conditionnements:[28,30]},{dose:'10mg',conditionnements:[28,30]}]},
+  {nom:'Méthyldopa',classe:'Antihypertenseur',dosages:[{dose:'250mg',conditionnements:[30,60]},{dose:'500mg',conditionnements:[30,60]}]},
+  {nom:'Nifédipine',classe:'Antihypertenseur',dosages:[{dose:'10mg',conditionnements:[30]},{dose:'20mg LP',conditionnements:[30]},{dose:'30mg LP',conditionnements:[30]}]},
+  {nom:'Metformine',classe:'Antidiabétique',dosages:[{dose:'500mg',conditionnements:[30,60,90]},{dose:'850mg',conditionnements:[30,60]},{dose:'1000mg',conditionnements:[30,60]}]},
+  {nom:'Glibenclamide',classe:'Antidiabétique',dosages:[{dose:'2.5mg',conditionnements:[30,60]},{dose:'5mg',conditionnements:[30,60]}]},
+  {nom:'Gliclazide',classe:'Antidiabétique',dosages:[{dose:'30mg LP',conditionnements:[30,60]},{dose:'80mg',conditionnements:[30,60]}]},
+  {nom:'Insuline Humaine NPH',classe:'Insuline',dosages:[{dose:'100 UI/ml',conditionnements:[1,5]}]},
+  {nom:'Insuline Humaine Rapide',classe:'Insuline',dosages:[{dose:'100 UI/ml',conditionnements:[1,5]}]},
+  {nom:'Aspirine',classe:'Antiagrégant',dosages:[{dose:'75mg',conditionnements:[30,90]},{dose:'100mg',conditionnements:[30,90]},{dose:'500mg',conditionnements:[20,30]}]},
+  {nom:'Digoxine',classe:'Cardiotonique',dosages:[{dose:'0.25mg',conditionnements:[30,60]}]},
+  {nom:'Simvastatine',classe:'Hypolipémiant',dosages:[{dose:'10mg',conditionnements:[28,30]},{dose:'20mg',conditionnements:[28,30]},{dose:'40mg',conditionnements:[28,30]}]},
+  {nom:'Atorvastatine',classe:'Hypolipémiant',dosages:[{dose:'10mg',conditionnements:[28,30]},{dose:'20mg',conditionnements:[28,30]},{dose:'40mg',conditionnements:[28,30]}]},
+  {nom:'Isosorbide dinitrate',classe:'Coronarodilatateur',dosages:[{dose:'10mg',conditionnements:[30,60]},{dose:'20mg',conditionnements:[30,60]}]},
+  {nom:'Paracétamol',classe:'Analgésique',dosages:[{dose:'500mg',conditionnements:[16,20,30]},{dose:'1000mg',conditionnements:[16,20,30]}]},
+  {nom:'Ibuprofène',classe:'AINS',dosages:[{dose:'200mg',conditionnements:[20,30]},{dose:'400mg',conditionnements:[20,30]},{dose:'600mg',conditionnements:[20,30]}]},
+  {nom:'Diclofénac',classe:'AINS',dosages:[{dose:'25mg',conditionnements:[30]},{dose:'50mg',conditionnements:[20,30]},{dose:'75mg LP',conditionnements:[30]}]},
+  {nom:'Tramadol',classe:'Analgésique opioïde',dosages:[{dose:'50mg',conditionnements:[20,30]},{dose:'100mg LP',conditionnements:[20,30]}]},
+  {nom:'Codéine',classe:'Analgésique opioïde',dosages:[{dose:'30mg',conditionnements:[20,30]}]},
+  {nom:'Oméprazole',classe:'Inhibiteur pompe à protons',dosages:[{dose:'10mg',conditionnements:[14,28]},{dose:'20mg',conditionnements:[14,28]},{dose:'40mg',conditionnements:[14,28]}]},
+  {nom:'Ranitidine',classe:'Anti-H2',dosages:[{dose:'150mg',conditionnements:[30,60]},{dose:'300mg',conditionnements:[30]}]},
+  {nom:'Métoclopramide',classe:'Antiémétique',dosages:[{dose:'10mg',conditionnements:[30]}]},
+  {nom:'Dompéridone',classe:'Antiémétique',dosages:[{dose:'10mg',conditionnements:[30,60]}]},
+  {nom:'Ondansétron',classe:'Antiémétique',dosages:[{dose:'4mg',conditionnements:[10,30]},{dose:'8mg',conditionnements:[10,30]}]},
+  {nom:'Phloroglucinol',classe:'Antispasmodique',dosages:[{dose:'80mg',conditionnements:[20,30]}]},
+  {nom:'Lopéramide',classe:'Antidiarrhéique',dosages:[{dose:'2mg',conditionnements:[12,20]}]},
+  {nom:'Salbutamol',classe:'Bronchodilatateur',dosages:[{dose:'2mg',conditionnements:[30,60]},{dose:'4mg',conditionnements:[30,60]},{dose:'100µg/dose inhalateur',conditionnements:[1]}]},
+  {nom:'Théophylline',classe:'Bronchodilatateur',dosages:[{dose:'100mg',conditionnements:[30]},{dose:'200mg',conditionnements:[30]}]},
+  {nom:'Prednisone',classe:'Corticoïde',dosages:[{dose:'5mg',conditionnements:[20,30]},{dose:'20mg',conditionnements:[20,30]}]},
+  {nom:'Prednisolone',classe:'Corticoïde',dosages:[{dose:'5mg',conditionnements:[30]},{dose:'20mg',conditionnements:[30]}]},
+  {nom:'Dexaméthasone',classe:'Corticoïde',dosages:[{dose:'0.5mg',conditionnements:[30]},{dose:'4mg',conditionnements:[30]}]},
+  {nom:'Albendazole',classe:'Antiparasitaire',dosages:[{dose:'200mg',conditionnements:[1,6]},{dose:'400mg',conditionnements:[1,6]}]},
+  {nom:'Mébendazole',classe:'Antiparasitaire',dosages:[{dose:'100mg',conditionnements:[6,18]},{dose:'500mg',conditionnements:[1,6]}]},
+  {nom:'Ivermectine',classe:'Antiparasitaire',dosages:[{dose:'3mg',conditionnements:[4,20]},{dose:'6mg',conditionnements:[4,20]}]},
+  {nom:'Praziquantel',classe:'Antiparasitaire',dosages:[{dose:'600mg',conditionnements:[6]}]},
+  {nom:'Phénobarbital',classe:'Antiépileptique',dosages:[{dose:'50mg',conditionnements:[30,60]},{dose:'100mg',conditionnements:[30,60]}]},
+  {nom:'Phénytoïne',classe:'Antiépileptique',dosages:[{dose:'100mg',conditionnements:[30,60]}]},
+  {nom:'Carbamazépine',classe:'Antiépileptique',dosages:[{dose:'200mg',conditionnements:[30,60]}]},
+  {nom:'Valproate de sodium',classe:'Antiépileptique',dosages:[{dose:'200mg',conditionnements:[30]},{dose:'500mg',conditionnements:[30]}]},
+  {nom:'Diazépam',classe:'Anxiolytique',dosages:[{dose:'2mg',conditionnements:[30]},{dose:'5mg',conditionnements:[30]}]},
+  {nom:'Halopéridol',classe:'Antipsychotique',dosages:[{dose:'1mg',conditionnements:[30]},{dose:'5mg',conditionnements:[30]}]},
+  {nom:'Chlorpromazine',classe:'Antipsychotique',dosages:[{dose:'25mg',conditionnements:[30]},{dose:'100mg',conditionnements:[30]}]},
+  {nom:'Amitriptyline',classe:'Antidépresseur',dosages:[{dose:'25mg',conditionnements:[30,50]},{dose:'50mg',conditionnements:[30,50]}]},
+  {nom:'Fluoxétine',classe:'Antidépresseur',dosages:[{dose:'20mg',conditionnements:[14,28]}]},
+  {nom:'Acide folique',classe:'Vitamine',dosages:[{dose:'0.4mg',conditionnements:[30,90]},{dose:'5mg',conditionnements:[30,90]}]},
+  {nom:'Sulfate ferreux',classe:'Minéral',dosages:[{dose:'200mg',conditionnements:[30,60,90]}]},
+  {nom:'Zinc',classe:'Minéral',dosages:[{dose:'10mg',conditionnements:[10,20]},{dose:'20mg',conditionnements:[10,20]}]},
+  {nom:'Vitamine A',classe:'Vitamine',dosages:[{dose:'200 000 UI',conditionnements:[1,10]}]},
+  {nom:'Vitamine B1',classe:'Vitamine',dosages:[{dose:'100mg',conditionnements:[30,60]}]},
+  {nom:'Vitamine B6',classe:'Vitamine',dosages:[{dose:'10mg',conditionnements:[30,60]},{dose:'50mg',conditionnements:[30,60]}]},
+  {nom:'Vitamine B12',classe:'Vitamine',dosages:[{dose:'250µg',conditionnements:[30,60]},{dose:'1000µg',conditionnements:[30,60]}]},
+  {nom:'Vitamine C',classe:'Vitamine',dosages:[{dose:'250mg',conditionnements:[30,60]},{dose:'500mg',conditionnements:[30,60]}]},
+  {nom:'Vitamine D',classe:'Vitamine',dosages:[{dose:'400 UI',conditionnements:[30,90]},{dose:'1000 UI',conditionnements:[30,90]}]},
+  {nom:'Calcium',classe:'Minéral',dosages:[{dose:'500mg',conditionnements:[30,60]},{dose:'1000mg',conditionnements:[30,60]}]},
+  {nom:'Lévothyroxine',classe:'Hormone thyroïdienne',dosages:[{dose:'25µg',conditionnements:[30,100]},{dose:'50µg',conditionnements:[30,100]},{dose:'100µg',conditionnements:[30,100]}]},
+  {nom:'Carbimazole',classe:'Antithyroïdien',dosages:[{dose:'5mg',conditionnements:[30,100]},{dose:'20mg',conditionnements:[30,100]}]},
+  {nom:'Colchicine',classe:'Antigoutte',dosages:[{dose:'0.5mg',conditionnements:[20,30,60]},{dose:'1mg',conditionnements:[20,30]}]},
+  {nom:'Allopurinol',classe:'Hypouricémiant',dosages:[{dose:'100mg',conditionnements:[30,60]},{dose:'300mg',conditionnements:[30,60]}]},
+  {nom:'Hydroxychloroquine',classe:'Rhumatologie',dosages:[{dose:'200mg',conditionnements:[30,60]}]},
+  {nom:'Chlorphénamine',classe:'Antihistaminique',dosages:[{dose:'4mg',conditionnements:[20,30]}]},
+  {nom:'Cétirizine',classe:'Antihistaminique',dosages:[{dose:'10mg',conditionnements:[7,14,30]}]},
+  {nom:'Loratadine',classe:'Antihistaminique',dosages:[{dose:'10mg',conditionnements:[7,14,30]}]},
+  {nom:'Prométhazine',classe:'Antihistaminique',dosages:[{dose:'25mg',conditionnements:[20,30]}]},
+  {nom:'Misoprostol',classe:'Prostaglandine',dosages:[{dose:'200µg',conditionnements:[4,28]}]},
+  {nom:'Progestérone',classe:'Progestatif',dosages:[{dose:'100mg',conditionnements:[30]},{dose:'200mg',conditionnements:[30]}]},
+  {nom:'Lévonorgestrel',classe:'Contraceptif urgence',dosages:[{dose:'1.5mg',conditionnements:[1]}]},
+  {nom:'Tamsulosine',classe:'Alpha-bloquant',dosages:[{dose:'0.4mg',conditionnements:[30]}]},
+  {nom:'Finastéride',classe:'Urologie',dosages:[{dose:'5mg',conditionnements:[28,30]}]},
+  {nom:'Sels de réhydratation orale',classe:'Réhydratation',dosages:[{dose:'Sachet 500ml',conditionnements:[10,20]}]},
+];
+
+var MED_SELECTED=null; // médicament sélectionné dans l'autocomplete
+
+function medAutocomplete(val){
+  var box=document.getElementById('medSuggestions');
+  MED_SELECTED=null;
+  resetDosageCondit();
+  if(!val||val.length<2){box.style.display='none';return;}
+  var q=val.toLowerCase().trim();
+  var results=MEDS_DB.filter(function(m){
+    return m.nom.toLowerCase().indexOf(q)>=0;
+  }).slice(0,8);
+  if(!results.length){box.style.display='none';return;}
+  box.style.display='block';
+  box.innerHTML=results.map(function(m){
+    var hl=m.nom.replace(new RegExp('('+val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<strong>$1</strong>');
+    return '<div onclick="selectMed(\''+m.nom.replace(/'/g,'\\\'')+'\')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;" onmouseover="this.style.background=\'var(--card2)\'" onmouseout="this.style.background=\'\'">'+
+      hl+'<span style="font-size:10px;color:var(--text3);margin-left:8px;">'+m.classe+'</span>'+
+    '</div>';
+  }).join('');
+}
+
+function selectMed(nom){
+  document.getElementById('mNom').value=nom;
+  document.getElementById('medSuggestions').style.display='none';
+  MED_SELECTED=MEDS_DB.find(function(m){return m.nom===nom;})||null;
+  if(MED_SELECTED){updateDosages();}
+}
+
+function updateDosages(){
+  var sel=document.getElementById('mDose');
+  sel.innerHTML='<option value="">-- Sélectionner --</option>';
+  if(!MED_SELECTED)return;
+  MED_SELECTED.dosages.forEach(function(d){
+    var opt=document.createElement('option');
+    opt.value=d.dose;opt.textContent=d.dose;
+    sel.appendChild(opt);
+  });
+  if(MED_SELECTED.dosages.length===1){
+    sel.value=MED_SELECTED.dosages[0].dose;
+    updateConditionnements();
+  }
+  document.getElementById('mCondit').innerHTML='<option value="">-- Sélectionner --</option>';
+}
+
+function updateConditionnements(){
+  var dose=document.getElementById('mDose').value;
+  var sel=document.getElementById('mCondit');
+  sel.innerHTML='<option value="">-- Sélectionner --</option>';
+  if(!MED_SELECTED||!dose)return;
+  var dosageObj=MED_SELECTED.dosages.find(function(d){return d.dose===dose;});
+  if(!dosageObj)return;
+  dosageObj.conditionnements.forEach(function(c){
+    var opt=document.createElement('option');
+    opt.value=c;opt.textContent=c+' comprimés/unités';
+    sel.appendChild(opt);
+  });
+  if(dosageObj.conditionnements.length===1)sel.value=dosageObj.conditionnements[0];
+}
+
+function resetDosageCondit(){
+  document.getElementById('mDose').innerHTML='<option value="">-- Sélectionner --</option>';
+  document.getElementById('mCondit').innerHTML='<option value="">-- Sélectionner --</option>';
+}
+
+// Fermer suggestions si clic ailleurs
+document.addEventListener('click',function(e){
+  var box=document.getElementById('medSuggestions');
+  if(box&&!box.contains(e.target)&&e.target.id!=='mNom')box.style.display='none';
+});
+
+// ══════════════════════════════
 // MODAL MÉDICAMENT
 // ══════════════════════════════
 var MODAL_MODE='';
 function openMedModal(mode){
   MODAL_MODE=mode||'';
   MODAL_EDIT_IDX=-1;
-  ['mNom','mDose','mDuree','mPoso'].forEach(function(id){document.getElementById(id).value='';
-  });
+  document.getElementById('mNom').value='';
+  document.getElementById('mDuree').value='';
+  document.getElementById('mPoso').value='';
+  document.getElementById('medSuggestions').style.display='none';
+  MED_SELECTED=null;
+  resetDosageCondit();
   var title=document.getElementById('medModalTitle');
   if(title)title.textContent=mode==='ald'?'Ajouter médicament ALD':'Ajouter un médicament';
   document.getElementById('medModal').classList.add('on');
+  setTimeout(function(){document.getElementById('mNom').focus();},100);
 }
 function closeMedModal(){document.getElementById('medModal').classList.remove('on');}
 function confirmMed(){
   var nom=(document.getElementById('mNom').value||'').trim();
   if(!nom){toast('Entrez le nom du médicament');return;}
+  var dose=document.getElementById('mDose').value||'';
+  var condit=document.getElementById('mCondit').value||'';
   var med={
     nom:nom,
-    dose:document.getElementById('mDose').value.trim()||'',
+    dose:dose,
     duree:document.getElementById('mDuree').value.trim()||'',
-    poso:document.getElementById('mPoso').value.trim()||''
+    poso:document.getElementById('mPoso').value.trim()||'',
+    conditionnement:condit?condit+' cp/unités':''
   };
   var list=MODAL_MODE==='ald'?MEDS_ALD:MEDS;
   var listId=MODAL_MODE==='ald'?'aldMedList':'medList';
   if(MODAL_EDIT_IDX>=0){
-    list[MODAL_EDIT_IDX]=med; // édition
+    list[MODAL_EDIT_IDX]=med;
   } else {
-    list.push(med); // ajout
+    list.push(med);
   }
   document.getElementById(listId).innerHTML=renderMeds(false,MODAL_MODE||undefined);
   closeMedModal();
