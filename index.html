@@ -262,8 +262,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
   <div class="hdr">
     <div class="hdr-back" onclick="goBack()">←</div>
     <div class="hdr-info"><div class="hdr-title" id="cTitre">Dossier</div><div class="hdr-sub" id="cSub"></div></div>
-    <div id="cBadge"></div>
-    <div onclick="sauvegarderBrouillon()" id="btnBrouillon" title="Sauvegarder brouillon" style="width:36px;height:36px;background:var(--card2);border:1px solid var(--border);border-radius:10px;display:none;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0;">💾</div>
   </div>
   <div class="cbody" id="cBody"></div>
 </div>
@@ -669,7 +667,6 @@ function openDos(notionId){
   };
   document.getElementById('cTitre').textContent=(CUR_DOS.patient.nom||'Patient')+' • '+(CUR_DOS.patient.age||'?')+' ans';
   document.getElementById('cSub').textContent=CUR_DOS.id+' • '+CUR_DOS.date;
-  document.getElementById('cBadge').innerHTML=bmap[CUR_DOS.statut]||'';
   renderConsult();
   showScreen('consultScreen');
 }
@@ -804,17 +801,24 @@ function editMed(i,mode){
 function renderConsult(){
   var d=CUR_DOS;
   var ro=d.statut==='valide'||d.statut==='cloture';
-  // Afficher/masquer le bouton 💾 dans le header
-  var btnB=document.getElementById('btnBrouillon');
-  if(btnB)btnB.style.display=ro?'none':'flex';
   var p=d.patient;
+  var bmap={
+    en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
+    en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
+    valide:'<span class="badge t">✅ VALIDÉ</span>',
+    cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
+  };
 
   // Dossier médical patient (allergies, traitements, antécédents)
   var hasDossier=p.allergies||p.traitements||p.antecedents;
 
   document.getElementById('cBody').innerHTML=
 
-    // 1. Infos patient
+    // 0. Statut + bouton 💾
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0 6px;">'+
+      '<div>'+(bmap[d.statut]||'')+'</div>'+
+      (!ro?'<button onclick="sauvegarderBrouillon()" title="Sauvegarder brouillon" style="display:flex;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text2);font-family:\'DM Sans\',sans-serif;">💾 Sauvegarder</button>':'') +
+    '</div>'+
     '<div class="fsec">'+
       '<div class="fsec-title"><div class="fsec-ico bl">👤</div><div class="fsec-label">Patient</div></div>'+
       '<div class="chips">'+
