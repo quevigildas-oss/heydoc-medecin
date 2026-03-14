@@ -1022,13 +1022,58 @@ function envoyerPrescription(){
 // ══════════════════════════════
 // VALIDATION IA
 // ══════════════════════════════
+// ══════════════════════════════
+// CALCUL DOSE JOURNALIÈRE
+// ══════════════════════════════
+function calculDoseJournaliere(dose,poso){
+  if(!dose||!poso)return null;
+
+  // Extraire la valeur numérique et l'unité du dosage
+  var doseMatch=dose.match(/^([\d.]+)\s*(mg|g|µg|mcg|UI|ml)?/i);
+  if(!doseMatch)return null;
+  var val=parseFloat(doseMatch[1]);
+  var unite=(doseMatch[2]||'mg').toLowerCase();
+  if(isNaN(val)||val<=0)return null;
+
+  // Extraire la fréquence de prise depuis la posologie
+  var freq=null;
+  var p=poso.toLowerCase().trim();
+
+  if(/1\s*[x×\/]\s*jour|1\s*fois\s*par\s*jour|1\s*cp?\s*\/\s*jour|1x\/j/.test(p)) freq=1;
+  else if(/2\s*[x×\/]\s*jour|2\s*fois\s*par\s*jour|2x\/j|matin\s+et\s+soir|deux\s+fois/.test(p)) freq=2;
+  else if(/3\s*[x×\/]\s*jour|3\s*fois\s*par\s*jour|3x\/j|matin.+midi.+soir|trois\s+fois/.test(p)) freq=3;
+  else if(/4\s*[x×\/]\s*jour|4\s*fois\s*par\s*jour|4x\/j|toutes\s*les\s*6/.test(p)) freq=4;
+  else if(/toutes\s*les\s*8\s*h/.test(p)) freq=3;
+  else if(/toutes\s*les\s*12\s*h/.test(p)) freq=2;
+  else if(/toutes\s*les\s*24\s*h|1\s*fois\s*\/\s*jour/.test(p)) freq=1;
+  else if(/matin\s*,\s*midi\s*et\s*soir|3\s*prises/.test(p)) freq=3;
+
+  if(!freq)return null;
+
+  var total=val*freq;
+  // Formater proprement
+  var totalStr=Number.isInteger(total)?String(total):total.toFixed(1).replace(/\.0$/,'');
+  return totalStr+unite;
+}
+
 async function lancerValidationIA(){
   var d=CUR_DOS;
   var p=d.patient;
   var diag=(document.getElementById('diagMedInput')||{}).value||'';
   var examens=(document.getElementById('examensInput')||{}).value||'';
   var notes=(document.getElementById('notesInput')||{}).value||'';
-  var medsStr=MEDS.map(function(m){return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' — '+m.duree:'');}).join('\n');
+
+  // ── Calcul dose journalière pour chaque médicament ──
+  var medsStr=MEDS.concat(MEDS_ALD.map(function(m){return Object.assign({},m,{_ald:true});}))
+    .map(function(m){
+      var ligne=m.nom+(m.dose?' '+m.dose:'');
+      var doseJour=calculDoseJournaliere(m.dose,m.poso);
+      if(doseJour)ligne+=' (= '+doseJour+'/jour total)';
+      if(m.poso)ligne+=' — '+m.poso;
+      if(m.duree)ligne+=' — '+m.duree;
+      if(m._ald)ligne+=' [ALD]';
+      return ligne;
+    }).join('\n');
 
   var prompt=
     'Tu es un expert en pharmacologie clinique et protocoles OMS Afrique subsaharienne.\n\n'+
@@ -1048,7 +1093,7 @@ async function lancerValidationIA(){
     '=== DÉCISION MÉDECIN ===\n'+
     'Diagnostic final: '+diag+'\n'+
     'Examens requis: '+(EXAMENS_REQUIS?'OUI — '+examens:'NON')+'\n'+
-    'Médicaments prescrits (consultation):\n'+(medsStr||'Aucun')+'\n'+(MEDS_ALD.length?'Médicaments ALD (permanents):\n'+MEDS_ALD.map(function(m){return m.nom+(m.dose?' '+m.dose:'');}).join('\n')+'\n':'')+
+    'Médicaments prescrits (dose unitaire × fréquence = dose journalière totale):\n'+(medsStr||'Aucun')+'\n'+
     (notes?'Notes: '+notes+'\n':'')+'\n'+
     '=== INSTRUCTIONS ===\n'+
     'Analyse cette prescription et réponds UNIQUEMENT avec ce format:\n\n'+
