@@ -263,6 +263,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
     <div class="hdr-back" onclick="goBack()">←</div>
     <div class="hdr-info"><div class="hdr-title" id="cTitre">Dossier</div><div class="hdr-sub" id="cSub"></div></div>
     <div id="cBadge"></div>
+    <div onclick="sauvegarderBrouillon()" id="btnBrouillon" title="Sauvegarder brouillon" style="width:36px;height:36px;background:var(--card2);border:1px solid var(--border);border-radius:10px;display:none;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0;">💾</div>
   </div>
   <div class="cbody" id="cBody"></div>
 </div>
@@ -639,10 +640,12 @@ function renderDossiers(){
 function openDos(notionId){
   CUR_DOS=DOSSIERS.find(function(d){return d.notionId===notionId;})||null;
   if(!CUR_DOS)return;
-  MEDS=CUR_DOS.traitementMed?parseMedsStr(CUR_DOS.traitementMed):[];
+  var parsed=CUR_DOS.traitementMed?parseMedsStr(CUR_DOS.traitementMed):{meds:[],medsAld:[]};
+  MEDS=parsed.meds;
+  MEDS_ALD=parsed.medsAld;
+  ALD=MEDS_ALD.length>0;
   EXAMENS_REQUIS=CUR_DOS.statut==='en_attente_examen';
-  ALD=false;
-  MEDS_ALD=[];
+  CID_VAL=null;
   CID_VAL=null;
   // Charger dossier patient depuis BDD Patients
   PATIENT_DOSSIER=null;
@@ -672,10 +675,28 @@ function openDos(notionId){
 }
 
 function parseMedsStr(str){
-  if(!str)return[];
-  return str.split('\n').filter(function(l){return l.trim();}).map(function(l){
-    return{nom:l,dose:'',duree:'',poso:''};
+  if(!str)return{meds:[],medsAld:[]};
+  var meds=[],medsAld=[];
+  str.split('\n').filter(function(l){return l.trim();}).forEach(function(l){
+    var isAld=l.indexOf('[ALD]')>=0;
+    // Parser format : "Nom Dosage — Posologie — Durée [ALD]"
+    var clean=l.replace('[ALD]','').trim();
+    var parts=clean.split(' — ');
+    var nomDose=(parts[0]||'').trim();
+    var poso=(parts[1]||'').trim();
+    var duree=(parts[2]||'').trim();
+    // Séparer nom et dose : dernier mot qui commence par chiffre = dose
+    var mots=nomDose.split(' ');
+    var dose='',nom=nomDose;
+    if(mots.length>=2&&/^\d/.test(mots[mots.length-1])){
+      dose=mots[mots.length-1];
+      nom=mots.slice(0,-1).join(' ');
+    }
+    var med={nom:nom,dose:dose,poso:poso,duree:duree};
+    if(isAld)medsAld.push(med);
+    else meds.push(med);
   });
+  return{meds:meds,medsAld:medsAld};
 }
 
 function sympToList(txt){
@@ -783,6 +804,9 @@ function editMed(i,mode){
 function renderConsult(){
   var d=CUR_DOS;
   var ro=d.statut==='valide'||d.statut==='cloture';
+  // Afficher/masquer le bouton 💾 dans le header
+  var btnB=document.getElementById('btnBrouillon');
+  if(btnB)btnB.style.display=ro?'none':'flex';
   var p=d.patient;
 
   // Dossier médical patient (allergies, traitements, antécédents)
@@ -879,11 +903,8 @@ function renderConsult(){
         '<div class="frow"><div class="flabel">Notes / Observations</div>'+
         '<textarea class="finput" id="notesInput" rows="2" placeholder="Observations cliniques...">'+escHtml(d.notes)+'</textarea></div>'+
 
-        // Boutons action
-        '<div style="display:flex;gap:10px;margin-bottom:14px;">'+
-          '<button class="btn-send" id="btnSend" onclick="envoyerPrescription()" style="flex:1;margin-bottom:0;">🤖 Valider avec l\'IA →</button>'+
-          '<button onclick="sauvegarderBrouillon()" title="Sauvegarder sans valider" style="width:52px;height:52px;background:var(--card2);border:1.5px solid var(--border);border-radius:14px;cursor:pointer;font-size:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .2s;" onmouseover="this.style.borderColor=\'var(--accent2)\'" onmouseout="this.style.borderColor=\'var(--border)\'">💾</button>'+
-        '</div>'+
+        // Bouton valider seul (le 💾 est dans le header)
+        '<button class="btn-send" id="btnSend" onclick="envoyerPrescription()">🤖 Valider avec l\'IA →</button>'+
       '</div>'+
 
       // Section validation (cachée au départ)
