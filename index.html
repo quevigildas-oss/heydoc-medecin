@@ -1577,6 +1577,8 @@ function getPosoStr(){
   if(precision) str+=(str?' — ':'')+precision;
   return str;
 }
+
+function selectMedByIndex(idx){
   var m=MEDS_DB[idx];
   if(!m)return;
   document.getElementById('mNom').value=m.nom;
