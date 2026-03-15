@@ -307,8 +307,25 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
           </select>
         </div>
       </div>
-      <div class="frow"><div class="flabel">Posologie</div><input class="finput" id="mPoso" placeholder="ex: 3x/jour" autocomplete="off"/></div>
+      <div class="frow">
+        <div class="flabel">Prises / jour</div>
+        <div style="display:flex;gap:6px;">
+          <input class="finput" id="mPrises" type="number" min="1" max="10" placeholder="ex: 2" style="flex:1;min-width:0;" oninput="updatePosoStr()"/>
+          <select class="finput" id="mPeriode" style="flex:1;min-width:0;" onchange="updatePosoStr()">
+            <option value="jour">/ jour</option>
+            <option value="semaine">/ sem.</option>
+            <option value="mois">/ mois</option>
+          </select>
+        </div>
+      </div>
     </div>
+    <!-- Précision libre optionnelle -->
+    <div class="frow">
+      <div class="flabel">Précision (optionnel)</div>
+      <input class="finput" id="mPoso" placeholder="ex: matin et soir, après repas, au coucher..." autocomplete="off" oninput="updatePosoStr()"/>
+    </div>
+    <!-- Aperçu posologie générée -->
+    <div id="posoPreview" style="display:none;background:rgba(0,200,150,.08);border:1px solid rgba(0,200,150,.2);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--accent);margin-bottom:4px;font-family:'DM Sans',sans-serif;"></div>
     <div class="modal-acts">
       <button class="mbtn cancel" onclick="closeMedModal()">Annuler</button>
       <button class="mbtn ok" onclick="confirmMed()">Ajouter</button>
@@ -782,8 +799,25 @@ function editMed(i,mode){
   MODAL_MODE=mode||'';
   MODAL_EDIT_IDX=i;
   document.getElementById('mNom').value=m.nom||'';
-  // Parser durée + unité
-  var dureeRaw=m.duree||'';
+  // Parser posologie structurée
+  var posoRaw=m.poso||'';
+  var prises=m._prises||0;
+  var periode=m._periode||'jour';
+  var precision='';
+  if(!prises&&posoRaw){
+    // Fallback : parser depuis le string "2x/jour — après repas"
+    var posoMatch=posoRaw.match(/^(\d+)x\/(jour|semaine|mois)/i);
+    if(posoMatch){prises=parseInt(posoMatch[1]);periode=posoMatch[2].toLowerCase();}
+    precision=posoRaw.replace(/^\d+x\/(jour|semaine|mois)\s*—?\s*/i,'').trim();
+  } else {
+    precision=posoRaw.replace(/^\d+x\/(jour|semaine|mois)\s*—?\s*/i,'').trim();
+  }
+  document.getElementById('mPrises').value=prises||'';
+  document.getElementById('mPeriode').value=['jour','semaine','mois'].indexOf(periode)>=0?periode:'jour';
+  document.getElementById('mPoso').value=precision;
+  var preview=document.getElementById('posoPreview');
+  if(preview)preview.style.display='none';
+  updatePosoStr();
   var dureeNum='',dureeUnite='jours';
   var dureeMatch=dureeRaw.match(/^(\d+)\s*(jours?|semaines?|mois)$/i);
   if(dureeMatch){dureeNum=dureeMatch[1];dureeUnite=dureeMatch[2].toLowerCase().replace(/s$/,'')+'s';}
@@ -1076,7 +1110,19 @@ async function lancerValidationIA(){
   var medsStr=MEDS.concat(MEDS_ALD.map(function(m){return Object.assign({},m,{_ald:true});}))
     .map(function(m){
       var ligne=m.nom+(m.dose?' '+m.dose:'');
-      var doseJour=calculDoseJournaliere(m.dose,m.poso);
+      var doseJour=null;
+      // Utiliser les champs structurés si disponibles
+      if(m._prises&&m._periode==='jour'){
+        var dMatch=m.dose&&m.dose.match(/^([\d.]+)\s*(mg|g|µg|mcg|UI|ml)?/i);
+        if(dMatch){
+          var total=parseFloat(dMatch[1])*m._prises;
+          var unite=(dMatch[2]||'mg').toLowerCase();
+          doseJour=(Number.isInteger(total)?String(total):total.toFixed(1).replace(/\.0$$/,''))+unite;
+        }
+      } else {
+        doseJour=calculDoseJournaliere(m.dose,m.poso);
+      }
+      dbg('Dose calcul — '+m.nom+' | dose="'+m.dose+'" | poso="'+m.poso+'" | résultat='+( doseJour||'NON CALCULÉ'));
       if(doseJour)ligne+=' (= '+doseJour+'/jour total)';
       if(m.poso)ligne+=' — '+m.poso;
       if(m.duree)ligne+=' — '+m.duree;
@@ -1499,7 +1545,38 @@ function medAutocomplete(val){
   }).join('');
 }
 
-function selectMedByIndex(idx){
+// ── Génère la posologie structurée depuis les champs ──
+function updatePosoStr(){
+  var prises=parseInt(document.getElementById('mPrises').value||'0')||0;
+  var periode=document.getElementById('mPeriode').value||'jour';
+  var precision=(document.getElementById('mPoso').value||'').trim();
+  var preview=document.getElementById('posoPreview');
+
+  if(!prises){if(preview)preview.style.display='none';return;}
+
+  var str='';
+  if(prises===1) str='1x/'+periode;
+  else str=prises+'x/'+periode;
+
+  if(precision) str+=' — '+precision;
+
+  if(preview){
+    preview.style.display='block';
+    preview.textContent='📋 Posologie : '+str;
+  }
+}
+
+// ── Lire la posologie structurée ──
+function getPosoStr(){
+  var prises=parseInt(document.getElementById('mPrises').value||'0')||0;
+  var periode=document.getElementById('mPeriode').value||'jour';
+  var precision=(document.getElementById('mPoso').value||'').trim();
+  if(!prises&&!precision)return '';
+  var str='';
+  if(prises>0) str=(prises===1?'1x/':prises+'x/')+periode;
+  if(precision) str+=(str?' — ':'')+precision;
+  return str;
+}
   var m=MEDS_DB[idx];
   if(!m)return;
   document.getElementById('mNom').value=m.nom;
@@ -1567,7 +1644,11 @@ function openMedModal(mode){
   document.getElementById('mNom').value='';
   document.getElementById('mDuree').value='';
   document.getElementById('mDureeUnite').value='jours';
+  document.getElementById('mPrises').value='';
+  document.getElementById('mPeriode').value='jour';
   document.getElementById('mPoso').value='';
+  var preview=document.getElementById('posoPreview');
+  if(preview)preview.style.display='none';
   document.getElementById('medSuggestions').style.display='none';
   MED_SELECTED=null;
   resetDosageCondit();
@@ -1589,8 +1670,10 @@ function confirmMed(){
     nom:nom,
     dose:dose,
     duree:dureeStr,
-    poso:document.getElementById('mPoso').value.trim()||'',
-    conditionnement:condit?condit+' cp/unités':''
+    poso:getPosoStr(),
+    conditionnement:condit?condit+' cp/unités':'',
+    _prises:parseInt(document.getElementById('mPrises').value||'0')||0,
+    _periode:document.getElementById('mPeriode').value||'jour'
   };
   var list=MODAL_MODE==='ald'?MEDS_ALD:MEDS;
   var listId=MODAL_MODE==='ald'?'aldMedList':'medList';
