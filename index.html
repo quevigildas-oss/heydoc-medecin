@@ -1186,8 +1186,13 @@ async function lancerValidationIA(){
     '=== INSTRUCTIONS ===\n'+
     'Analyse cette prescription et réponds UNIQUEMENT avec ce format:\n\n'+
     'VERDICT: CONFORME ou NON CONFORME\n\n'+
+    'RÈGLES DE VALIDATION:\n'+
+    '1. Le traitement curatif principal doit correspondre aux recommandations OMS pour le diagnostic.\n'+
+    '2. Les médicaments symptomatiques adjuvants (antalgiques, antipyrétiques, anti-inflammatoires comme Paracétamol, Ibuprofène, etc.) sont TOUJOURS acceptables en complément — ne pas les refuser même s\'ils ne figurent pas dans les recommandations OMS spécifiques au diagnostic.\n'+
+    '3. Vérifier uniquement que les adjuvants ne sont pas contre-indiqués avec le traitement principal ou les antécédents du patient.\n'+
+    '4. Ne juger NON CONFORME QUE SI : le traitement curatif principal est inadapté, sous-dosé, contre-indiqué ou manquant.\n\n'+
     'ANALYSE:\n'+
-    '- Adéquation diagnostic/traitement vs recommandations OMS\n'+
+    '- Traitement curatif principal vs recommandations OMS\n'+
     '- Dosages adaptés à l\'âge ('+p.age+' ans) et poids ('+(p.poids||'?')+'kg)\n'+
     '- Interactions médicamenteuses avec traitements en cours\n'+
     '- Contre-indications liées aux allergies et antécédents\n'+
