@@ -657,14 +657,29 @@ function openDos(notionId){
   if(!CUR_DOS)return;
   // Essayer de récupérer le brouillon JSON enrichi (stocké dans valIA)
   var brouillonOk=false;
-  if(CUR_DOS.valIA&&CUR_DOS.valIA.indexOf('##BROUILLON##')===0){
+  if(CUR_DOS.valIA&&typeof CUR_DOS.valIA==='string'&&CUR_DOS.valIA.indexOf('##BROUILLON##')===0){
     try{
-      var allMeds=JSON.parse(CUR_DOS.valIA.replace('##BROUILLON##',''));
-      MEDS=allMeds.filter(function(m){return !m.ald;});
-      MEDS_ALD=allMeds.filter(function(m){return m.ald;});
-      ALD=MEDS_ALD.length>0;
+      var b=JSON.parse(CUR_DOS.valIA.replace('##BROUILLON##',''));
+      if(b.v===2){
+        // Brouillon complet v2
+        MEDS=b.meds.filter(function(m){return !m.ald;});
+        MEDS_ALD=b.meds.filter(function(m){return m.ald;});
+        ALD=MEDS_ALD.length>0;
+        EXAMENS_REQUIS=b.examensRequis||false;
+        // Restaurer diag/examens/notes dans CUR_DOS pour pré-remplir les champs
+        CUR_DOS.diagMed=b.diag||CUR_DOS.diagMed;
+        CUR_DOS.examensPrescrit=b.examens||CUR_DOS.examensPrescrit;
+        CUR_DOS.notes=b.notes||CUR_DOS.notes;
+        dbg('💾 Brouillon v2 restauré — '+b.meds.length+' méd. sauvegardé le '+b.savedAt);
+      } else {
+        // Ancien format v1 — juste les médicaments
+        MEDS=b.filter(function(m){return !m.ald;});
+        MEDS_ALD=b.filter(function(m){return m.ald;});
+        ALD=MEDS_ALD.length>0;
+        dbg('💾 Brouillon v1 restauré — '+b.length+' méd.');
+      }
       brouillonOk=true;
-    }catch(e){brouillonOk=false;}
+    }catch(e){brouillonOk=false;dbgWarn('Brouillon parse erreur: '+e.message);}
   }
   if(!brouillonOk){
     var parsed=CUR_DOS.traitementMed?parseMedsStr(CUR_DOS.traitementMed):{meds:[],medsAld:[]};
@@ -1004,9 +1019,10 @@ async function sauvegarderBrouillon(){
   var examens=(document.getElementById('examensInput')||{}).value||'';
   var notes=(document.getElementById('notesInput')||{}).value||'';
 
-  // Format JSON enrichi — préserve tous les champs (dose, poso, duree, conditionnement, ald)
   var allMeds=MEDS.map(function(m){return Object.assign({},m,{ald:false});})
     .concat(MEDS_ALD.map(function(m){return Object.assign({},m,{ald:true});}));
+
+  if(!diag&&!allMeds.length&&!notes){toast('⚠️ Rien à sauvegarder');return;}
 
   // Format texte lisible pour Notion (Traitement Prescrit)
   var medsStr=MEDS.map(function(m){
@@ -1017,12 +1033,18 @@ async function sauvegarderBrouillon(){
   }).join('\n');
   var medsStrComplet=(medsStr+(medsAldStr?'\n'+medsAldStr:'')).trim();
 
-  if(!diag&&!medsStrComplet&&!notes){
-    toast('⚠️ Rien à sauvegarder');return;
-  }
-
-  // Stocker le JSON enrichi dans Notes internes pour récupération fidèle
-  var brouillonJson='##BROUILLON##'+JSON.stringify(allMeds);
+  // JSON brouillon complet — tout le formulaire
+  var brouillon={
+    v:2,
+    diag:diag,
+    examens:examens,
+    notes:notes,
+    examensRequis:EXAMENS_REQUIS,
+    ald:ALD,
+    meds:allMeds,
+    savedAt:new Date().toISOString()
+  };
+  var brouillonJson='##BROUILLON##'+JSON.stringify(brouillon);
 
   toast('💾 Sauvegarde...');
   var ok=await updateNotionDossier(CUR_DOS.notionId,{
@@ -1030,17 +1052,19 @@ async function sauvegarderBrouillon(){
     examensPrescrit:examens,
     traitementMed:medsStrComplet,
     notes:notes,
-    validationIA:brouillonJson  // réutilise ce champ pour stocker le JSON brouillon
+    validationIA:brouillonJson
   });
 
-  // MAJ cache local
+  // MAJ cache local complet
   CUR_DOS.diagMed=diag;
   CUR_DOS.examensPrescrit=examens;
   CUR_DOS.traitementMed=medsStrComplet;
   CUR_DOS.notes=notes;
+  CUR_DOS.valIA=brouillonJson; // pour que openDos puisse le relire
   var idx=DOSSIERS.findIndex(function(d){return d.notionId===CUR_DOS.notionId;});
   if(idx>=0)DOSSIERS[idx]=CUR_DOS;
 
+  dbg('💾 Brouillon sauvegardé — '+allMeds.length+' méd. | diag="'+diag.slice(0,30)+'"');
   toast(ok?'✅ Brouillon sauvegardé':'⚠️ Erreur sauvegarde');
 }
 
