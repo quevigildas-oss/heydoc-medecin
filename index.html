@@ -796,21 +796,37 @@ var MODAL_EDIT_IDX=-1;
 function editMed(i,mode){
   var list=mode==='ald'?MEDS_ALD:MEDS;
   var m=list[i];
+  if(!m)return;
   MODAL_MODE=mode||'';
   MODAL_EDIT_IDX=i;
+
+  // Nom
   document.getElementById('mNom').value=m.nom||'';
-  // Parser posologie structurée
-  var posoRaw=m.poso||'';
+  document.getElementById('medSuggestions').style.display='none';
+
+  // Durée + unité
+  var dureeRaw=m.duree||'';
+  var dureeNum='',dureeUnite='jours';
+  var dureeMatch=dureeRaw.match(/^(\d+)\s*(jours?|semaines?|mois)$/i);
+  if(dureeMatch){
+    dureeNum=dureeMatch[1];
+    dureeUnite=dureeMatch[2].toLowerCase().replace(/^(jour)$/,'jours').replace(/^(semaine)$/,'semaines');
+  } else if(dureeRaw){
+    dureeNum=dureeRaw;
+  }
+  document.getElementById('mDuree').value=dureeNum;
+  document.getElementById('mDureeUnite').value=['jours','semaines','mois'].indexOf(dureeUnite)>=0?dureeUnite:'jours';
+
+  // Posologie structurée
   var prises=m._prises||0;
   var periode=m._periode||'jour';
   var precision='';
-  if(!prises&&posoRaw){
-    // Fallback : parser depuis le string "2x/jour — après repas"
-    var posoMatch=posoRaw.match(/^(\d+)x\/(jour|semaine|mois)/i);
+  if(!prises&&m.poso){
+    var posoMatch=m.poso.match(/^(\d+)x\/(jour|semaine|mois)/i);
     if(posoMatch){prises=parseInt(posoMatch[1]);periode=posoMatch[2].toLowerCase();}
-    precision=posoRaw.replace(/^\d+x\/(jour|semaine|mois)\s*—?\s*/i,'').trim();
+    precision=m.poso.replace(/^\d+x\/(jour|semaine|mois)\s*—?\s*/i,'').trim();
   } else {
-    precision=posoRaw.replace(/^\d+x\/(jour|semaine|mois)\s*—?\s*/i,'').trim();
+    precision=m.poso?m.poso.replace(/^\d+x\/(jour|semaine|mois)\s*—?\s*/i,'').trim():'';
   }
   document.getElementById('mPrises').value=prises||'';
   document.getElementById('mPeriode').value=['jour','semaine','mois'].indexOf(periode)>=0?periode:'jour';
@@ -818,15 +834,8 @@ function editMed(i,mode){
   var preview=document.getElementById('posoPreview');
   if(preview)preview.style.display='none';
   updatePosoStr();
-  var dureeNum='',dureeUnite='jours';
-  var dureeMatch=dureeRaw.match(/^(\d+)\s*(jours?|semaines?|mois)$/i);
-  if(dureeMatch){dureeNum=dureeMatch[1];dureeUnite=dureeMatch[2].toLowerCase().replace(/s$/,'')+'s';}
-  else if(dureeRaw){dureeNum=dureeRaw;}
-  document.getElementById('mDuree').value=dureeNum;
-  document.getElementById('mDureeUnite').value=['jours','semaines','mois'].indexOf(dureeUnite)>=0?dureeUnite:'jours';
-  document.getElementById('mPoso').value=m.poso||'';
-  document.getElementById('medSuggestions').style.display='none';
-  // Recharger dosages et conditionnements depuis MEDS_DB
+
+  // Dosage + conditionnement
   MED_SELECTED=MEDS_DB.find(function(x){return x.nom===(m.nom||'');})||null;
   if(MED_SELECTED){
     updateDosages();
@@ -835,11 +844,11 @@ function editMed(i,mode){
     document.getElementById('mCondit').value=m.conditionnement?(parseInt(m.conditionnement)||''):'';
   } else {
     resetDosageCondit();
-    // Fallback : injecter la valeur texte dans le select si non trouvée
     var doseEl=document.getElementById('mDose');
     doseEl.innerHTML='<option value="'+(m.dose||'')+'">'+(m.dose||'-- Saisir --')+'</option>';
     doseEl.value=m.dose||'';
   }
+
   var title=document.getElementById('medModalTitle');
   if(title)title.textContent=mode==='ald'?'Modifier médicament ALD':'Modifier médicament';
   document.getElementById('medModal').classList.add('on');
