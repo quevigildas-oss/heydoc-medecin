@@ -1184,20 +1184,20 @@ async function lancerValidationIA(){
     'Médicaments prescrits (dose unitaire × fréquence = dose journalière totale):\n'+(medsStr||'Aucun')+'\n'+
     (notes?'Notes: '+notes+'\n':'')+'\n'+
     '=== INSTRUCTIONS ===\n'+
-    'Analyse cette prescription et réponds UNIQUEMENT avec ce format:\n\n'+
+    'Tu es un validateur de prescription. Ton rôle est de vérifier que la prescription du médecin est médicalement sûre — pas de la réécrire.\n\n'+
+    'RÈGLES STRICTES:\n'+
+    '1. TRAITEMENT CURATIF: Vérifier que le médicament principal correspond au diagnostic ET que la dose journalière totale est dans la fourchette OMS pour le poids ('+( p.poids||'?')+'kg) et l\'âge ('+p.age+' ans). Si la dose est dans la fourchette OMS → CONFORME même si ce n\'est pas la dose maximale.\n'+
+    '2. ADJUVANTS SYMPTOMATIQUES (Paracétamol, Ibuprofène, antalgiques, antipyrétiques): Accepter si la dose journalière totale ne dépasse pas la dose maximale pédiatrique pour le poids. Ne jamais rejeter un adjuvant au motif qu\'il ne figure pas dans les recommandations OMS du diagnostic principal.\n'+
+    '3. NE PAS exiger d\'examens complémentaires (EEG, biologie, imagerie) pour valider une prescription — les examens sont gérés séparément dans le workflow.\n'+
+    '4. NE PAS proposer de modifier la posologie si elle est dans la fourchette thérapeutique acceptée.\n'+
+    '5. Juger NON CONFORME UNIQUEMENT si: mauvais médicament pour le diagnostic, dose dangereuse (hors fourchette OMS ou toxique), contre-indication formelle avec allergie/antécédent connu du patient.\n\n'+
+    'FORMAT DE RÉPONSE:\n'+
     'VERDICT: CONFORME ou NON CONFORME\n\n'+
-    'RÈGLES DE VALIDATION:\n'+
-    '1. Le traitement curatif principal doit correspondre aux recommandations OMS pour le diagnostic.\n'+
-    '2. Les médicaments symptomatiques adjuvants (antalgiques, antipyrétiques, anti-inflammatoires comme Paracétamol, Ibuprofène, etc.) sont TOUJOURS acceptables en complément — ne pas les refuser même s\'ils ne figurent pas dans les recommandations OMS spécifiques au diagnostic.\n'+
-    '3. Vérifier uniquement que les adjuvants ne sont pas contre-indiqués avec le traitement principal ou les antécédents du patient.\n'+
-    '4. Ne juger NON CONFORME QUE SI : le traitement curatif principal est inadapté, sous-dosé, contre-indiqué ou manquant.\n\n'+
     'ANALYSE:\n'+
-    '- Traitement curatif principal vs recommandations OMS\n'+
-    '- Dosages adaptés à l\'âge ('+p.age+' ans) et poids ('+(p.poids||'?')+'kg)\n'+
-    '- Interactions médicamenteuses avec traitements en cours\n'+
-    '- Contre-indications liées aux allergies et antécédents\n'+
-    (EXAMENS_REQUIS?'- Vérifier que seuls médicaments symptomatiques sont prescrits (pas de traitement curatif avant résultats)\n':'')+
-    '\nSi NON CONFORME:\nRECOMMANDATION OMS: alternative thérapeutique précise avec dosage';
+    '- Traitement principal: [médicament] [dose/jour calculée] vs OMS [fourchette] → [OK/NON]\n'+
+    '- Adjuvants: [liste] → [acceptables/problème si dose excessive]\n'+
+    '- Interactions/Contre-indications: [résultat]\n'+
+    '\nSi NON CONFORME seulement:\nCORRECTION: [correction précise et minimale]';
 
   try{
     var r=await fetch('/api/claude',{
