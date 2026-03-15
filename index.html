@@ -1117,7 +1117,7 @@ async function lancerValidationIA(){
         if(dMatch){
           var total=parseFloat(dMatch[1])*m._prises;
           var unite=(dMatch[2]||'mg').toLowerCase();
-          doseJour=(Number.isInteger(total)?String(total):total.toFixed(1).replace(/\.0$$/,''))+unite;
+          doseJour=(Number.isInteger(total)?String(total):total.toFixed(1).replace(/\.0$/,''))+unite;
         }
       } else {
         doseJour=calculDoseJournaliere(m.dose,m.poso);
