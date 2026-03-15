@@ -1,14 +1,24 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V1.2
-     DATE    : 2026-03-13
+     VERSION : V4.0
+     DATE    : 2026-03-15
      STACK   : Claude API (validation prescription) + Notion
-     STATUS  : ALD format enrichi standardisé
+     STATUS  : Workflow complet validé — Phase test
      CHANGELOG:
+       V4.0 — 2026-03-15 : Autocomplete médicaments (125 molécules OMS + Afrique Ouest)
+                           Posologie structurée (prises + période + précision)
+                           Durée structurée (numérique + jours/semaines/mois)
+                           Calcul dose journalière dans prompt validation (200mg×2=400mg/jour)
+                           Brouillon JSON v2 complet (diag + examens + notes + meds + ALD)
+                           Badge statut dans corps de page + header allégé
+                           Prompt validation amélioré (adjuvants acceptés, pas d'exigence examens)
+                           Monitoring debug panel : dbg/dbgWarn/dbgError
+                           Fix rich_text multi-blocs (toutes fonctions txt())
+                           Fix valIA chargé depuis Notion
+                           Bouton 🏠 Accueil dans header consultScreen
+                           J'achète moins cher : entre Télécharger et Partager
        V1.2 — 2026-03-13 : Format ALD enrichi dans Notion (compatible Dokita V3.2)
-                           Déduplication traitements existants
-                           Toast précis nombre de traitements ALD
        V1.1 — 2026-03-09 : Workflow complet validé
 ============================================ -->
 <html lang="fr">
