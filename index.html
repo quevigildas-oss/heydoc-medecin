@@ -1377,43 +1377,39 @@ async function finaliser(nouveauStatut){
       traitements:traitementsFinal
     });
     toast(aldOk?'🏥 Dossier patient mis à jour (ALD — '+MEDS_ALD.length+' traitement'+(MEDS_ALD.length>1?'s':'')+')':'⚠️ Erreur MAJ dossier patient');
+  }
 
-    // ── Remplir colonne Ordonnances dans BDD Patients (JSON cumulatif) ──
-    if(aldOk&&nouveauStatut!=='en_attente_examen'){
+  // ── Remplir colonne Ordonnances dans BDD Patients (JSON cumulatif) ──
+  // Toujours sauvegarder l'ordonnance, avec ou sans ALD
+  if(PATIENT_DOSSIER&&nouveauStatut!=='en_attente_examen'){
+    var diag3=(document.getElementById('diagMedInput')||{}).value||CUR_DOS.diagMed||'';
+    try{
+      var ordosExistantes=[];
       try{
-        // Lire les ordonnances existantes
-        var ordosExistantes=[];
-        try{
-          var ordRaw=PATIENT_DOSSIER.ordonnances||'';
-          if(ordRaw)ordosExistantes=JSON.parse(ordRaw);
-          if(!Array.isArray(ordosExistantes))ordosExistantes=[];
-        }catch(e){ordosExistantes=[];}
-
-        // Construire la nouvelle ordonnance complète
-        var nouvelleOrdonnance={
-          date:new Date().toISOString().slice(0,10),
-          consultationId:CUR_DOS.id||CUR_DOS.notionId.slice(0,8),
-          medecin:CUR_MED.nom,
-          specialite:CUR_MED.spec,
-          diagnostic:diag2,
-          medicaments:MEDS.map(function(m){
-            return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' ('+m.duree+')':'');
-          }).concat(MEDS_ALD.map(function(m){
-            return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+' [ALD — permanent]';
-          })),
-          notes:notes||''
-        };
-
-        // Ajouter en tête (plus récent en premier) et limiter à 20 ordonnances
-        ordosExistantes.unshift(nouvelleOrdonnance);
-        if(ordosExistantes.length>20)ordosExistantes=ordosExistantes.slice(0,20);
-
-        await notionRequest('/pages/'+PATIENT_DOSSIER.notionId,'PATCH',{
-          properties:{'Ordonnances':{rich_text:[{text:{content:JSON.stringify(ordosExistantes).slice(0,2000)}}]}}
-        });
-        dbg('Ordonnances BDD Patients mise à jour: '+ordosExistantes.length+' ordo(s)');
-      }catch(e){console.log('Erreur MAJ Ordonnances patient:',e.message);}
-    }
+        var ordRaw=PATIENT_DOSSIER.ordonnances||'';
+        if(ordRaw)ordosExistantes=JSON.parse(ordRaw);
+        if(!Array.isArray(ordosExistantes))ordosExistantes=[];
+      }catch(e){ordosExistantes=[];}
+      var nouvelleOrdonnance={
+        date:new Date().toISOString().slice(0,10),
+        consultationId:CUR_DOS.notionId,
+        medecin:CUR_MED.nom,
+        specialite:CUR_MED.spec,
+        diagnostic:diag3,
+        medicaments:MEDS.map(function(m){
+          return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' ('+m.duree+')':'');
+        }).concat(MEDS_ALD.map(function(m){
+          return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+' [ALD — permanent]';
+        })),
+        notes:notes||''
+      };
+      ordosExistantes.unshift(nouvelleOrdonnance);
+      if(ordosExistantes.length>20)ordosExistantes=ordosExistantes.slice(0,20);
+      await notionRequest('/pages/'+PATIENT_DOSSIER.notionId,'PATCH',{
+        properties:{'Ordonnances':{rich_text:[{text:{content:JSON.stringify(ordosExistantes).slice(0,2000)}}]}}
+      });
+      dbg('Ordonnances BDD Patients mise à jour: '+ordosExistantes.length+' ordo(s)');
+    }catch(e){console.log('Erreur MAJ Ordonnances patient:',e.message);}
   }
 
   // Mettre à jour le cache local
