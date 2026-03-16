@@ -1526,6 +1526,9 @@ var MEDS_DB=[
   {nom:'Phloroglucinol',classe:'Antispasmodique',dosages:[{dose:'80mg',conditionnements:[20,30]}]},
   {nom:'Lopéramide',classe:'Antidiarrhéique',dosages:[{dose:'2mg',conditionnements:[12,20]}]},
   {nom:'Salbutamol',classe:'Bronchodilatateur',dosages:[{dose:'2mg',conditionnements:[30,60]},{dose:'4mg',conditionnements:[30,60]},{dose:'100µg/dose inhalateur',conditionnements:[1]}]},
+  {nom:'Bromhexine',classe:'Mucolytique',dosages:[{dose:'4mg',conditionnements:[20,30]},{dose:'8mg',conditionnements:[20,30]}]},
+  {nom:'Acétylcystéine',classe:'Mucolytique',dosages:[{dose:'200mg',conditionnements:[20,30]},{dose:'600mg',conditionnements:[10,20]}]},
+  {nom:'Ambroxol',classe:'Mucolytique',dosages:[{dose:'30mg',conditionnements:[20,30]},{dose:'75mg',conditionnements:[10,20]}]},
   {nom:'Théophylline',classe:'Bronchodilatateur',dosages:[{dose:'100mg',conditionnements:[30]},{dose:'200mg',conditionnements:[30]}]},
   {nom:'Prednisone',classe:'Corticoïde',dosages:[{dose:'5mg',conditionnements:[20,30]},{dose:'20mg',conditionnements:[20,30]}]},
   {nom:'Prednisolone',classe:'Corticoïde',dosages:[{dose:'5mg',conditionnements:[30]},{dose:'20mg',conditionnements:[30]}]},
@@ -1581,11 +1584,18 @@ function medAutocomplete(val){
   var results=MEDS_DB.filter(function(m){
     return m.nom.toLowerCase().indexOf(q)>=0;
   }).slice(0,8);
+  // Auto-sélection si correspondance exacte
+  var exact=MEDS_DB.find(function(m){return m.nom.toLowerCase()===q;});
+  if(exact){
+    MED_SELECTED=exact;
+    updateDosages();
+    box.style.display='none';
+    return;
+  }
   if(!results.length){box.style.display='none';return;}
   box.style.display='block';
-  box.innerHTML=results.map(function(m,ri){
+  box.innerHTML=results.map(function(m){
     var hl=m.nom.replace(new RegExp('('+val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<strong>$1</strong>');
-    // Utiliser l'index dans MEDS_DB pour éviter les problèmes d'encodage accent
     var dbIdx=MEDS_DB.indexOf(m);
     return '<div onclick="selectMedByIndex('+dbIdx+')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;" onmouseover="this.style.background=\'var(--card2)\'" onmouseout="this.style.background=\'\'">'+
       hl+'<span style="font-size:10px;color:var(--text3);margin-left:8px;">'+m.classe+'</span>'+
@@ -1639,8 +1649,11 @@ function selectMed(nom){
   document.getElementById('mNom').value=nom;
   document.getElementById('medSuggestions').style.display='none';
   MED_SELECTED=MEDS_DB.find(function(m){return m.nom===nom;})||null;
-  if(MED_SELECTED){updateDosages();}
+  updateDosages();
 }
+
+function basculerSaisieLibre(){}   // désactivé — selects toujours fixes
+function basculerSaisieSelect(){}  // désactivé — selects toujours fixes
 
 function updateDosages(){
   var sel=document.getElementById('mDose');
