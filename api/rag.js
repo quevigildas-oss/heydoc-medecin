@@ -26,38 +26,78 @@ export default async function handler(req, res) {
   const CLAUDE_KEY   = process.env.ANTHROPIC_KEY;
 
   try {
-    // 1. Extraire le dernier message
     const lastMsg = messages[messages.length - 1].content || '';
+    const isResume = lastMsg.trim() === 'RESUME_CONSULTATION';
 
-    // 2. Embedding OpenAI
+    // --- Détection du diagnostic depuis la conversation ---
+    const diagKeywords = {
+      'paludisme': 'malaria treatment artemether lumefantrine dosage weight kg child pediatric',
+      'malaria': 'malaria treatment artemether lumefantrine dosage weight kg child pediatric',
+      'typhoide': 'typhoid fever treatment azithromycin ciprofloxacin dosage',
+      'typhoïde': 'typhoid fever treatment azithromycin ciprofloxacin dosage',
+      'meningite': 'meningitis treatment ceftriaxone dosage pediatric',
+      'méningite': 'meningitis treatment ceftriaxone dosage pediatric',
+      'tuberculose': 'tuberculosis treatment rifampicin isoniazid dosage',
+      'vih': 'HIV antiretroviral treatment dosage',
+      'dengue': 'dengue fever treatment management',
+      'cholera': 'cholera treatment rehydration antibiotics dosage',
+      'choléra': 'cholera treatment rehydration antibiotics dosage',
+      'mpox': 'mpox monkeypox treatment management',
+      'pneumonie': 'pneumonia treatment amoxicillin dosage pediatric',
+      'diarrhee': 'diarrhea treatment rehydration zinc dosage child',
+      'diarrhée': 'diarrhea treatment rehydration zinc dosage child',
+    };
+
+    // Construire la requête de recherche
+    let searchQuery = lastMsg.slice(0, 8000);
+    if (isResume) {
+      // Chercher le diagnostic dans toute la conversation
+      const convText = messages.map(m => m.content || '').join(' ').toLowerCase();
+      let diagQuery = 'tropical disease treatment dosage Africa'; // défaut
+      for (const [keyword, query] of Object.entries(diagKeywords)) {
+        if (convText.includes(keyword)) {
+          diagQuery = query;
+          break;
+        }
+      }
+      searchQuery = diagQuery;
+      console.log('RESUME search query:', searchQuery);
+    }
+
+    // 1. Embedding OpenAI
     const embRes = await fetch('https://api.openai.com/v1/embeddings', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${OPENAI_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'text-embedding-3-small', input: lastMsg.slice(0, 8000) })
+      body: JSON.stringify({ model: 'text-embedding-3-small', input: searchQuery })
     });
     const embData = await embRes.json();
     const embedding = embData?.data?.[0]?.embedding;
     console.log('Embedding OK:', !!embedding, embData?.error?.message || '');
 
-    // 3. Recherche Supabase pgvector
+    // 2. Recherche Supabase pgvector
     let chunks = [];
     if (embedding) {
+      const matchCount = isResume ? 10 : 5;
       const searchRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_medical`, {
         method: 'POST',
-        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query_embedding: embedding, match_count: 5 })
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query_embedding: embedding, match_count: matchCount })
       });
       chunks = await searchRes.json();
       if (!Array.isArray(chunks)) chunks = [];
-      console.log('Chunks found:', chunks.length);
+      console.log('Chunks found:', chunks.length, 'isResume:', isResume);
     }
 
-    // 4. Contexte médical depuis Supabase
+    // 3. Contexte médical
     const contexteMedial = chunks.length > 0
       ? chunks.map(c => `[Source: ${c.source}]\n${c.content}`).join('\n\n---\n\n')
       : 'Aucune source médicale trouvée pour cette requête.';
 
-    // 5. Prompt validé — copie exacte du prompt Relevance AI
+    // 4. Prompt validé — copie exacte du prompt Relevance AI
     const systemPrompt = `SOURCES AUTORISÉES
 
 Les guidelines médicales OMS/MSF suivantes ont été trouvées pour cette consultation :
@@ -281,7 +321,7 @@ Cite toujours la source exacte
 
 Ne jamais improviser un dosage ou un protocole`;
 
-    // 6. Appel Claude
+    // 5. Appel Claude
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
