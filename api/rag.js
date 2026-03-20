@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_KEY = process.env.SUPABASE_KEY;
   const OPENAI_KEY   = process.env.OPENAI_KEY;
-  const CLAUDE_KEY   = process.env.ANTHROPIC_API_KEY;
+  const CLAUDE_KEY   = process.env.ANTHROPIC_KEY;
 
   try {
     // 1. Extraire la dernière question du patient
