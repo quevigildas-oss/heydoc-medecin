@@ -45,6 +45,7 @@ export default async function handler(req, res) {
     });
     const embData = await embRes.json();
     const embedding = embData?.data?.[0]?.embedding;
+    console.log('Embedding OK:', !!embedding, 'OpenAI error:', embData?.error?.message || 'none');
 
     // 3. Recherche Supabase pgvector
     let chunks = [];
@@ -62,10 +63,11 @@ export default async function handler(req, res) {
         })
       });
       chunks = await searchRes.json();
+      console.log('Chunks found:', Array.isArray(chunks) ? chunks.length : 'error', typeof chunks === 'object' && !Array.isArray(chunks) ? JSON.stringify(chunks).slice(0,200) : '');
     }
 
     // 4. Construire contexte médical
-    const contexteMedial = chunks.length > 0
+    const contexteMedial = Array.isArray(chunks) && chunks.length > 0
       ? chunks.map(c => `[Source: ${c.source}]\n${c.content}`).join('\n\n---\n\n')
       : '';
 
@@ -136,8 +138,15 @@ LANGUE : Réponds TOUJOURS dans la même langue que le patient.`;
     });
     const claudeData = await claudeRes.json();
     const answer = claudeData?.content?.[0]?.text || '';
+    console.log('Claude status:', claudeRes.status);
+    console.log('Claude error:', claudeData?.error?.message || 'none');
+    console.log('Answer length:', answer.length);
 
-    return res.status(200).json({ answer, chunks_used: chunks.length });
+    return res.status(200).json({
+      answer,
+      chunks_used: Array.isArray(chunks) ? chunks.length : 0,
+      debug: claudeData?.error ? claudeData.error : null
+    });
 
   } catch (e) {
     console.error('RAG error:', e);
