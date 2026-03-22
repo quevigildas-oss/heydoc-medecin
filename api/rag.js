@@ -190,27 +190,287 @@ export default async function handler(req, res) {
       'tsindry rà':'hypertension','kudzvanyidzwa':'hypertension',
       'isifo somfutho wegazi':'hypertension',
 
+      // ÉTAT DE CHOC
+      'choc':'choc','shock':'choc','état de choc':'choc','collapse':'choc',
+      'mshtuko wa damu':'choc','صدمة':'choc','шок':'choc',
+
+      // FIÈVRE (générique)
+      'fièvre':'fievre','fievre':'fievre','fever':'fievre','homa':'fievre',
+      'حمى':'fievre','lихорадка':'fievre','zazzabi':'fievre','iba':'fievre',
+
+      // HYPOGLYCÉMIE
+      'hypoglycémie':'hypoglycemie','hypoglycemie':'hypoglycemie',
+      'hypoglycemia':'hypoglycemie','low blood sugar':'hypoglycemie',
+      'sukari chini':'hypoglycemie','انخفاض السكر':'hypoglycemie',
+
+      // ANÉMIE
+      'anémie':'anemie','anemie':'anemie','anemia':'anemie',
+      'فقر الدم':'anemie','анемия':'anemie','anemi':'anemie',
+      'damu chache':'anemie','paleness':'anemie','pâleur':'anemie',
+
+      // DÉSHYDRATATION
+      'déshydratation':'deshydratation','deshydratation':'deshydratation',
+      'dehydration':'deshydratation','upungufu wa maji':'deshydratation',
+      'جفاف':'deshydratation','обезвоживание':'deshydratation',
+
+      // ANGINE / PHARYNGITE
+      'angine':'angine','pharyngite':'angine','tonsillitis':'angine',
+      'sore throat':'angine','mal de gorge':'angine','التهاب الحلق':'angine',
+      'тонзиллит':'angine','maumivu ya koo':'angine','ciwon makogwaro':'angine',
+
+      // DIPHTÉRIE
+      'diphtérie':'diphterie','diphterie':'diphterie','diphtheria':'diphterie',
+      'الدفتيريا':'diphterie','дифтерия':'diphterie',
+
+      // CROUP
+      'croup':'croup','laryngite':'croup','laryngotrachéite':'croup',
+      'toux aboyante':'croup','barking cough':'croup',
+
+      // COQUELUCHE
+      'coqueluche':'coqueluche','whooping cough':'coqueluche','pertussis':'coqueluche',
+      'السعال الديكي':'coqueluche','коклюш':'coqueluche','kikohozi cha mvua':'coqueluche',
+
+      // BRONCHIOLITE
+      'bronchiolite':'bronchiolite','bronchiolitis':'bronchiolite',
+      'التهاب القصيبات':'bronchiolite','бронхиолит':'bronchiolite',
+
+      // ASTHME
+      'asthme':'asthme','asthma':'asthme','pumu':'asthme',
+      'الربو':'asthme','астма':'asthme','pumzi':'asthme',
+      'ikọ́ oyún':'asthme','ọrịa ume':'asthme',
+
+      // GALE
+      'gale':'gale','scabies':'gale','mange':'gale',
+      'الجرب':'gale','чесотка':'gale','upele':'gale','kikwazo':'gale',
+
+      // IMPÉTIGO
+      'impétigo':'impetigo','impetigo':'impetigo',
+      'التقيح':'impetigo','импетиго':'impetigo',
+
+      // ÉRYSIPÈLE / CELLULITE
+      'érysipèle':'erysipele','erysipele':'erysipele','cellulite':'erysipele',
+      'erysipelas':'erysipele','التهاب النسيج':'erysipele',
+
+      // ANAPHYLAXIE / URTICAIRE
+      'anaphylaxie':'anaphylaxie','anaphylaxis':'anaphylaxie',
+      'urticaire':'anaphylaxie','hives':'anaphylaxie','allergie sévère':'anaphylaxie',
+      'الحساسية الشديدة':'anaphylaxie','анафилаксия':'anaphylaxie',
+
+      // CHARBON
+      'charbon':'charbon','anthrax':'charbon','الجمرة الخبيثة':'charbon',
+
+      // AMIBIASE
+      'amibiase':'amibiase','amebiasis':'amibiase','amoeba':'amibiase',
+      'abcès amibien':'amibiase','داء الأميبا':'amibiase','амёбиаз':'amibiase',
+
+      // GIARDIASE
+      'giardiase':'giardiase','giardiasis':'giardiase','giardia':'giardiase',
+      'داء الجيارديا':'giardiase',
+
+      // BRUCELLOSE
+      'brucellose':'brucellose','brucellosis':'brucellose','fièvre de Malte':'brucellose',
+      'البروسيلا':'brucellose','бруцеллёз':'brucellose',
+
+      // LEPTOSPIROSE
+      'leptospirose':'leptospirose','leptospirosis':'leptospirose',
+      'البريميات':'leptospirose','лептоспироз':'leptospirose',
+
+      // RICKETTSIOSES
+      'rickettsiose':'rickettsiose','typhus':'rickettsiose','fièvre boutonneuse':'rickettsiose',
+      'rickettsial':'rickettsiose','الريكيتسيا':'rickettsiose',
+
+      // FIÈVRES RÉCURRENTES
+      'fièvre récurrente':'fievres_recurrentes','relapsing fever':'fievres_recurrentes',
+      'borréliose':'fievres_recurrentes',
+
+      // TRYPANOSOMIASE
+      'trypanosomiase':'trypanosomiase','sleeping sickness':'trypanosomiase',
+      'maladie du sommeil':'trypanosomiase','ugonjwa wa usingizi':'trypanosomiase',
+      'داء النوم':'trypanosomiase',
+
+      // LEISHMANIOSE
+      'leishmaniose':'leishmaniose','leishmaniasis':'leishmaniose','kala-azar':'leishmaniose',
+      'داء الليشمانيات':'leishmaniose','лейшманиоз':'leishmaniose',
+
+      // SCHISTOSOMIASE
+      'schistosomiase':'schistosomiase','bilharziose':'schistosomiase',
+      'schistosomiasis':'schistosomiase','bilharzia':'schistosomiase',
+      'البلهارسيا':'schistosomiase','kichocho':'schistosomiase',
+
+      // FILARIOSE
+      'filariose':'filariose','onchocercose':'filariose','cécité des rivières':'filariose',
+      'elephantiasis':'filariose','loase':'filariose','river blindness':'filariose',
+      'داء الفيلاريات':'filariose',
+
+      // HÉPATITE
+      'hépatite':'hepatite','hepatite':'hepatite','hepatitis':'hepatite',
+      'ictère':'hepatite','jaunisse':'hepatite','التهاب الكبد':'hepatite',
+      'гепатит':'hepatite','homa ya ini':'hepatite','ugonjwa wa ini':'hepatite',
+
+      // CYSTITE / INFECTION URINAIRE
+      'cystite':'cystite','infection urinaire':'cystite','urinary tract infection':'cystite',
+      'uti':'cystite','التهاب المثانة':'cystite','цистит':'cystite',
+      'maumivu ya mkojo':'cystite',
+
+      // IST GÉNÉRIQUES
+      'ist':'ist','sti':'ist','mst':'ist','infection sexuelle':'ist',
+      'ecoulement':'ist','écoulement':'ist','discharge':'ist',
+      'الأمراض المنقولة جنسياً':'ist','مرض جنسي':'ist',
+
+      // SYPHILIS / ULCÉRATION GÉNITALE
+      'syphilis':'syphilis','chancre':'syphilis','ulcération génitale':'syphilis',
+      'الزهري':'syphilis','сифилис':'syphilis','kaswende':'syphilis',
+
+      // IGH
+      'salpingite':'igh','infections génitales hautes':'igh','pid':'igh',
+      'pelvic inflammatory disease':'igh',
+
+      // BRÛLURES
+      'brûlure':'brulure','brulure':'brulure','burn':'brulure',
+      'mchomo':'brulure','حرق':'brulure','ожог':'brulure',
+
+      // DÉPRESSION
+      'dépression':'depression','depression':'depression',
+      'الاكتئاب':'depression','депрессия':'depression','huzuni':'depression',
+
+      // PSYCHOSE / TROUBLES BIPOLAIRES
+      'psychose':'psychose','schizophrénie':'psychose','troubles bipolaires':'psychose',
+      'manie':'psychose','psychosis':'psychose','الذهان':'psychose',
+      'ugonjwa wa akili':'psychose',
+
+      // ANXIÉTÉ / PTSD
+      'anxiété':'anxiete','anxiete':'anxiete','anxiety':'anxiete',
+      'ptsd':'anxiete','stress post-traumatique':'anxiete','insomnie':'anxiete',
+      'القلق':'anxiete','тревога':'anxiete',
+
+      // INSUFFISANCE CARDIAQUE
+      'insuffisance cardiaque':'icc','oap':'icc','œdème pulmonaire':'icc',
+      'heart failure':'icc','فشل القلب':'icc','сердечная недостаточность':'icc',
+
+      // DRÉPANOCYTOSE
+      'drépanocytose':'drepanocytose','sickle cell':'drepanocytose',
+      'anémie falciforme':'drepanocytose','مرض الخلايا المنجلية':'drepanocytose',
+      'ugonjwa wa seli mundu':'drepanocytose','isifo samagadi':'drepanocytose',
+
+      // MALNUTRITION (déjà présent mais enrichi)
+      'kwashiorkor':'malnutrition','marasme':'malnutrition','mas':'malnutrition',
+      'mam':'malnutrition','stunting':'malnutrition',
+
+      // OTITE
+      'otite':'otite','ear infection':'otite','otalgie':'otite',
+      'mal d\'oreille':'otite','التهاب الأذن':'otite','уши болят':'otite',
+      'maumivu ya sikio':'otite',
+
+      // MUGUET / CANDIDOSE
+      'muguet':'muguet','candidose':'muguet','thrush':'muguet',
+      'candida':'muguet','القلاع':'muguet','кандидоз':'muguet',
+
+      // NÉONATAL
+      'sepsis néonatal':'neonatal','infection néonatale':'neonatal',
+      'nouveau-né malade':'neonatal','neonatal infection':'neonatal',
+
+      // VIOLENCES SEXUELLES
+      'violences sexuelles':'violences_sex','viol':'violences_sex','agression':'violences_sex',
+      'sexual violence':'violences_sex','rape':'violences_sex',
+      'post-exposition':'violences_sex','pep':'violences_sex',
+
+      // CONTRACEPTION
+      'contraception':'contraception','pilule':'contraception','contraceptif':'contraception',
+      'planning familial':'contraception','family planning':'contraception',
+      'diu':'contraception','stérilet':'contraception','injectable':'contraception',
+
+      // VACCINATION
+      'vaccin':'vaccination','vaccination':'vaccination','vaccine':'vaccination',
+      'pev':'vaccination','immunisation':'vaccination','تطعيم':'vaccination',
+      'chanjo':'vaccination',
+
+      // LITHIASE
+      'colique néphrétique':'lithiase','calcul rénal':'lithiase','pierre rein':'lithiase',
+      'kidney stone':'lithiase','urolithiasis':'lithiase','حصوات الكلى':'lithiase',
+
+      // DYSPEPSIE / GASTRITE
+      'gastrite':'dyspepsie','rgo':'dyspepsie','ulcère':'dyspepsie',
+      'brûlures estomac':'dyspepsie','gastritis':'dyspepsie','reflux':'dyspepsie',
+      'h pylori':'dyspepsie','التهاب المعدة':'dyspepsie',
+
     };
 
-    // Queries de recherche Supabase — maladie + contexte uniquement, JAMAIS le médicament
+    // Queries Supabase — maladie + contexte UNIQUEMENT, JAMAIS le nom du médicament.
+    // Règle : si le protocole change demain → seul le Markdown change, pas ce code.
     const diagQueries = {
-      'paludisme':    'paludisme simple traitement dosage poids kg comprimés protocole national Côte d\'Ivoire',
-      'typhoide':     'fièvre typhoïde traitement dosage adulte enfant ambulatoire hospitalisation',
-      'meningite':    'méningite bactérienne traitement dosage pédiatrique adulte mg/kg hospitalisation',
-      'tuberculose':  'tuberculose traitement dosage poids comprimés phase intensive continuation',
-      'vih':          'VIH traitement antirétroviral ARV schéma adulte enfant première ligne',
-      'dengue':       'dengue traitement prise en charge symptomatique réhydratation groupes',
-      'cholera':      'choléra traitement réhydratation SRO antibiotiques dosage',
-      'mpox':         'mpox traitement prise en charge symptomatique',
-      'pneumonie':    'pneumonie traitement dosage pédiatrique adulte mg/kg ambulatoire hospitalisation',
-      'diarrhee':     'diarrhée aiguë traitement réhydratation SRO zinc dosage enfant plan A B C',
-      'rougeole':     'rougeole traitement vitamine A dosage complications',
-      'tetanos':      'tétanos traitement dosage hospitalisation spasmes',
-      'convulsion':   'convulsions traitement dosage poids urgence',
-      'epilepsie':    'épilepsie traitement dosage entretien long terme',
-      'malnutrition': 'malnutrition aiguë sévère MAS traitement phases nutritionnel médical',
-      'diabete':      'diabète type 2 traitement dosage glycémie étapes',
-      'hypertension': 'hypertension artérielle traitement dosage objectifs tensionnels',
+      // Maladies infectieuses tropicales prioritaires
+      'paludisme':          'paludisme simple traitement dosage poids kg comprimés protocole national Côte d\'Ivoire',
+      'typhoide':           'fièvre typhoïde traitement dosage adulte enfant ambulatoire hospitalisation',
+      'meningite':          'méningite bactérienne traitement dosage pédiatrique adulte mg/kg hospitalisation',
+      'tuberculose':        'tuberculose traitement dosage poids comprimés phase intensive continuation',
+      'vih':                'VIH traitement antirétroviral ARV schéma adulte enfant première ligne',
+      'dengue':             'dengue traitement prise en charge symptomatique réhydratation groupes',
+      'cholera':            'choléra traitement réhydratation SRO antibiotiques dosage',
+      'mpox':               'mpox traitement prise en charge symptomatique isolement',
+      'rougeole':           'rougeole traitement vitamine A dosage complications surinfection',
+      'tetanos':            'tétanos traitement dosage hospitalisation spasmes immunoglobuline',
+      'brucellose':         'brucellose traitement dosage durée antibiotiques',
+      'leptospirose':       'leptospirose traitement dosage forme légère sévère',
+      'rickettsiose':       'rickettsiose typhus traitement dosage antibiotiques',
+      'fievres_recurrentes':'fièvres récurrentes borréliose traitement dosage',
+      'trypanosomiase':     'trypanosomiase maladie du sommeil traitement dosage stade',
+      'leishmaniose':       'leishmaniose traitement dosage forme cutanée viscérale',
+      'schistosomiase':     'schistosomiase bilharziose traitement dosage',
+      'filariose':          'filariose onchocercose traitement dosage annuel',
+      // Pathologie respiratoire
+      'pneumonie':          'pneumonie traitement dosage pédiatrique adulte mg/kg ambulatoire hospitalisation',
+      'angine':             'angine pharyngite traitement dosage antibiotiques durée',
+      'diphterie':          'diphtérie traitement dosage sérum antidiphtérique antibiotiques',
+      'croup':              'croup laryngotrachéite traitement dosage corticoïdes urgence',
+      'coqueluche':         'coqueluche traitement dosage nourrisson enfant adulte durée',
+      'bronchiolite':       'bronchiolite traitement dosage nourrisson oxygène',
+      'asthme':             'asthme traitement dosage crise chronique corticoïdes bronchodilatateurs',
+      // Pathologie digestive
+      'diarrhee':           'diarrhée aiguë traitement réhydratation SRO zinc dosage enfant plan A B C',
+      'amibiase':           'amibiase traitement dosage adulte enfant durée',
+      'giardiase':          'giardiase traitement dosage durée',
+      'dyspepsie':          'troubles dyspeptiques gastrite RGO traitement dosage durée',
+      // Pathologie dermatologique
+      'gale':               'gale traitement dosage poids applications temps contact',
+      'impetigo':           'impétigo traitement dosage local oral durée',
+      'erysipele':          'érysipèle cellulite traitement dosage durée',
+      'anaphylaxie':        'anaphylaxie urticaire traitement dosage urgence',
+      'charbon':            'charbon anthrax traitement dosage durée antibiotiques',
+      // Symptômes généraux / urgences
+      'choc':               'état de choc traitement dosage réhydratation urgence type',
+      'fievre':             'fièvre traitement dosage causes infectieuses Afrique',
+      'hypoglycemie':       'hypoglycémie traitement dosage glucose correction urgence',
+      'anemie':             'anémie traitement dosage fer transfusion seuils hémoglobine',
+      'deshydratation':     'déshydratation traitement réhydratation SRO plan A B C dosage',
+      'convulsion':         'convulsions traitement dosage poids urgence étapes',
+      // IST / Urologie / Gynéco
+      'ist':                'infections sexuellement transmissibles traitement dosage syndromique',
+      'syphilis':           'syphilis ulcération génitale traitement dosage pénicilline durée',
+      'cystite':            'cystite infection urinaire traitement dosage durée',
+      'brulure':            'brûlures traitement dosage réhydratation analgésie soins locaux',
+      'igh':                'infections génitales hautes salpingite traitement dosage durée',
+      'lithiase':           'lithiase urinaire colique néphrétique traitement dosage antalgiques',
+      'contraception':      'contraception pilule injectable DIU posologie',
+      'violences_sex':      'violences sexuelles prophylaxie post-exposition traitement dosage IST ARV',
+      // Maladies chroniques
+      'diabete':            'diabète type 2 traitement dosage glycémie étapes monothérapie bithérapie',
+      'hypertension':       'hypertension artérielle traitement dosage objectifs tensionnels',
+      'drepanocytose':      'drépanocytose traitement dosage crise antalgiques prévention',
+      'epilepsie':          'épilepsie traitement dosage entretien long terme antiépileptiques',
+      'icc':                'insuffisance cardiaque OAP traitement dosage urgence diurétiques',
+      // Psychiatrie
+      'depression':         'dépression traitement dosage antidépresseurs durée',
+      'psychose':           'psychose troubles bipolaires traitement dosage antipsychotiques',
+      'anxiete':            'anxiété insomnie PTSD traitement dosage',
+      // Pédiatrie / Néonatal
+      'malnutrition':       'malnutrition aiguë sévère MAS traitement phases nutritionnel médical vitamine',
+      'otite':              'otite moyenne aiguë traitement dosage enfant antibiotiques durée',
+      'muguet':             'muguet candidose orale traitement dosage nourrisson enfant adulte',
+      'neonatal':           'infections néonatales traitement dosage nourrisson antibiotiques',
+      // Autres
+      'hepatite':           'hépatite virale traitement dosage symptomatique chronique',
+      'vaccination':        'vaccination calendrier PEV enfant Côte d\'Ivoire doses',
+      'sclerose':           'paludisme traitement dosage poids kg comprimés protocole',
     };
 
     // Construire la requête de recherche
@@ -234,9 +494,7 @@ export default async function handler(req, res) {
       }
 
       searchQuery = diagQuery;
-      console.log('RESUME — langue détectée, concept normalisé:', normalizedDisease, '| query:', searchQuery);
-      searchQuery = diagQuery;
-      console.log('RESUME search query:', searchQuery);
+      console.log('RESUME — concept normalisé:', normalizedDisease, '| query:', searchQuery);
     }
 
     // 1. Embedding OpenAI
