@@ -600,16 +600,16 @@ export default async function handler(req, res) {
         const fileKeyword = diseaseFileKeywords[normalizedDisease];
         if (fileKeyword) {
           // Récupère directement tous les Markdowns Dokita dont le nom contient le mot-clé
-          const directRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/medical_documents?source=like.*${fileKeyword}*&select=id,content,source`,
-            {
+          // PostgREST syntax: ilike pour case-insensitive, * = wildcard
+        // Double filtre : source contient "Dokita Dosages" ET le mot-clé maladie
+        const directUrl = `${SUPABASE_URL}/rest/v1/medical_documents?source=ilike.*${encodeURIComponent(fileKeyword)}*&source=ilike.*Dokita*&select=id,content,source`;
+        const directRes = await fetch(directUrl, {
               headers: {
                 'apikey': SUPABASE_KEY,
                 'Authorization': `Bearer ${SUPABASE_KEY}`,
                 'Content-Type': 'application/json'
               }
-            }
-          );
+            });
           let directChunks = await directRes.json();
           if (!Array.isArray(directChunks)) directChunks = [];
 
