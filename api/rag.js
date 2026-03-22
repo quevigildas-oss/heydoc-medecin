@@ -475,11 +475,12 @@ export default async function handler(req, res) {
 
     // Construire la requête de recherche
     let searchQuery = lastMsg.slice(0, 8000);
+    let normalizedDisease = null; // déclaré ici pour être accessible dans tout le handler
+
     if (isResume) {
       const convText = messages.map(m => m.content || '').join(' ').toLowerCase();
 
       // Étape 1 : normaliser la langue → concept clé
-      let normalizedDisease = null;
       for (const [alias, concept] of Object.entries(diseaseAliases)) {
         if (convText.includes(alias.toLowerCase())) {
           normalizedDisease = concept;
