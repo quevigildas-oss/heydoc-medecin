@@ -522,15 +522,113 @@ export default async function handler(req, res) {
       });
       chunks = await searchRes.json();
       if (!Array.isArray(chunks)) chunks = [];
-      console.log('Chunks found:', chunks.length, 'isResume:', isResume);
+      console.log('Chunks sémantiques:', chunks.length, 'isResume:', isResume);
 
-      // ✏️ CHANGEMENT 2 — Remonter les Markdowns Dokita en tête de liste
-      if (isResume) {
-        const dokitaChunks = chunks.filter(c => c.source && c.source.includes('Dokita Dosages'));
-        const otherChunks  = chunks.filter(c => !c.source || !c.source.includes('Dokita Dosages'));
-        chunks = [...dokitaChunks, ...otherChunks];
-        console.log('Dokita chunks en tête:', dokitaChunks.length, '| Autres:', otherChunks.length);
+      // LOGIQUE MULTI-MARKDOWNS — Pour RESUME_CONSULTATION uniquement
+      // Appel 2 : récupère TOUS les Markdowns Dokita liés à la maladie détectée
+      // Garantit que AL + ASAQ + paludisme_severe + femme_enceinte remontent tous ensemble
+      if (isResume && normalizedDisease) {
+
+        // Mapping concept → mots-clés de recherche dans le nom de fichier Supabase
+        const diseaseFileKeywords = {
+          'paludisme':          'paludisme',
+          'typhoide':           'typhoide',
+          'meningite':          'meningite',
+          'tuberculose':        'tuberculose',
+          'vih':                'VIH',
+          'dengue':             'dengue',
+          'cholera':            'cholera',
+          'mpox':               'mpox',
+          'rougeole':           'rougeole',
+          'tetanos':            'tetanos',
+          'brucellose':         'brucellose',
+          'leptospirose':       'leptospirose',
+          'rickettsiose':       'rickettsioses',
+          'fievres_recurrentes':'fievres_recurrentes',
+          'trypanosomiase':     'trypanosomiase',
+          'leishmaniose':       'leishmaniose',
+          'schistosomiase':     'schistosomiase',
+          'filariose':          'filariose',
+          'pneumonie':          'pneumonie',
+          'angine':             'angine',
+          'diphterie':          'diphterie',
+          'croup':              'croup',
+          'coqueluche':         'coqueluche',
+          'bronchiolite':       'bronchiolite',
+          'asthme':             'asthme',
+          'diarrhee':           'diarrhee',
+          'amibiase':           'amibiase',
+          'giardiase':          'giardiase',
+          'dyspepsie':          'dyspeptiques',
+          'gale':               'gale',
+          'impetigo':           'impetigo',
+          'erysipele':          'erysipele',
+          'anaphylaxie':        'anaphylaxie',
+          'charbon':            'charbon',
+          'choc':               'choc',
+          'fievre':             'fievre',
+          'hypoglycemie':       'hypoglycemie',
+          'anemie':             'anemie',
+          'deshydratation':     'deshydratation',
+          'convulsion':         'convulsions',
+          'ist':                'IST',
+          'syphilis':           'syphilis',
+          'cystite':            'cystite',
+          'brulure':            'brulures',
+          'igh':                'IGH',
+          'lithiase':           'lithiase',
+          'contraception':      'contraception',
+          'violences_sex':      'violences',
+          'diabete':            'diabete',
+          'hypertension':       'HTA',
+          'drepanocytose':      'drepanocytose',
+          'epilepsie':          'epilepsie',
+          'icc':                'cardiaque',
+          'depression':         'depression',
+          'psychose':           'psychose',
+          'anxiete':            'anxiete',
+          'malnutrition':       'malnutrition',
+          'otite':              'otite',
+          'muguet':             'muguet',
+          'neonatal':           'neonat',
+          'hepatite':           'hepatites',
+          'vaccination':        'vaccination',
+          'rougeole_enfant':    'rougeole',
+        };
+
+        const fileKeyword = diseaseFileKeywords[normalizedDisease];
+        if (fileKeyword) {
+          // Récupère directement tous les Markdowns Dokita dont le nom contient le mot-clé
+          const directRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/medical_documents?source=like.*${fileKeyword}*&select=id,content,source`,
+            {
+              headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+          let directChunks = await directRes.json();
+          if (!Array.isArray(directChunks)) directChunks = [];
+
+          // Filtrer uniquement les Markdowns Dokita
+          directChunks = directChunks.filter(c => c.source && c.source.includes('Dokita Dosages'));
+
+          console.log(`Multi-Markdowns "${fileKeyword}": ${directChunks.length} chunks directs`);
+
+          // Fusionner : Markdowns directs en tête, puis chunks sémantiques (sans doublons)
+          const directIds = new Set(directChunks.map(c => c.id));
+          const semanticOnly = chunks.filter(c => !directIds.has(c.id));
+          chunks = [...directChunks, ...semanticOnly];
+        }
       }
+
+      // Markdowns Dokita toujours en tête (sécurité)
+      const dokitaChunks = chunks.filter(c => c.source && c.source.includes('Dokita Dosages'));
+      const otherChunks  = chunks.filter(c => !c.source || !c.source.includes('Dokita Dosages'));
+      chunks = [...dokitaChunks, ...otherChunks];
+      console.log('Final — Dokita:', dokitaChunks.length, '| Autres:', otherChunks.length, '| Total:', chunks.length);
     }
 
     // 3. Contexte médical
