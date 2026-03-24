@@ -478,17 +478,68 @@ export default async function handler(req, res) {
     let normalizedDisease = null; // déclaré ici pour être accessible dans tout le handler
 
     if (isResume) {
+      // ── DÉTECTION DEPUIS SUSPICIONS DIAGNOSTIQUES ──
+      // Parse le bloc structuré généré par Dr. AfriBot :
+      // "[Maladie] — Probabilité : ⬛⬛⬛⬛⬛ Très élevée"
+      // Plus fiable que chercher dans le texte libre (évite faux positifs)
+
+      const lastAssistantMsg = [...messages]
+        .reverse()
+        .find(m => m.role === 'assistant');
+      const diagText = (lastAssistantMsg?.content || '');
       const convText = messages.map(m => m.content || '').join(' ').toLowerCase();
 
-      // Étape 1 : normaliser la langue → concept clé
-      for (const [alias, concept] of Object.entries(diseaseAliases)) {
-        if (convText.includes(alias.toLowerCase())) {
-          normalizedDisease = concept;
-          break;
+      // Étape 1 : parser le bloc SUSPICIONS DIAGNOSTIQUES
+      // Format exact du prompt Dr. AfriBot
+      let suspicions = []; // [{maladie, probabilite, concept}]
+
+      const suspicionRegex = /\[([^\]]+)\]\s*[—–-]\s*Probabilité\s*:\s*[⬛⬜◼◻█░]+\s*(Très élevée|Élevée|Modérée|Faible)/gi;
+      let match;
+      while ((match = suspicionRegex.exec(diagText)) !== null) {
+        const maladieBrute = match[1].toLowerCase().trim();
+        const probabilite  = match[2].trim();
+        // Normaliser via diseaseAliases
+        let concept = null;
+        for (const [alias, c] of Object.entries(diseaseAliases)) {
+          if (maladieBrute.includes(alias.toLowerCase())) {
+            concept = c;
+            break;
+          }
+        }
+        if (concept) {
+          suspicions.push({ maladie: match[1].trim(), probabilite, concept });
         }
       }
 
-      // Étape 2 : concept clé → query Supabase en français
+      // Étape 2 : fallback si SUSPICIONS non parsées (message court, format inattendu)
+      if (suspicions.length === 0) {
+        // Chercher dans le texte du dernier message assistant
+        for (const [alias, concept] of Object.entries(diseaseAliases)) {
+          if (diagText.toLowerCase().includes(alias.toLowerCase())) {
+            suspicions.push({ maladie: alias, probabilite: 'Élevée', concept });
+            if (suspicions.length >= 2) break;
+          }
+        }
+      }
+      // Dernier fallback : chercher dans toute la conversation
+      if (suspicions.length === 0) {
+        for (const [alias, concept] of Object.entries(diseaseAliases)) {
+          if (convText.includes(alias.toLowerCase())) {
+            suspicions.push({ maladie: alias, probabilite: 'Élevée', concept });
+            if (suspicions.length >= 2) break;
+          }
+        }
+      }
+
+      // Garder max 2 suspicions (les 2 plus probables)
+      suspicions = suspicions.slice(0, 2);
+
+      // Rétrocompatibilité : normalizedDisease = première suspicion
+      normalizedDisease = suspicions[0]?.concept || null;
+
+      console.log('RESUME — suspicions parsées:', suspicions.map(s => s.concept + '(' + s.probabilite + ')').join(' | ') || 'aucune');
+
+      // Étape 3 : query sémantique = première suspicion (la plus probable)
       let diagQuery = 'maladie tropicale traitement dosage Afrique protocole';
       if (normalizedDisease && diagQueries[normalizedDisease]) {
         diagQuery = diagQueries[normalizedDisease];
@@ -496,6 +547,9 @@ export default async function handler(req, res) {
 
       searchQuery = diagQuery;
       console.log('RESUME — concept normalisé:', normalizedDisease, '| query:', searchQuery);
+
+      // Stocker les suspicions pour l'Appel 2 multi-Markdowns
+      req._suspicions = suspicions;
     }
 
     // 1. Embedding OpenAI
@@ -597,32 +651,52 @@ export default async function handler(req, res) {
           'rougeole_enfant':    'rougeole',
         };
 
-        const fileKeyword = diseaseFileKeywords[normalizedDisease];
-        if (fileKeyword) {
-          // Récupère directement tous les Markdowns Dokita dont le nom contient le mot-clé
-          // PostgREST syntax: ilike pour case-insensitive, * = wildcard
-        // Double filtre : source contient "Dokita Dosages" ET le mot-clé maladie
-        const directUrl = `${SUPABASE_URL}/rest/v1/medical_documents?source=ilike.*${encodeURIComponent(fileKeyword)}*&source=ilike.*Dokita*&select=id,content,source`;
-        const directRes = await fetch(directUrl, {
-              headers: {
-                'apikey': SUPABASE_KEY,
-                'Authorization': `Bearer ${SUPABASE_KEY}`,
-                'Content-Type': 'application/json'
-              }
-            });
-          let directChunks = await directRes.json();
-          if (!Array.isArray(directChunks)) directChunks = [];
+        // ── APPEL 2 MULTI-MARKDOWNS ──
+        // Une query par suspicion (max 2) en parallèle
+        // → Typhoïde : tous les Markdowns typhoïde
+        // → Paludisme : tous les Markdowns paludisme
+        // Fusion : suspicion 1 en tête, suspicion 2 ensuite, sémantique complète
 
-          // Filtrer uniquement les Markdowns Dokita
-          directChunks = directChunks.filter(c => c.source && c.source.includes('Dokita Dosages'));
+        const suspicionsToFetch = req._suspicions || (normalizedDisease ? [{concept: normalizedDisease}] : []);
 
-          console.log(`Multi-Markdowns "${fileKeyword}": ${directChunks.length} chunks directs`);
+        const fetchMarkdownsForDisease = async (concept) => {
+          const fileKeyword = diseaseFileKeywords[concept];
+          if (!fileKeyword) return [];
+          const url = `${SUPABASE_URL}/rest/v1/medical_documents?source=ilike.*${encodeURIComponent(fileKeyword)}*&source=ilike.*Dokita*&select=id,content,source`;
+          const res = await fetch(url, {
+            headers: {
+              'apikey': SUPABASE_KEY,
+              'Authorization': `Bearer ${SUPABASE_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          let result = await res.json();
+          if (!Array.isArray(result)) result = [];
+          result = result.filter(c => c.source && c.source.includes('Dokita Dosages'));
+          console.log(`Multi-Markdowns "${fileKeyword}" (${concept}): ${result.length} chunks directs`);
+          return result;
+        };
 
-          // Fusionner : Markdowns directs en tête, puis chunks sémantiques (sans doublons)
-          const directIds = new Set(directChunks.map(c => c.id));
-          const semanticOnly = chunks.filter(c => !directIds.has(c.id));
-          chunks = [...directChunks, ...semanticOnly];
+        // Queries en parallèle pour toutes les suspicions
+        const allDirectChunks = await Promise.all(
+          suspicionsToFetch.map(s => fetchMarkdownsForDisease(s.concept))
+        );
+
+        // Fusion : suspicion 1 en tête, suspicion 2 ensuite, sans doublons
+        const seenIds = new Set();
+        let directChunksMerged = [];
+        for (const chunkList of allDirectChunks) {
+          for (const c of chunkList) {
+            if (!seenIds.has(c.id)) {
+              seenIds.add(c.id);
+              directChunksMerged.push(c);
+            }
+          }
         }
+
+        // Ajouter chunks sémantiques sans doublons
+        const semanticOnly = chunks.filter(c => !seenIds.has(c.id));
+        chunks = [...directChunksMerged, ...semanticOnly];
       }
 
       // Markdowns Dokita toujours en tête (sécurité)
