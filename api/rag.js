@@ -493,21 +493,29 @@ export default async function handler(req, res) {
       // Format exact du prompt Dr. AfriBot
       let suspicions = []; // [{maladie, probabilite, concept}]
 
-      const suspicionRegex = /\[([^\]]+)\]\s*[—–-]\s*Probabilité\s*:\s*[⬛⬜◼◻█░]+\s*(Très élevée|Élevée|Modérée|Faible)/gi;
-      let match;
-      while ((match = suspicionRegex.exec(diagText)) !== null) {
-        const maladieBrute = match[1].toLowerCase().trim();
-        const probabilite  = match[2].trim();
-        // Normaliser via diseaseAliases
-        let concept = null;
-        for (const [alias, c] of Object.entries(diseaseAliases)) {
-          if (maladieBrute.includes(alias.toLowerCase())) {
-            concept = c;
-            break;
+      // Parser ligne par ligne — format réel Dr. AfriBot :
+      // "Fièvre typhoïde — Probabilité : ████ Très élevée"  (sans crochets)
+      const suspicionLineRegex = /^(.+?)\s*[—–]\s*Probabilité\s*:\s*[\u2588\u2591\u25FC\u25FD█░⬛⬜◼◻]+\s*(Très élevée|Élevée|Modérée|Faible)/i;
+      const diagLines = diagText.split('\n');
+      for (const line of diagLines) {
+        const trimmed = line.trim();
+        const match = trimmed.match(suspicionLineRegex);
+        if (match) {
+          const maladieBrute = match[1].trim();
+          const probabilite  = match[2].trim();
+          // Ignorer les lignes trop longues (contexte, explication)
+          if (maladieBrute.length > 60) continue;
+          // Normaliser via diseaseAliases
+          let concept = null;
+          for (const [alias, c] of Object.entries(diseaseAliases)) {
+            if (maladieBrute.toLowerCase().includes(alias.toLowerCase())) {
+              concept = c;
+              break;
+            }
           }
-        }
-        if (concept) {
-          suspicions.push({ maladie: match[1].trim(), probabilite, concept });
+          if (concept && !suspicions.find(s => s.concept === concept)) {
+            suspicions.push({ maladie: maladieBrute, probabilite, concept });
+          }
         }
       }
 
