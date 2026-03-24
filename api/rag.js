@@ -902,11 +902,11 @@ Réponds UNIQUEMENT avec le JSON valide ci-dessous (sans markdown, sans texte av
   "ville": "ville mentionnée",
   "voyage": "voyage ou zone mentionnés, sinon Aucun",
   "symptomes": "résumé des symptômes décrits par le patient",
-  "diagnostic": "diagnostic principal avec probabilité",
-  "recommandations": "recommandations OMS synthétiques examens et orientation",
-  "examens": "examens recommandés par OMS avec disponibilité locale",
-  "medicaments_oms": "médicament 1ère intention OMS — dosage exact — durée | médicament 2ème intention — dosage — durée",
-  "contre_indications": "contre-indications et précautions selon profil patient",
+  "diagnostic": "TOUTES les suspicions diagnostiques séparées par | — ex: Typhoïde — Très élevée | Infection urinaire — Élevée",
+  "recommandations": "recommandations OMS synthétiques examens et orientation POUR CHAQUE diagnostic",
+  "examens": "TOUS les examens recommandés OMS pour CHAQUE diagnostic, séparés par | — préciser obligatoire ou recommandé",
+  "medicaments_oms": "DIAGNOSTIC 1: médicament 1ère intention — dosage exact — durée | médicament 2ème intention — dosage — durée || DIAGNOSTIC 2: médicament 1ère intention — dosage — durée",
+  "contre_indications": "contre-indications et précautions pour CHAQUE diagnostic selon profil patient",
   "sources": "nom du document MSF/OMS trouvé dans les sources"
 }
 
