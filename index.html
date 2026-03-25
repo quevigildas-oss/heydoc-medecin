@@ -1493,23 +1493,6 @@ function selectMed(nom){
   document.getElementById('medSuggestions').style.display='none';
   // MED_SELECTED sera null — les selects dosage resteront vides (OK)
 }
-  {nom:'Fluoxétine',classe:'Antidépresseur',dosages:[{dose:'20mg',conditionnements:[14,28]}]},
-  {nom:'Acide folique',classe:'Vitamine',dosages:[{dose:'0.4mg',conditionnements:[30,90]},{dose:'5mg',conditionnements:[30,90]}]},
-  {nom:'Sulfate ferreux',classe:'Minéral',dosages:[{dose:'200mg',conditionnements:[30,60,90]}]},
-  {nom:'Zinc',classe:'Minéral',dosages:[{dose:'10mg',conditionnements:[10,20]},{dose:'20mg',conditionnements:[10,20]}]},
-  {nom:'Vitamine A',classe:'Vitamine',dosages:[{dose:'200 000 UI',conditionnements:[1,10]}]},
-  {nom:'Vitamine B1',classe:'Vitamine',dosages:[{dose:'100mg',conditionnements:[30,60]}]},
-  {nom:'Vitamine B6',classe:'Vitamine',dosages:[{dose:'10mg',conditionnements:[30,60]},{dose:'50mg',conditionnements:[30,60]}]},
-  {nom:'Vitamine B12',classe:'Vitamine',dosages:[{dose:'250µg',conditionnements:[30,60]},{dose:'1000µg',conditionnements:[30,60]}]},
-  {nom:'Vitamine C',classe:'Vitamine',dosages:[{dose:'250mg',conditionnements:[30,60]},{dose:'500mg',conditionnements:[30,60]}]},
-  {nom:'Vitamine D',classe:'Vitamine',dosages:[{dose:'400 UI',conditionnements:[30,90]},{dose:'1000 UI',conditionnements:[30,90]}]},
-  {nom:'Calcium',classe:'Minéral',dosages:[{dose:'500mg',conditionnements:[30,60]},{dose:'1000mg',conditionnements:[30,60]}]},
-  {nom:'Lévothyroxine',classe:'Hormone thyroïdienne',dosages:[{dose:'25µg',conditionnements:[30,100]},{dose:'50µg',conditionnements:[30,100]},{dose:'100µg',conditionnements:[30,100]}]},
-  {nom:'Carbimazole',classe:'Antithyroïdien',dosages:[{dose:'5mg',conditionnements:[30,100]},{dose:'20mg',conditionnements:[30,100]}]},
-  {nom:'Colchicine',classe:'Antigoutte',dosages:[{dose:'0.5mg',conditionnements:[20,30,60]},{dose:'1mg',conditionnements:[20,30]}]},
-  {nom:'Allopurinol',classe:'Hypouricémiant',dosages:[{dose:'100mg',conditionnements:[30,60]},{dose:'300mg',conditionnements:[30,60]}]},
-  {nom:'Hydroxychloroquine',classe:'Rhumatologie',dosages:[{dose:'200mg',conditionnements:[30,60]}]},
-  {nom:'Chlorphénamine',classe:'Antihistaminique',dosages:[{dose:'4mg',conditionnements:[20,30]}]},
 // ── Génère la posologie structurée depuis les champs ──
 function updatePosoStr(){
   var prises=parseInt(document.getElementById('mPrises').value||'0')||0;
