@@ -626,15 +626,28 @@ async function doLogin(){
   var code=(document.getElementById('liCode').value||'').trim();
   var errEl=document.getElementById('liErr');
   if(!ordre||!code){errEl.textContent='Numéro d\'ordre et code requis';errEl.classList.add('on');return;}
-  errEl.textContent='Connexion en cours...';errEl.classList.add('on');
+  errEl.textContent='⏳ Connexion...';errEl.classList.add('on');
   try{
+    errEl.textContent='⏳ Appel /api/db...';
     var data=await dbGet('medecins',{filter:'numero_ordre=eq.'+ordre});
+    errEl.textContent='⏳ Réponse reçue — parsing...';
     var rows=Array.isArray(data)?data:(data.data||[]);
-    if(!rows.length){errEl.textContent='Numéro d\'ordre introuvable';errEl.classList.add('on');return;}
+    dbg('LOGIN — rows reçus: '+rows.length+' | data type: '+typeof data+' | isArray: '+Array.isArray(data));
+    if(!rows.length){
+      // Afficher la réponse brute pour debug
+      errEl.textContent='❌ Introuvable — Réponse: '+JSON.stringify(data).slice(0,120);
+      errEl.classList.add('on');return;
+    }
     var med=rows[0];
-    if(med.code_acces!==code){errEl.textContent='Code incorrect';errEl.classList.add('on');return;}
-    if(med.statut&&med.statut!=='actif'&&med.statut!=='Actif'){errEl.textContent='Compte médecin inactif';errEl.classList.add('on');return;}
-    if(!med.partenaire_dokita){errEl.textContent='Compte non activé comme partenaire Dokita';errEl.classList.add('on');return;}
+    dbg('LOGIN — med: code_acces='+med.code_acces+' statut='+med.statut+' partenaire='+med.partenaire_dokita);
+    if(med.code_acces!==code){
+      errEl.textContent='❌ Code incorrect (attendu: '+med.code_acces.length+' car., saisi: '+code.length+' car.)';
+      errEl.classList.add('on');return;
+    }
+    if(med.statut&&med.statut.toLowerCase()!=='actif'){
+      errEl.textContent='❌ Statut: "'+med.statut+'" — compte inactif';errEl.classList.add('on');return;
+    }
+    if(!med.partenaire_dokita){errEl.textContent='❌ partenaire_dokita=false';errEl.classList.add('on');return;}
     var nomComplet='Dr. '+(med.prenom?med.prenom+' ':'')+med.nom;
     var spec=med.specialite||med.type_medecin||'Médecin';
     var colors=['#00C896','#0EA5E9','#F59E0B','#A78BFA','#F97316'];
