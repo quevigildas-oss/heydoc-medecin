@@ -1,24 +1,26 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.0
-     DATE    : 2026-03-15
-     STACK   : Claude API (validation prescription) + Notion
-     STATUS  : Workflow complet validé — Phase test
+     VERSION : V4.2
+     DATE    : 2026-03-25
+     STACK   : Claude API (validation prescription) + Supabase
+     STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
-       V4.0 — 2026-03-15 : Autocomplete médicaments (125 molécules OMS + Afrique Ouest)
-                           Posologie structurée (prises + période + précision)
-                           Durée structurée (numérique + jours/semaines/mois)
-                           Calcul dose journalière dans prompt validation (200mg×2=400mg/jour)
-                           Brouillon JSON v2 complet (diag + examens + notes + meds + ALD)
-                           Badge statut dans corps de page + header allégé
-                           Prompt validation amélioré (adjuvants acceptés, pas d'exigence examens)
-                           Monitoring debug panel : dbg/dbgWarn/dbgError
-                           Fix rich_text multi-blocs (toutes fonctions txt())
-                           Fix valIA chargé depuis Notion
-                           Bouton 🏠 Accueil dans header consultScreen
-                           J'achète moins cher : entre Télécharger et Partager
-       V1.2 — 2026-03-13 : Format ALD enrichi dans Notion (compatible Dokita V3.2)
+       V4.2 — 2026-03-25 : Migration complète Notion → Supabase
+                           doLogin() → GET /api/db?table=medecins
+                           chargerDossiers() → GET /api/db?table=consultations
+                           updateDossier() → PATCH /api/db (table consultations)
+                           chargerDossierPatient() → GET /api/db?table=patients
+                           mettreAJourDossierPatient() → PATCH /api/db (table patients)
+                           medAutocomplete() → GET /api/search-med
+                           sauvegarderBrouillon() → PATCH brouillon_json JSONB
+                           finaliser() → INSERT ordonnances + PATCH consultations
+                           Email → POST /api/notify (Resend)
+                           Suppression MEDS_DB hardcodé (125 molécules)
+                           Suppression objet MEDECINS hardcodé
+                           Suppression RA_URL / Relevance AI
+                           Suppression notionRequest() et NOTION_*
+       V4.1 — 2026-03-15 : Autocomplete médicaments, posologie structurée, brouillon v2
        V1.1 — 2026-03-09 : Workflow complet validé
 ============================================ -->
 <html lang="fr">
@@ -205,7 +207,36 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .dot:nth-child(2){animation-delay:.2s;}.dot:nth-child(3){animation-delay:.4s;}
 @keyframes db{0%,100%{transform:translateY(0);opacity:.4;}50%{transform:translateY(-5px);opacity:1;}}
 
-/* Toast */
+/* Recherche patient */
+.search-bar{display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:10px 14px;margin-bottom:12px;transition:border-color .2s;}
+.search-bar:focus-within{border-color:var(--accent2);}
+.search-bar input{flex:1;background:none;border:none;outline:none;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);}
+.search-bar input::placeholder{color:var(--text3);}
+.search-ico{font-size:14px;color:var(--text3);}
+.search-modal{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;display:none;flex-direction:column;}
+.search-modal.on{display:flex;}
+.search-panel{background:var(--card);border-radius:20px 20px 0 0;margin-top:auto;padding:20px;padding-bottom:calc(20px + var(--sb));max-height:85vh;display:flex;flex-direction:column;}
+.search-fields{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;}
+.sfield label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px;}
+.sfield input{width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:11px;padding:10px 13px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;}
+.sfield input:focus{border-color:var(--accent2);}
+.search-results{flex:1;overflow-y:auto;}
+.search-result-item{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:border-color .2s;}
+.search-result-item:active{border-color:var(--accent);}
+
+/* Bouton PDF ordonnance */
+.btn-ordo-pdf{display:inline-flex;align-items:center;gap:7px;background:rgba(239,68,68,.1);border:1.5px solid rgba(239,68,68,.3);border-radius:12px;padding:9px 16px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#ef4444;cursor:pointer;transition:all .2s;margin-top:14px;}
+.btn-ordo-pdf:active{opacity:.8;}
+.btn-ordo-pdf .pdf-ico{font-size:18px;}
+
+/* Overlay ordonnance */
+.ordo-overlay{position:fixed;inset:0;background:#fff;z-index:500;display:none;flex-direction:column;}
+.ordo-overlay.on{display:flex;}
+.ordo-topbar{background:#00C896;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.ordo-topbar-title{flex:1;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#fff;}
+.ordo-close{background:rgba(255,255,255,.2);border:none;border-radius:8px;padding:7px 14px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#fff;cursor:pointer;}
+.ordo-print{background:#fff;border:none;border-radius:8px;padding:7px 14px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#00C896;cursor:pointer;}
+.ordo-content{flex:1;overflow-y:auto;padding:0;}
 .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 18px;font-size:13px;color:var(--text);z-index:1000;box-shadow:0 8px 30px rgba(0,0,0,.4);white-space:nowrap;animation:tIn .3s ease;}
 @keyframes tIn{from{opacity:0;transform:translateX(-50%) translateY(10px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
 
@@ -244,7 +275,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
   <div class="hdr">
     <div class="hdr-ico">🏥</div>
     <div class="hdr-info"><div class="hdr-title" id="dashNom">Dr. —</div><div class="hdr-sub" id="dashSpec">Médecin</div></div>
-    <div class="hdr-refresh" id="refreshBtn" onclick="chargerNotion()" title="Actualiser">↻</div>
+    <div class="hdr-refresh" id="refreshBtn" onclick="chargerDossiers()" title="Actualiser">↻</div>
     <button class="hdr-btn" onclick="doLogout()">Déconnexion</button>
   </div>
   <div class="dash-body">
@@ -262,6 +293,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
       <div class="ftag" onclick="setFilter('cloture',this)">📁 Clôturés</div>
     </div>
     <div class="notion-sync"><div class="notion-dot" id="notionDot"></div><span id="notionStatus">Non synchronisé</span></div>
+    <!-- Barre de recherche -->
+    <div class="search-bar" style="margin-top:10px;">
+      <span class="search-ico">🔍</span>
+      <input type="text" id="searchInput" placeholder="Rechercher un patient..." oninput="rechercheLocale(this.value)" autocomplete="off"/>
+      <span onclick="ouvrirRechercheAvancee()" style="font-size:11px;font-weight:700;color:var(--accent2);cursor:pointer;white-space:nowrap;padding-left:4px;">Avancée</span>
+    </div>
     <div class="sec-title" style="margin-top:10px;">Dossiers de consultation</div>
     <div id="dList"><div class="loading-state">Chargement des dossiers...</div></div>
   </div>
@@ -276,6 +313,36 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
   <div class="cbody" id="cBody"></div>
 </div>
 
+</div>
+
+<!-- Modal recherche avancée patient -->
+<div class="search-modal" id="searchModal">
+  <div style="flex:1;" onclick="fermerRechercheAvancee()"></div>
+  <div class="search-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--white);">Recherche patient</div>
+      <span onclick="fermerRechercheAvancee()" style="font-size:20px;color:var(--text3);cursor:pointer;padding:4px 8px;">×</span>
+    </div>
+    <div class="search-fields">
+      <div class="sfield"><label>Nom complet</label><input type="text" id="sNom" placeholder="ex: Koné Mamadou" autocomplete="off"/></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="sfield"><label>Date de naissance</label><input type="date" id="sDDN"/></div>
+        <div class="sfield"><label>Téléphone</label><input type="tel" id="sTel" placeholder="ex: 0700000000" autocomplete="off"/></div>
+      </div>
+    </div>
+    <button onclick="lancerRechercheAvancee()" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:12px;padding:13px;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--bg);cursor:pointer;margin-bottom:14px;">🔍 Rechercher</button>
+    <div id="searchResults" class="search-results"></div>
+  </div>
+</div>
+
+<!-- Overlay ordonnance PDF -->
+<div class="ordo-overlay" id="ordoOverlay">
+  <div class="ordo-topbar">
+    <div class="ordo-topbar-title">📋 Ordonnance</div>
+    <button class="ordo-print" onclick="imprimerOrdo()">🖨️ Imprimer</button>
+    <button class="ordo-close" onclick="fermerOrdo()">✕ Fermer</button>
+  </div>
+  <div class="ordo-content" id="ordoContent"></div>
 </div>
 
 <!-- Modal médicament -->
@@ -345,84 +412,96 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 
 <script>
 // ══════════════════════════════
-// CONFIG
+// CONFIG — V4.2 Supabase
 // ══════════════════════════════
-var NOTION_DB='319dce21-e1d3-8094-a601-fe3bb4abff3a';
-var NOTION_PATIENTS_DB='31cdce21-e1d3-80b4-a74e-e0a6417ee0fb';
-var NOTION_PROXY='/api/notion'; // proxy Vercel sécurisé — clé dans variables Vercel
+var DB_URL     = 'https://heydoc-medecin.vercel.app/api/db';
+var SAVE_URL   = 'https://heydoc-medecin.vercel.app/api/save';
+var SEARCH_MED = 'https://heydoc-medecin.vercel.app/api/search-med';
+var DOKITA_KEY = 'dk-2026-prod-x9f7m';
 
-async function notionRequest(endpoint, method, body) {
-  var url = NOTION_PROXY + '?path=' + encodeURIComponent(endpoint);
-  var opts = {
-    method: method || 'GET',
-    headers: { 'Content-Type': 'application/json' }
-  };
-  if (body) opts.body = JSON.stringify(body);
-  var r = await fetch(url, opts);
-  if (!r.ok) throw new Error('Notion ' + r.status);
+// Helper générique GET Supabase via /api/db
+async function dbGet(table, params) {
+  var url = DB_URL + '?table=' + table;
+  if (params) {
+    Object.keys(params).forEach(function(k) {
+      url += '&' + k + '=' + encodeURIComponent(params[k]);
+    });
+  }
+  var r = await fetch(url, { headers: { 'x-dokita-key': DOKITA_KEY } });
+  if (!r.ok) throw new Error('DB GET ' + r.status);
+  return await r.json();
+}
+
+// Helper générique PATCH Supabase via /api/db
+async function dbPatch(table, id, body) {
+  var url = DB_URL + '?table=' + table + '&id=' + id;
+  var r = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'x-dokita-key': DOKITA_KEY },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error('DB PATCH ' + r.status);
+  return await r.json();
+}
+
+// Helper générique INSERT Supabase via /api/db
+async function dbInsert(table, body) {
+  var url = DB_URL + '?table=' + table;
+  var r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-dokita-key': DOKITA_KEY },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error('DB INSERT ' + r.status);
   return await r.json();
 }
 
 // ══════════════════════════════
-// BDD PATIENTS
+// BDD PATIENTS — Supabase
 // ══════════════════════════════
-async function chargerDossierPatient(nomPatient,patientId){
-  PATIENT_DOSSIER=null;
-  try{
-    var filter=patientId
-      ?{property:'ID Patient',rich_text:{equals:patientId}}
-      :{property:'Nom complet',title:{contains:nomPatient}};
-    var data=await notionRequest('/databases/'+NOTION_PATIENTS_DB+'/query','POST',{
-      filter:filter,
-      page_size:1
-    });
-    if(data.results&&data.results.length>0){
-      var p=data.results[0];
-      var props=p.properties||{};
-      function txt(k){
-        if(!props[k])return '';
-        var t=props[k].type;
-        if(t==='title')return (props[k].title||[]).map(function(x){return x.plain_text;}).join('');
-        if(t==='rich_text')return (props[k].rich_text||[]).map(function(x){return x.plain_text;}).join('');
-        if(t==='email')return props[k].email||'';
-        if(t==='phone_number')return props[k].phone_number||'';
-        if(t==='date')return props[k].date?props[k].date.start:'';
-        return '';
-      }
-      PATIENT_DOSSIER={
-        notionId:p.id,
-        nom:txt('Nom complet'),
-        prenom:txt('Prenom'),
-        nomSeul:txt('Nom'),
-        email:txt('Email'),
-        telephone:txt('Téléphone'),
-        ville:txt('Ville'),
-        sexe:txt('Sexe'),
-        poids:txt('Poids'),
-        dateNaissance:txt('Date naissance'),
-        allergies:txt('Allergies'),
-        antecedents:txt('Antécédents'),
-        traitements:txt('Traitements réguliers'),
-        ordonnances:txt('Ordonnances'),
-        idPatient:txt('ID Patient')
+async function chargerDossierPatient(nomPatient, patientId) {
+  PATIENT_DOSSIER = null;
+  try {
+    var params = patientId
+      ? { filter: 'patient_id=eq.' + patientId }
+      : { filter: 'nom_complet=ilike.*' + nomPatient + '*' };
+    var data = await dbGet('patients', params);
+    var rows = Array.isArray(data) ? data : (data.data || []);
+    if (rows.length > 0) {
+      var p = rows[0];
+      PATIENT_DOSSIER = {
+        supabaseId: p.id,
+        nom: p.nom_complet || (p.prenom ? p.prenom + ' ' + p.nom : p.nom) || '',
+        prenom: p.prenom || '',
+        email: p.email || '',
+        telephone: p.telephone || '',
+        ville: p.ville || '',
+        sexe: p.sexe || '',
+        poids: p.poids || '',
+        dateNaissance: p.date_naissance || '',
+        allergies: p.allergies || '',
+        antecedents: p.antecedents || '',
+        traitements: p.traitements_reguliers || '',
+        ordonnances: p.ordonnances || '',
+        idPatient: p.patient_id || ''
       };
       return PATIENT_DOSSIER;
     }
-  }catch(e){console.log('Erreur BDD Patients:',e.message);}
+  } catch (e) { console.log('Erreur BDD Patients:', e.message); }
   return null;
 }
 
-async function mettreAJourDossierPatient(updates){
-  if(!PATIENT_DOSSIER||!PATIENT_DOSSIER.notionId)return false;
-  var props={};
-  if(updates.allergies)props['Allergies']={rich_text:[{text:{content:updates.allergies.slice(0,2000)}}]};
-  if(updates.antecedents)props['Antécédents']={rich_text:[{text:{content:updates.antecedents.slice(0,2000)}}]};
-  if(updates.traitements)props['Traitements réguliers']={rich_text:[{text:{content:updates.traitements.slice(0,2000)}}]};
-  if(updates.ordonnances)props['Ordonnances']={rich_text:[{text:{content:updates.ordonnances.slice(0,2000)}}]};
-  try{
-    await notionRequest('/pages/'+PATIENT_DOSSIER.notionId,'PATCH',{properties:props});
+async function mettreAJourDossierPatient(updates) {
+  if (!PATIENT_DOSSIER || !PATIENT_DOSSIER.supabaseId) return false;
+  var body = {};
+  if (updates.allergies !== undefined)   body.allergies = updates.allergies;
+  if (updates.antecedents !== undefined) body.antecedents = updates.antecedents;
+  if (updates.traitements !== undefined) body.traitements_reguliers = updates.traitements;
+  if (updates.ordonnances !== undefined) body.ordonnances = updates.ordonnances;
+  try {
+    await dbPatch('patients', PATIENT_DOSSIER.supabaseId, body);
     return true;
-  }catch(e){return false;}
+  } catch (e) { return false; }
 }
 
 function mergeChamp(existant,nouveau){
@@ -432,119 +511,101 @@ function mergeChamp(existant,nouveau){
   return existant+', '+nouveau;
 }
 
-var RA_RG='d7b62b',RA_RP='428dc1d8-2fa4-46da-b226-c26a52653ed0',RA_AGENT='7d26fda3-fe2d-405c-8aed-645df10baa12',RA_KEY='';
-var RA_URL='https://api-'+RA_RG+'.stack.tryrelevance.com/latest/agents/trigger';
-
-var MEDECINS={
-  'quevi.gildas@gmail.com':{nom:'Dr. Quevi Gildas',spec:'Infectiologue',code:'1234',color:'#00C896'}
-};
-
-var NOTION_MEDECINS_DB='314dce21-e1d3-802e-88a1-fc736fb3bde9';
+// Variables globales
 var CUR_MED=null,CUR_DOS=null,FILTRE='tous',MEDS=[],CID_VAL=null;
 var DOSSIERS=[];
 var EXAMENS_REQUIS=false;
-var PATIENT_DOSSIER=null; // dossier médical patient depuis BDD Patients
-var ALD=false; // affection longue durée cochée
-var MEDS_ALD=[]; // médicaments ALD permanents
+var PATIENT_DOSSIER=null;
+var ALD=false;
+var MEDS_ALD=[];
+var NOTION_MEDECINS_DB=''; // obsolète V4.2 — conservé pour compatibilité éventuelle
 
-async function chargerNotion(){
+async function chargerDossiers(){
   var btn=document.getElementById('refreshBtn');
   if(btn)btn.classList.add('spin');
-  setNotionStatus('sync','Chargement...');
-  document.getElementById('dList').innerHTML='<div class="loading-state"><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span><br><br>Chargement depuis Notion...</div>';
+  setSyncStatus('sync','Chargement...');
+  document.getElementById('dList').innerHTML='<div class="loading-state"><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span><br><br>Chargement depuis Supabase...</div>';
   try{
-    var data=await notionRequest('/databases/'+NOTION_DB+'/query','POST',{
-      sorts:[{property:'Date',direction:'descending'}],
-      page_size:50
-    });
-    if(data.results){
-      DOSSIERS=data.results.map(parseDossierNotion);
-      renderDash();
-      setNotionStatus('ok',DOSSIERS.length+' dossiers — '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
-    } else {
-      setNotionStatus('err','Erreur: '+(data.message||JSON.stringify(data)));
-    }
+    var params={filter:'medecin_id=eq.'+CUR_MED.supabaseId,order:'created_at.desc',limit:'50'};
+    var data=await dbGet('consultations',params);
+    var rows=Array.isArray(data)?data:(data.data||[]);
+    DOSSIERS=rows.map(parseDossierSupabase);
+    renderDash();
+    setSyncStatus('ok',DOSSIERS.length+' dossiers — '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
   }catch(e){
-    setNotionStatus('err','Erreur: '+e.message);
+    setSyncStatus('err','Erreur: '+e.message);
     document.getElementById('dList').innerHTML='<div class="empty"><div class="empty-ico">⚠️</div><div class="empty-txt">Impossible de charger les dossiers<br><span style="font-size:11px;color:var(--text3)">'+e.message+'</span></div></div>';
   }
   if(btn)btn.classList.remove('spin');
 }
 
-function parseDossierNotion(page){
-  var p=page.properties||{};
-  function txt(prop){
-    if(!p[prop])return '';
-    var t=p[prop].type;
-    if(t==='title')return (p[prop].title||[]).map(function(x){return x.plain_text;}).join('');
-    if(t==='rich_text')return (p[prop].rich_text||[]).map(function(x){return x.plain_text;}).join('');
-    if(t==='select')return p[prop].select?p[prop].select.name:'';
-    if(t==='number')return p[prop].number!=null?String(p[prop].number):'';
-    if(t==='date')return p[prop].date?p[prop].date.start:'';
-    return '';
+function parseDossierSupabase(row){
+  var statut=row.statut||'en_attente';
+  // Brouillon JSON stocké directement en JSONB
+  var brouillonJson=row.brouillon_json||null;
+  // valIA : objet ou texte depuis validation_ia_texte
+  var valIA=null;
+  if(row.validation_ia_texte){
+    valIA={statut:row.decision_medecin||'nonconforme',texte:row.validation_ia_texte};
   }
-  var statut=txt('Statut')||'en_attente';
   return {
-    notionId:page.id,
-    id:txt('ID')||page.id.slice(0,8),
+    supabaseId: row.id,
+    id: row.consultation_id||row.id.slice(0,8),
     patient:{
-      nom:txt('Patient Nom'),
-      patientId:txt('Patient ID')||'',
-      age:txt('Patient Age'),
-      poids:txt('Patient Poids'),
-      ville:txt('Patient Ville'),
-      voyage:txt('Patient Voyage'),
-      allergies:txt('Allergies')||'',
-      traitements:txt('Traitements')||'',
-      antecedents:txt('Antecedents')||''
+      nom: row.patient_nom||'',
+      patientId: row.patient_id||'',
+      patientUuid: row.patient_uuid||'',
+      age: row.patient_age||'',
+      poids: row.patient_poids||'',
+      ville: row.patient_ville||'',
+      voyage: row.patient_voyage||'',
+      allergies: '',
+      traitements: '',
+      antecedents: '',
+      email: ''
     },
-    date:txt('Date'),
-    statut:statut,
-    symptomes:txt('Symptomes'),
-    diagIA:txt('Diagnostic IA'),
-    recommandationsOMS:txt('Recommandations OMS'),
-    examensRecommandes:txt('Examens recommandés'),
-    medicamentsOMS:txt('Medicaments OMS'),
-    contreIndications:txt('Contre Indications'),
-    sourcesOMS:txt('Sources OMS'),
-    diagMed:txt('Diagnostic Medecin')||'',
-    examensPrescrit:txt('Examens Prescrit')||'',
-    traitementMed:txt('Traitement Prescrit')||'',
-    notes:txt('Notes')||'',
-    medecin:txt('Medecin')||'',
-    valIA:txt('Validation IA')||null,
-    urgent:statut==='en_attente'
+    date: row.created_at?(new Date(row.created_at)).toLocaleDateString('fr-FR'):'',
+    statut: statut,
+    symptomes: row.symptomes||'',
+    diagIA: row.diagnostic_ia||'',
+    recommandationsOMS: row.recommandations_oms||'',
+    examensRecommandes: row.examens_recommandes||'',
+    medicamentsOMS: row.medicaments_oms||'',
+    contreIndications: row.contre_indications||'',
+    sourcesOMS: row.sources_oms||'',
+    diagMed: row.diagnostic_medecin||'',
+    examensPrescrit: row.examens_prescrit||'',
+    notes: row.notes||'',
+    medecin: row.medecin_id||'',
+    valIA: valIA,
+    brouillonJson: brouillonJson,
+    urgent: statut==='en_attente'
   };
 }
 
-async function updateNotionDossier(notionId,fields){
-  // Construire les properties Notion selon le type
-  var props={};
-  var mapping={
-    'Statut':{type:'select',val:fields.statut},
-    'Diagnostic Medecin':{type:'rich_text',val:fields.diagMed},
-    'Examens Prescrit':{type:'rich_text',val:fields.examensPrescrit},
-    'Traitement Prescrit':{type:'rich_text',val:fields.traitementMed},
-    'Notes':{type:'rich_text',val:fields.notes},
-    'Validation IA':{type:'rich_text',val:fields.validationIA}
-  };
-  for(var k in mapping){
-    var m=mapping[k];
-    if(m.val===undefined||m.val===null||m.val==='')continue;
-    if(m.type==='select')props[k]={select:{name:m.val}};
-    else props[k]={rich_text:[{text:{content:String(m.val||'').slice(0,2000)}}]};
-  }
+async function updateDossier(supabaseId, fields){
+  var body={};
+  if(fields.statut!==undefined)           body.statut=fields.statut;
+  if(fields.diagMed!==undefined)          body.diagnostic_medecin=fields.diagMed;
+  if(fields.examensPrescrit!==undefined)  body.examens_prescrit=fields.examensPrescrit;
+  if(fields.notes!==undefined)            body.notes=fields.notes;
+  if(fields.validationIATexte!==undefined)body.validation_ia_texte=fields.validationIATexte;
+  if(fields.validationIA!==undefined)     body.validation_ia=fields.validationIA;
+  if(fields.decisionMedecin!==undefined)  body.decision_medecin=fields.decisionMedecin;
+  if(fields.scoreConformite!==undefined)  body.score_conformite=fields.scoreConformite;
+  if(fields.brouillonJson!==undefined)    body.brouillon_json=fields.brouillonJson;
+  if(fields.notifPatientEnvoyee!==undefined) body.notif_patient_envoyee=fields.notifPatientEnvoyee;
+  body.updated_at=new Date().toISOString();
   try{
-    await notionRequest('/pages/'+notionId,'PATCH',{properties:props});
+    await dbPatch('consultations',supabaseId,body);
     return true;
   }catch(e){
-    toast('⚠️ Notion: '+e.message.slice(0,60));
-    console.log('Notion error detail:',e);
+    toast('⚠️ Supabase: '+e.message.slice(0,60));
     return false;
   }
 }
 
-function setNotionStatus(state,msg){
+function setSyncStatus(state,msg){
   var dot=document.getElementById('notionDot');
   var st=document.getElementById('notionStatus');
   if(dot){dot.className='notion-dot'+(state==='ok'?' ok':state==='err'?' err':' sync');}
@@ -567,37 +628,29 @@ async function doLogin(){
   if(!ordre||!code){errEl.textContent='Numéro d\'ordre et code requis';errEl.classList.add('on');return;}
   errEl.textContent='Connexion en cours...';errEl.classList.add('on');
   try{
-    var data=await notionRequest('/databases/'+NOTION_MEDECINS_DB+'/query','POST',{
-      filter:{property:'Numéro d\'ordre médical',rich_text:{equals:ordre}},
-      page_size:1
-    });
-    if(!data.results||!data.results.length){errEl.textContent='Numéro d\'ordre introuvable';errEl.classList.add('on');return;}
-    var page=data.results[0];
-    var props=page.properties;
-    function txt(k){var p=props[k];if(!p)return '';var t=p.type;
-      if(t==='rich_text')return(p.rich_text||[]).map(function(x){return x.plain_text;}).join('');
-      if(t==='title')return(p.title||[]).map(function(x){return x.plain_text;}).join('');
-      if(t==='email')return p.email||'';
-      if(t==='phone_number')return p.phone_number||'';
-      if(t==='select')return p.select?p.select.name:'';
-      if(t==='number')return p.number!=null?String(p.number):'';
-      return '';}
-    var storedCode=txt('Code');
-    if(storedCode!==code){errEl.textContent='Code incorrect';errEl.classList.add('on');return;}
-    var statut=txt('Statut');
-    if(statut&&statut!=='Actif'){errEl.textContent='Compte médecin inactif';errEl.classList.add('on');return;}
-    var prenom=txt('Prénom');
-    var nom=txt('Nom');
-    var nomComplet='Dr. '+(prenom?prenom+' ':'')+nom;
-    var spec=txt('Spécialité')||txt('Type de médecin')||'Médecin';
-    var email=txt('Email');
+    var data=await dbGet('medecins',{filter:'numero_ordre=eq.'+ordre});
+    var rows=Array.isArray(data)?data:(data.data||[]);
+    if(!rows.length){errEl.textContent='Numéro d\'ordre introuvable';errEl.classList.add('on');return;}
+    var med=rows[0];
+    if(med.code_acces!==code){errEl.textContent='Code incorrect';errEl.classList.add('on');return;}
+    if(med.statut&&med.statut!=='actif'&&med.statut!=='Actif'){errEl.textContent='Compte médecin inactif';errEl.classList.add('on');return;}
+    if(!med.partenaire_dokita){errEl.textContent='Compte non activé comme partenaire Dokita';errEl.classList.add('on');return;}
+    var nomComplet='Dr. '+(med.prenom?med.prenom+' ':'')+med.nom;
+    var spec=med.specialite||med.type_medecin||'Médecin';
     var colors=['#00C896','#0EA5E9','#F59E0B','#A78BFA','#F97316'];
-    CUR_MED={ordre:ordre,email:email,nom:nomComplet,spec:spec,color:colors[Math.floor(Math.random()*colors.length)]};
+    CUR_MED={
+      supabaseId:med.id,
+      ordre:ordre,
+      email:med.email||'',
+      nom:nomComplet,
+      spec:spec,
+      color:colors[Math.floor(Math.random()*colors.length)]
+    };
     errEl.classList.remove('on');
     document.getElementById('dashNom').textContent=nomComplet;
     document.getElementById('dashSpec').textContent=spec;
     showScreen('dashScreen');
-    chargerNotion();
+    chargerDossiers();
   }catch(e){errEl.textContent='Erreur connexion: '+e.message;errEl.classList.add('on');}
 }
 function doLogout(){CUR_MED=null;document.getElementById('liOrdre').value='';document.getElementById('liCode').value='';showScreen('loginScreen');}
@@ -654,7 +707,7 @@ function renderDossiers(){
         '<span class="dcard-id">'+d.id+'</span>'+
         '<span style="font-size:12px;color:var(--text3)">Ouvrir →</span>'+
       '</div>';
-    el.onclick=function(){openDos(d.notionId);};
+    el.onclick=function(){openDos(d.supabaseId);};
     list.appendChild(el);
   });
 }
@@ -662,56 +715,46 @@ function renderDossiers(){
 // ══════════════════════════════
 // CONSULTATION
 // ══════════════════════════════
-function openDos(notionId){
-  CUR_DOS=DOSSIERS.find(function(d){return d.notionId===notionId;})||null;
+function openDos(supabaseId){
+  CUR_DOS=DOSSIERS.find(function(d){return d.supabaseId===supabaseId;})||null;
   if(!CUR_DOS)return;
-  // Essayer de récupérer le brouillon JSON enrichi (stocké dans valIA)
+  // Restaurer brouillon depuis JSONB Supabase (propre, pas de ##BROUILLON## hack)
   var brouillonOk=false;
-  if(CUR_DOS.valIA&&typeof CUR_DOS.valIA==='string'&&CUR_DOS.valIA.indexOf('##BROUILLON##')===0){
+  if(CUR_DOS.brouillonJson&&typeof CUR_DOS.brouillonJson==='object'){
     try{
-      var b=JSON.parse(CUR_DOS.valIA.replace('##BROUILLON##',''));
+      var b=CUR_DOS.brouillonJson;
       if(b.v===2){
-        // Brouillon complet v2
         MEDS=b.meds.filter(function(m){return !m.ald;});
         MEDS_ALD=b.meds.filter(function(m){return m.ald;});
         ALD=MEDS_ALD.length>0;
         EXAMENS_REQUIS=b.examensRequis||false;
-        // Restaurer diag/examens/notes dans CUR_DOS pour pré-remplir les champs
         CUR_DOS.diagMed=b.diag||CUR_DOS.diagMed;
         CUR_DOS.examensPrescrit=b.examens||CUR_DOS.examensPrescrit;
         CUR_DOS.notes=b.notes||CUR_DOS.notes;
         dbg('💾 Brouillon v2 restauré — '+b.meds.length+' méd. sauvegardé le '+b.savedAt);
       } else {
-        // Ancien format v1 — juste les médicaments
-        MEDS=b.filter(function(m){return !m.ald;});
-        MEDS_ALD=b.filter(function(m){return m.ald;});
+        MEDS=(b.meds||b).filter(function(m){return !m.ald;});
+        MEDS_ALD=(b.meds||b).filter(function(m){return m.ald;});
         ALD=MEDS_ALD.length>0;
-        dbg('💾 Brouillon v1 restauré — '+b.length+' méd.');
       }
       brouillonOk=true;
     }catch(e){brouillonOk=false;dbgWarn('Brouillon parse erreur: '+e.message);}
   }
   if(!brouillonOk){
-    var parsed=CUR_DOS.traitementMed?parseMedsStr(CUR_DOS.traitementMed):{meds:[],medsAld:[]};
-    MEDS=parsed.meds;
-    MEDS_ALD=parsed.medsAld;
-    ALD=MEDS_ALD.length>0;
+    MEDS=[];MEDS_ALD=[];ALD=false;
   }
   EXAMENS_REQUIS=CUR_DOS.statut==='en_attente_examen';
   CID_VAL=null;
-  CID_VAL=null;
-  // Charger dossier patient depuis BDD Patients
   PATIENT_DOSSIER=null;
   console.log('Recherche patient BDD:', CUR_DOS.patient.nom);
   chargerDossierPatient(CUR_DOS.patient.nom, CUR_DOS.patient.patientId||null).then(function(dp){
     console.log('PATIENT_DOSSIER trouvé:', dp?'OUI — email='+dp.email:'NON');
     if(dp){
-      // Enrichir les infos patient avec le dossier médical
       CUR_DOS.patient.allergies=dp.allergies||CUR_DOS.patient.allergies||'';
       CUR_DOS.patient.antecedents=dp.antecedents||CUR_DOS.patient.antecedents||'';
       CUR_DOS.patient.traitements=dp.traitements||CUR_DOS.patient.traitements||'';
       CUR_DOS.patient.email=dp.email||CUR_DOS.patient.email||'';
-      renderConsult(); // re-render avec le dossier complet
+      renderConsult();
     }
   });
   var bmap={
@@ -860,18 +903,19 @@ function editMed(i,mode){
   if(preview)preview.style.display='none';
   updatePosoStr();
 
-  // Dosage + conditionnement
-  MED_SELECTED=MEDS_DB.find(function(x){return x.nom===(m.nom||'');})||null;
-  if(MED_SELECTED){
-    updateDosages();
-    document.getElementById('mDose').value=m.dose||'';
-    updateConditionnements();
-    document.getElementById('mCondit').value=m.conditionnement?(parseInt(m.conditionnement)||''):'';
-  } else {
-    resetDosageCondit();
+  // Dosage + conditionnement — MED_SELECTED null (pas de DB locale), on pré-remplit en saisie libre
+  MED_SELECTED=null;
+  resetDosageCondit();
+  if(m.dose){
     var doseEl=document.getElementById('mDose');
-    doseEl.innerHTML='<option value="'+(m.dose||'')+'">'+(m.dose||'-- Saisir --')+'</option>';
+    doseEl.innerHTML='<option value="'+escHtml(m.dose||'')+'">'+escHtml(m.dose||'Saisir')+'</option>';
     doseEl.value=m.dose||'';
+  }
+  if(m.conditionnement){
+    var conEl=document.getElementById('mCondit');
+    var cv=parseInt(m.conditionnement)||m.conditionnement||'';
+    conEl.innerHTML='<option value="'+cv+'">'+cv+' cp/unités</option>';
+    conEl.value=cv;
   }
 
   var title=document.getElementById('medModalTitle');
@@ -1005,8 +1049,8 @@ function renderConsult(){
         '<div class="fsec-title"><div class="fsec-ico gr">🩺</div><div class="fsec-label">Décision médicale</div></div>'+
         (d.diagMed?'<div class="frow"><div class="flabel">Diagnostic</div><div class="ia-txt">'+escHtml(d.diagMed)+'</div></div>':'')+
         (d.examensPrescrit?'<div class="frow"><div class="flabel">Examens prescrits</div><div class="ia-txt">'+escHtml(d.examensPrescrit).replace(/\n/g,'<br>')+'</div></div>':'')+
-        (d.traitementMed?'<div class="frow"><div class="flabel">Traitement</div><div class="ia-txt">'+escHtml(d.traitementMed).replace(/\n/g,'<br>')+'</div></div>':'')+
         (d.notes?'<div class="frow"><div class="flabel">Notes</div><div class="ia-txt">'+escHtml(d.notes)+'</div></div>':'')+
+        '<button class="btn-ordo-pdf" onclick="afficherOrdo()"><span class="pdf-ico">📄</span> Voir l\'ordonnance</button>'+
       '</div>'+
       (d.valIA&&typeof d.valIA==='object'&&d.valIA.statut?
         '<div class="fsec">'+
@@ -1022,7 +1066,7 @@ function renderConsult(){
 }
 
 // ══════════════════════════════
-// SAUVEGARDE BROUILLON
+// SAUVEGARDE BROUILLON — Supabase JSONB
 // ══════════════════════════════
 async function sauvegarderBrouillon(){
   var diag=(document.getElementById('diagMedInput')||{}).value||'';
@@ -1034,16 +1078,7 @@ async function sauvegarderBrouillon(){
 
   if(!diag&&!allMeds.length&&!notes){toast('⚠️ Rien à sauvegarder');return;}
 
-  // Format texte lisible pour Notion (Traitement Prescrit)
-  var medsStr=MEDS.map(function(m){
-    return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' — '+m.duree:'');
-  }).join('\n');
-  var medsAldStr=MEDS_ALD.map(function(m){
-    return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' — '+m.duree:'')+' [ALD]';
-  }).join('\n');
-  var medsStrComplet=(medsStr+(medsAldStr?'\n'+medsAldStr:'')).trim();
-
-  // JSON brouillon complet — tout le formulaire
+  // Brouillon complet v2 — stocké en JSONB (pas de hack string)
   var brouillon={
     v:2,
     diag:diag,
@@ -1054,24 +1089,21 @@ async function sauvegarderBrouillon(){
     meds:allMeds,
     savedAt:new Date().toISOString()
   };
-  var brouillonJson='##BROUILLON##'+JSON.stringify(brouillon);
 
   toast('💾 Sauvegarde...');
-  var ok=await updateNotionDossier(CUR_DOS.notionId,{
+  var ok=await updateDossier(CUR_DOS.supabaseId,{
     diagMed:diag,
     examensPrescrit:examens,
-    traitementMed:medsStrComplet,
     notes:notes,
-    validationIA:brouillonJson
+    brouillonJson:brouillon
   });
 
-  // MAJ cache local complet
+  // MAJ cache local
   CUR_DOS.diagMed=diag;
   CUR_DOS.examensPrescrit=examens;
-  CUR_DOS.traitementMed=medsStrComplet;
   CUR_DOS.notes=notes;
-  CUR_DOS.valIA=brouillonJson; // pour que openDos puisse le relire
-  var idx=DOSSIERS.findIndex(function(d){return d.notionId===CUR_DOS.notionId;});
+  CUR_DOS.brouillonJson=brouillon;
+  var idx=DOSSIERS.findIndex(function(d){return d.supabaseId===CUR_DOS.supabaseId;});
   if(idx>=0)DOSSIERS[idx]=CUR_DOS;
 
   dbg('💾 Brouillon sauvegardé — '+allMeds.length+' méd. | diag="'+diag.slice(0,30)+'"');
@@ -1290,257 +1322,164 @@ function modifierPrescription(){
 }
 
 // ══════════════════════════════
-// FINALISER → NOTION
+// FINALISER → SUPABASE
 // ══════════════════════════════
 async function finaliser(nouveauStatut){
   var diag=(document.getElementById('diagMedInput')||{}).value||CUR_DOS.diagMed||'';
   var examens=(document.getElementById('examensInput')||{}).value||CUR_DOS.examensPrescrit||'';
   var notes=(document.getElementById('notesInput')||{}).value||CUR_DOS.notes||'';
-  var medsStr=MEDS.map(function(m){
-    return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' — '+m.duree:'');
-  }).join('\n');
-  // Inclure les médicaments ALD dans Traitement Prescrit
-  var medsAldStr=MEDS_ALD.map(function(m){
-    return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+' [ALD]';
-  }).join('\n');
-  var medsStrComplet=(medsStr+(medsAldStr?'\n'+medsAldStr:'')).trim();
 
-  toast('⏳ Mise à jour Notion...');
+  // JSON médicaments pour Supabase JSONB
+  var prescriptionJson={
+    meds:MEDS.map(function(m){
+      return {nom:m.nom,dose:m.dose||'',poso:m.poso||'',duree:m.duree||'',conditionnement:m.conditionnement||''};
+    }),
+    medsAld:MEDS_ALD.map(function(m){
+      return {nom:m.nom,dose:m.dose||'',poso:m.poso||'',duree:m.duree||'',ald:true};
+    })
+  };
 
-  // Mettre à jour Notion
-  // valide_override = médecin maintient malgré non-conformité IA
+  toast('⏳ Mise à jour Supabase...');
+
   var statutFinal=nouveauStatut==='valide_override'?'valide':nouveauStatut;
-  var ok=await updateNotionDossier(CUR_DOS.notionId,{
+  var conf=(nouveauStatut==='valide'||nouveauStatut==='valide_override');
+  var valTexte=CUR_DOS.valIA?CUR_DOS.valIA.texte:'';
+
+  // 1. PATCH consultations
+  var ok=await updateDossier(CUR_DOS.supabaseId,{
     statut:statutFinal,
     diagMed:diag,
     examensPrescrit:examens,
-    traitementMed:medsStrComplet,
     notes:notes,
-    validationIA:CUR_DOS.valIA?CUR_DOS.valIA.texte:''
+    validationIATexte:valTexte,
+    validationIA:conf?'conforme':'nonconforme',
+    decisionMedecin:nouveauStatut==='valide_override'?'maintenu_hors_conformite':'accepte',
+    brouillonJson:null  // effacer le brouillon après finalisation
   });
 
-  // Sauvegarder ordonnance dans BDD Consultations (colonne Ordonnance)
+  // 2. INSERT ordonnances (si pas en_attente_examen)
   if(nouveauStatut!=='en_attente_examen'){
-    // Fusionner médicaments consultation + médicaments ALD
     var tousLesMeds=MEDS.concat(MEDS_ALD.map(function(m){
       return {nom:m.nom,dose:m.dose,poso:m.poso+'(ALD — traitement permanent)',duree:''};
     }));
-    var ordonnance={
-      date:new Date().toISOString().slice(0,10),
-      medecin:CUR_MED.nom,
-      specialite:CUR_MED.spec,
-      diagnostic:diag,
-      medicaments:tousLesMeds.map(function(m){
-        return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' ('+m.duree+')':'');
-      }),
-      notes:notes||''
-    };
     try{
-      await notionRequest('/pages/'+CUR_DOS.notionId,'PATCH',{
-        properties:{'Ordonnance':{rich_text:[{text:{content:JSON.stringify(ordonnance).slice(0,2000)}}]}}
+      await dbInsert('ordonnances',{
+        consultation_id: CUR_DOS.supabaseId,
+        patient_id: CUR_DOS.patient.patientId||'',
+        patient_uuid: CUR_DOS.patient.patientUuid||null,
+        medecin_id: CUR_MED.supabaseId,
+        prescription_medecin: prescriptionJson,
+        prescription_medecin_at: new Date().toISOString(),
+        prescription_finale: prescriptionJson,
+        recommandation_oms: CUR_DOS.medicamentsOMS||'',
+        source_oms: CUR_DOS.sourcesOMS||'',
+        decision: nouveauStatut==='valide_override'?'maintenu_hors_conformite':'accepte',
+        justification: notes||'',
+        conforme_oms: conf,
+        ald: ALD,
+        meds_ald: MEDS_ALD.length?MEDS_ALD:null,
+        statut: statutFinal
       });
-    }catch(e){console.log('Erreur sauvegarde ordonnance:',e.message);}
+      dbg('✅ Ordonnance insérée dans Supabase');
+    }catch(e){dbgWarn('Erreur INSERT ordonnances: '+e.message);}
   }
 
-  // Mettre à jour BDD Patients si ALD cochée
+  // 3. MAJ dossier patient si ALD
   if(ALD&&PATIENT_DOSSIER){
-    var diag2=(document.getElementById('diagMedInput')||{}).value||CUR_DOS.diagMed||'';
     var dateAujourdhui=new Date().toISOString().slice(0,10);
-
-    // ── Format enrichi standardisé (compatible app patient tuile Traitements) ──
-    // Format : "Nom Dosage — Fréquence [ALD] (Indication) — Dr. Prescripteur — Début: YYYY-MM-DD"
     var nouvTraits=MEDS_ALD.map(function(m){
       var ligne=m.nom+(m.dose?' '+m.dose:'');
       if(m.poso)ligne+=' — '+m.poso;
       ligne+=' [ALD]';
-      if(diag2)ligne+=' ('+diag2+')';
+      if(diag)ligne+=' ('+diag+')';
       ligne+=' — '+CUR_MED.nom;
       ligne+=' — Début: '+dateAujourdhui;
       return ligne;
     }).join('\n');
-
-    // Merger avec les traitements existants sans doublons par nom de médicament
     var existants=(PATIENT_DOSSIER.traitements||'').split('\n').filter(function(l){return l.trim();});
     MEDS_ALD.forEach(function(m){
-      // Supprimer l'ancienne ligne si même médicament déjà présent
-      existants=existants.filter(function(l){
-        return l.toLowerCase().indexOf(m.nom.toLowerCase())<0;
-      });
+      existants=existants.filter(function(l){return l.toLowerCase().indexOf(m.nom.toLowerCase())<0;});
     });
     var traitementsFinal=nouvTraits+(existants.length?'\n'+existants.join('\n'):'');
-
-    // MAJ antécédents avec le diagnostic ALD
-    var newAntecedents=mergeChamp(PATIENT_DOSSIER.antecedents,diag2);
-
-    var aldOk=await mettreAJourDossierPatient({
-      antecedents:newAntecedents,
-      traitements:traitementsFinal
-    });
+    var newAntecedents=mergeChamp(PATIENT_DOSSIER.antecedents,diag);
+    var aldOk=await mettreAJourDossierPatient({antecedents:newAntecedents,traitements:traitementsFinal});
     toast(aldOk?'🏥 Dossier patient mis à jour (ALD — '+MEDS_ALD.length+' traitement'+(MEDS_ALD.length>1?'s':'')+')':'⚠️ Erreur MAJ dossier patient');
   }
 
-  // ── Remplir colonne Ordonnances dans BDD Patients (JSON cumulatif) ──
-  // Toujours sauvegarder l'ordonnance, avec ou sans ALD
-  if(PATIENT_DOSSIER&&nouveauStatut!=='en_attente_examen'){
-    var diag3=(document.getElementById('diagMedInput')||{}).value||CUR_DOS.diagMed||'';
-    try{
-      var ordosExistantes=[];
-      try{
-        var ordRaw=PATIENT_DOSSIER.ordonnances||'';
-        if(ordRaw)ordosExistantes=JSON.parse(ordRaw);
-        if(!Array.isArray(ordosExistantes))ordosExistantes=[];
-      }catch(e){ordosExistantes=[];}
-      var nouvelleOrdonnance={
-        date:new Date().toISOString().slice(0,10),
-        consultationId:CUR_DOS.notionId,
-        medecin:CUR_MED.nom,
-        specialite:CUR_MED.spec,
-        diagnostic:diag3,
-        medicaments:MEDS.map(function(m){
-          return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' ('+m.duree+')':'');
-        }).concat(MEDS_ALD.map(function(m){
-          return m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+' [ALD — permanent]';
-        })),
-        notes:notes||''
-      };
-      ordosExistantes.unshift(nouvelleOrdonnance);
-      if(ordosExistantes.length>20)ordosExistantes=ordosExistantes.slice(0,20);
-      await notionRequest('/pages/'+PATIENT_DOSSIER.notionId,'PATCH',{
-        properties:{'Ordonnances':{rich_text:[{text:{content:JSON.stringify(ordosExistantes).slice(0,2000)}}]}}
-      });
-      dbg('Ordonnances BDD Patients mise à jour: '+ordosExistantes.length+' ordo(s)');
-    }catch(e){console.log('Erreur MAJ Ordonnances patient:',e.message);}
-  }
+  // Notification patient — à implémenter via WhatsApp (pas email)
+  // TODO : POST /api/whatsapp quand WhatsApp Cloud API intégré
 
-  // Mettre à jour le cache local
+  // 5. MAJ cache local
   CUR_DOS.statut=statutFinal;
   CUR_DOS.diagMed=diag;
   CUR_DOS.examensPrescrit=examens;
-  CUR_DOS.traitementMed=medsStrComplet;
   CUR_DOS.notes=notes;
-  var idx=DOSSIERS.findIndex(function(d){return d.notionId===CUR_DOS.notionId;});
+  CUR_DOS.brouillonJson=null;
+  var idx=DOSSIERS.findIndex(function(d){return d.supabaseId===CUR_DOS.supabaseId;});
   if(idx>=0)DOSSIERS[idx]=CUR_DOS;
 
-  toast(ok?'✅ Notion mis à jour':'⚠️ Erreur sync Notion');
-
-  // Email notification patient
-  var ds=new Date().toLocaleDateString('fr-FR');
-  var dest=(CUR_DOS.patient.email||'').trim();
-  if(!dest&&PATIENT_DOSSIER)dest=(PATIENT_DOSSIER.email||'').trim();
-  if(!dest){
-    toast('⚠️ Email patient non renseigné dans la BDD Patients');
-    setTimeout(function(){goBack();},1500);
-    return;
-  }
-  if(dest){
-    var subj=encodeURIComponent('[Dokita] Votre ordonnance est disponible');
-    var emailBody=encodeURIComponent(
-      'Bonjour '+CUR_DOS.patient.nom+',\n\n'+
-      (nouveauStatut==='en_attente_examen'
-        ? 'Des examens complémentaires ont été demandés. Votre médecin vous contactera après réception des résultats.\n\n'
-        : 'Votre consultation du '+ds+' a été traitée.\n\nMerci de vous connecter à votre espace Dokita pour récupérer votre ordonnance.\n\n'
-      )+
-      '— '+CUR_MED.nom+' | Dokita'
-    );
-    await new Promise(function(r){setTimeout(r,500);});
-    window.location.href='mailto:'+dest+'?subject='+subj+'&body='+emailBody;
-  }
-
+  toast(ok?'✅ Dossier finalisé':'⚠️ Erreur sync Supabase');
   setTimeout(function(){goBack();},1500);
 }
 
 // ══════════════════════════════
-// BASE DE DONNÉES MÉDICAMENTS
+// AUTOCOMPLETE MÉDICAMENTS — /api/search-med
 // ══════════════════════════════
-var MEDS_DB=[
-  {nom:'Artéméther + Luméfantrine',classe:'Antipaludéen',dosages:[{dose:'20mg/120mg',conditionnements:[24]},{dose:'40mg/240mg',conditionnements:[24]}]},
-  {nom:'Artésunate',classe:'Antipaludéen',dosages:[{dose:'50mg',conditionnements:[12,30]},{dose:'200mg',conditionnements:[12]}]},
-  {nom:'Quinine',classe:'Antipaludéen',dosages:[{dose:'300mg',conditionnements:[30]},{dose:'500mg',conditionnements:[30]}]},
-  {nom:'Chloroquine',classe:'Antipaludéen',dosages:[{dose:'100mg',conditionnements:[30]},{dose:'250mg',conditionnements:[30]}]},
-  {nom:'Méfloquine',classe:'Antipaludéen',dosages:[{dose:'250mg',conditionnements:[8]}]},
-  {nom:'Dihydroartémisinine + Pipéraquine',classe:'Antipaludéen',dosages:[{dose:'40mg/320mg',conditionnements:[12]}]},
-  {nom:'Amoxicilline',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[21,30]},{dose:'500mg',conditionnements:[21,30]},{dose:'1000mg',conditionnements:[14,21]}]},
-  {nom:'Amoxicilline + Acide clavulanique',classe:'Antibiotique',dosages:[{dose:'500mg/125mg',conditionnements:[14,21]},{dose:'875mg/125mg',conditionnements:[14]}]},
-  {nom:'Ampicilline',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[24]},{dose:'500mg',conditionnements:[24]}]},
-  {nom:'Azithromycine',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[6]},{dose:'500mg',conditionnements:[3,6]}]},
-  {nom:'Ciprofloxacine',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[10,20]},{dose:'500mg',conditionnements:[10,20]}]},
-  {nom:'Cotrimoxazole',classe:'Antibiotique',dosages:[{dose:'400mg/80mg',conditionnements:[20,30]},{dose:'800mg/160mg',conditionnements:[20,30]}]},
-  {nom:'Doxycycline',classe:'Antibiotique',dosages:[{dose:'100mg',conditionnements:[10,30]}]},
-  {nom:'Érythromycine',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[16,30]},{dose:'500mg',conditionnements:[16,30]}]},
-  {nom:'Métronidazole',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[20,30]},{dose:'500mg',conditionnements:[20,30]}]},
-  {nom:'Pénicilline V',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[30]},{dose:'500mg',conditionnements:[30]}]},
-  {nom:'Clindamycine',classe:'Antibiotique',dosages:[{dose:'150mg',conditionnements:[16,24]},{dose:'300mg',conditionnements:[16,24]}]},
-  {nom:'Ceftriaxone',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[1]},{dose:'500mg',conditionnements:[1]},{dose:'1g',conditionnements:[1]}]},
-  {nom:'Céfixime',classe:'Antibiotique',dosages:[{dose:'200mg',conditionnements:[10,20]},{dose:'400mg',conditionnements:[7,10]}]},
-  {nom:'Nitrofurantoïne',classe:'Antibiotique',dosages:[{dose:'50mg',conditionnements:[30]},{dose:'100mg',conditionnements:[30]}]},
-  {nom:'Levofloxacine',classe:'Antibiotique',dosages:[{dose:'250mg',conditionnements:[10,14]},{dose:'500mg',conditionnements:[7,10]}]},
-  {nom:'Isoniazide',classe:'Antituberculeux',dosages:[{dose:'100mg',conditionnements:[30,100]},{dose:'300mg',conditionnements:[30,100]}]},
-  {nom:'Rifampicine',classe:'Antituberculeux',dosages:[{dose:'150mg',conditionnements:[100]},{dose:'300mg',conditionnements:[100]}]},
-  {nom:'Pyrazinamide',classe:'Antituberculeux',dosages:[{dose:'400mg',conditionnements:[100]},{dose:'500mg',conditionnements:[100]}]},
-  {nom:'Éthambutol',classe:'Antituberculeux',dosages:[{dose:'100mg',conditionnements:[100]},{dose:'400mg',conditionnements:[100]}]},
-  {nom:'Fluconazole',classe:'Antifongique',dosages:[{dose:'50mg',conditionnements:[7,14]},{dose:'150mg',conditionnements:[1,7]},{dose:'200mg',conditionnements:[7,14]}]},
-  {nom:'Kétoconazole',classe:'Antifongique',dosages:[{dose:'200mg',conditionnements:[20,30]}]},
-  {nom:'Nystatine',classe:'Antifongique',dosages:[{dose:'500 000 UI',conditionnements:[20,30]}]},
-  {nom:'Aciclovir',classe:'Antiviral',dosages:[{dose:'200mg',conditionnements:[25,30]},{dose:'400mg',conditionnements:[30]},{dose:'800mg',conditionnements:[30]}]},
-  {nom:'Lamivudine',classe:'Antirétroviral',dosages:[{dose:'150mg',conditionnements:[60]},{dose:'300mg',conditionnements:[30,60]}]},
-  {nom:'Zidovudine',classe:'Antirétroviral',dosages:[{dose:'300mg',conditionnements:[60]}]},
-  {nom:'Ténofovir',classe:'Antirétroviral',dosages:[{dose:'300mg',conditionnements:[30,60]}]},
-  {nom:'Efavirenz',classe:'Antirétroviral',dosages:[{dose:'200mg',conditionnements:[30,90]},{dose:'600mg',conditionnements:[30,90]}]},
-  {nom:'Lopinavir + Ritonavir',classe:'Antirétroviral',dosages:[{dose:'200mg/50mg',conditionnements:[60,120]}]},
-  {nom:'Névirapine',classe:'Antirétroviral',dosages:[{dose:'200mg',conditionnements:[60]}]},
-  {nom:'Amlodipine',classe:'Antihypertenseur',dosages:[{dose:'5mg',conditionnements:[30,60,90]},{dose:'10mg',conditionnements:[30,60,90]}]},
-  {nom:'Captopril',classe:'Antihypertenseur',dosages:[{dose:'25mg',conditionnements:[30,60]},{dose:'50mg',conditionnements:[30,60]}]},
-  {nom:'Énalapril',classe:'Antihypertenseur',dosages:[{dose:'5mg',conditionnements:[28,30]},{dose:'10mg',conditionnements:[28,30]},{dose:'20mg',conditionnements:[28,30]}]},
-  {nom:'Losartan',classe:'Antihypertenseur',dosages:[{dose:'25mg',conditionnements:[28,30]},{dose:'50mg',conditionnements:[28,30]},{dose:'100mg',conditionnements:[28,30]}]},
-  {nom:'Hydrochlorothiazide',classe:'Antihypertenseur',dosages:[{dose:'12.5mg',conditionnements:[30]},{dose:'25mg',conditionnements:[30]}]},
-  {nom:'Furosémide',classe:'Diurétique',dosages:[{dose:'20mg',conditionnements:[30]},{dose:'40mg',conditionnements:[30]}]},
-  {nom:'Spironolactone',classe:'Diurétique',dosages:[{dose:'25mg',conditionnements:[30]},{dose:'50mg',conditionnements:[30]},{dose:'100mg',conditionnements:[30]}]},
-  {nom:'Aténolol',classe:'Bêtabloquant',dosages:[{dose:'50mg',conditionnements:[28,30]},{dose:'100mg',conditionnements:[28,30]}]},
-  {nom:'Bisoprolol',classe:'Bêtabloquant',dosages:[{dose:'2.5mg',conditionnements:[28,30]},{dose:'5mg',conditionnements:[28,30]},{dose:'10mg',conditionnements:[28,30]}]},
-  {nom:'Méthyldopa',classe:'Antihypertenseur',dosages:[{dose:'250mg',conditionnements:[30,60]},{dose:'500mg',conditionnements:[30,60]}]},
-  {nom:'Nifédipine',classe:'Antihypertenseur',dosages:[{dose:'10mg',conditionnements:[30]},{dose:'20mg LP',conditionnements:[30]},{dose:'30mg LP',conditionnements:[30]}]},
-  {nom:'Metformine',classe:'Antidiabétique',dosages:[{dose:'500mg',conditionnements:[30,60,90]},{dose:'850mg',conditionnements:[30,60]},{dose:'1000mg',conditionnements:[30,60]}]},
-  {nom:'Glibenclamide',classe:'Antidiabétique',dosages:[{dose:'2.5mg',conditionnements:[30,60]},{dose:'5mg',conditionnements:[30,60]}]},
-  {nom:'Gliclazide',classe:'Antidiabétique',dosages:[{dose:'30mg LP',conditionnements:[30,60]},{dose:'80mg',conditionnements:[30,60]}]},
-  {nom:'Insuline Humaine NPH',classe:'Insuline',dosages:[{dose:'100 UI/ml',conditionnements:[1,5]}]},
-  {nom:'Insuline Humaine Rapide',classe:'Insuline',dosages:[{dose:'100 UI/ml',conditionnements:[1,5]}]},
-  {nom:'Aspirine',classe:'Antiagrégant',dosages:[{dose:'75mg',conditionnements:[30,90]},{dose:'100mg',conditionnements:[30,90]},{dose:'500mg',conditionnements:[20,30]}]},
-  {nom:'Digoxine',classe:'Cardiotonique',dosages:[{dose:'0.25mg',conditionnements:[30,60]}]},
-  {nom:'Simvastatine',classe:'Hypolipémiant',dosages:[{dose:'10mg',conditionnements:[28,30]},{dose:'20mg',conditionnements:[28,30]},{dose:'40mg',conditionnements:[28,30]}]},
-  {nom:'Atorvastatine',classe:'Hypolipémiant',dosages:[{dose:'10mg',conditionnements:[28,30]},{dose:'20mg',conditionnements:[28,30]},{dose:'40mg',conditionnements:[28,30]}]},
-  {nom:'Isosorbide dinitrate',classe:'Coronarodilatateur',dosages:[{dose:'10mg',conditionnements:[30,60]},{dose:'20mg',conditionnements:[30,60]}]},
-  {nom:'Paracétamol',classe:'Analgésique',dosages:[{dose:'500mg',conditionnements:[16,20,30]},{dose:'1000mg',conditionnements:[16,20,30]}]},
-  {nom:'Ibuprofène',classe:'AINS',dosages:[{dose:'200mg',conditionnements:[20,30]},{dose:'400mg',conditionnements:[20,30]},{dose:'600mg',conditionnements:[20,30]}]},
-  {nom:'Diclofénac',classe:'AINS',dosages:[{dose:'25mg',conditionnements:[30]},{dose:'50mg',conditionnements:[20,30]},{dose:'75mg LP',conditionnements:[30]}]},
-  {nom:'Tramadol',classe:'Analgésique opioïde',dosages:[{dose:'50mg',conditionnements:[20,30]},{dose:'100mg LP',conditionnements:[20,30]}]},
-  {nom:'Codéine',classe:'Analgésique opioïde',dosages:[{dose:'30mg',conditionnements:[20,30]}]},
-  {nom:'Oméprazole',classe:'Inhibiteur pompe à protons',dosages:[{dose:'10mg',conditionnements:[14,28]},{dose:'20mg',conditionnements:[14,28]},{dose:'40mg',conditionnements:[14,28]}]},
-  {nom:'Ranitidine',classe:'Anti-H2',dosages:[{dose:'150mg',conditionnements:[30,60]},{dose:'300mg',conditionnements:[30]}]},
-  {nom:'Métoclopramide',classe:'Antiémétique',dosages:[{dose:'10mg',conditionnements:[30]}]},
-  {nom:'Dompéridone',classe:'Antiémétique',dosages:[{dose:'10mg',conditionnements:[30,60]}]},
-  {nom:'Ondansétron',classe:'Antiémétique',dosages:[{dose:'4mg',conditionnements:[10,30]},{dose:'8mg',conditionnements:[10,30]}]},
-  {nom:'Phloroglucinol',classe:'Antispasmodique',dosages:[{dose:'80mg',conditionnements:[20,30]}]},
-  {nom:'Lopéramide',classe:'Antidiarrhéique',dosages:[{dose:'2mg',conditionnements:[12,20]}]},
-  {nom:'Salbutamol',classe:'Bronchodilatateur',dosages:[{dose:'2mg',conditionnements:[30,60]},{dose:'4mg',conditionnements:[30,60]},{dose:'100µg/dose inhalateur',conditionnements:[1]}]},
-  {nom:'Bromhexine',classe:'Mucolytique',dosages:[{dose:'4mg',conditionnements:[20,30]},{dose:'8mg',conditionnements:[20,30]}]},
-  {nom:'Acétylcystéine',classe:'Mucolytique',dosages:[{dose:'200mg',conditionnements:[20,30]},{dose:'600mg',conditionnements:[10,20]}]},
-  {nom:'Ambroxol',classe:'Mucolytique',dosages:[{dose:'30mg',conditionnements:[20,30]},{dose:'75mg',conditionnements:[10,20]}]},
-  {nom:'Théophylline',classe:'Bronchodilatateur',dosages:[{dose:'100mg',conditionnements:[30]},{dose:'200mg',conditionnements:[30]}]},
-  {nom:'Prednisone',classe:'Corticoïde',dosages:[{dose:'5mg',conditionnements:[20,30]},{dose:'20mg',conditionnements:[20,30]}]},
-  {nom:'Prednisolone',classe:'Corticoïde',dosages:[{dose:'5mg',conditionnements:[30]},{dose:'20mg',conditionnements:[30]}]},
-  {nom:'Dexaméthasone',classe:'Corticoïde',dosages:[{dose:'0.5mg',conditionnements:[30]},{dose:'4mg',conditionnements:[30]}]},
-  {nom:'Albendazole',classe:'Antiparasitaire',dosages:[{dose:'200mg',conditionnements:[1,6]},{dose:'400mg',conditionnements:[1,6]}]},
-  {nom:'Mébendazole',classe:'Antiparasitaire',dosages:[{dose:'100mg',conditionnements:[6,18]},{dose:'500mg',conditionnements:[1,6]}]},
-  {nom:'Ivermectine',classe:'Antiparasitaire',dosages:[{dose:'3mg',conditionnements:[4,20]},{dose:'6mg',conditionnements:[4,20]}]},
-  {nom:'Praziquantel',classe:'Antiparasitaire',dosages:[{dose:'600mg',conditionnements:[6]}]},
-  {nom:'Phénobarbital',classe:'Antiépileptique',dosages:[{dose:'50mg',conditionnements:[30,60]},{dose:'100mg',conditionnements:[30,60]}]},
-  {nom:'Phénytoïne',classe:'Antiépileptique',dosages:[{dose:'100mg',conditionnements:[30,60]}]},
-  {nom:'Carbamazépine',classe:'Antiépileptique',dosages:[{dose:'200mg',conditionnements:[30,60]}]},
-  {nom:'Valproate de sodium',classe:'Antiépileptique',dosages:[{dose:'200mg',conditionnements:[30]},{dose:'500mg',conditionnements:[30]}]},
-  {nom:'Diazépam',classe:'Anxiolytique',dosages:[{dose:'2mg',conditionnements:[30]},{dose:'5mg',conditionnements:[30]}]},
-  {nom:'Halopéridol',classe:'Antipsychotique',dosages:[{dose:'1mg',conditionnements:[30]},{dose:'5mg',conditionnements:[30]}]},
-  {nom:'Chlorpromazine',classe:'Antipsychotique',dosages:[{dose:'25mg',conditionnements:[30]},{dose:'100mg',conditionnements:[30]}]},
-  {nom:'Amitriptyline',classe:'Antidépresseur',dosages:[{dose:'25mg',conditionnements:[30,50]},{dose:'50mg',conditionnements:[30,50]}]},
+var MED_SELECTED=null;
+var _medSearchTimer=null;
+
+function medAutocomplete(val){
+  var box=document.getElementById('medSuggestions');
+  MED_SELECTED=null;
+  resetDosageCondit();
+  if(!val||val.length<2){box.style.display='none';return;}
+  clearTimeout(_medSearchTimer);
+  _medSearchTimer=setTimeout(async function(){
+    try{
+      var r=await fetch(SEARCH_MED+'?q='+encodeURIComponent(val),{headers:{'x-dokita-key':DOKITA_KEY}});
+      var results=await r.json();
+      if(!Array.isArray(results)||!results.length){box.style.display='none';return;}
+      // Auto-sélection si correspondance exacte
+      var exact=results.find(function(m){return m.nom.toLowerCase()===val.toLowerCase();});
+      if(exact){MED_SELECTED=exact;updateDosages();box.style.display='none';return;}
+      box.style.display='block';
+      box.innerHTML=results.slice(0,8).map(function(m,i){
+        var safeVal=val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+        var hl=m.nom.replace(new RegExp('('+safeVal+')','gi'),'<strong>$1</strong>');
+        return '<div data-idx="'+i+'" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;" onmouseover="this.style.background=\'var(--card2)\'" onmouseout="this.style.background=\'\'">'+
+          hl+'<span style="font-size:10px;color:var(--text3);margin-left:8px;">'+(m.classe||'')+'</span>'+
+        '</div>';
+      }).join('');
+      // Stocker les résultats pour selectMedFromSearch
+      box._results=results;
+      box.querySelectorAll('[data-idx]').forEach(function(el){
+        el.addEventListener('click',function(){
+          selectMedFromSearch(results[parseInt(el.dataset.idx)]);
+        });
+      });
+    }catch(e){box.style.display='none';}
+  },250);
+}
+
+function selectMedFromSearch(m){
+  document.getElementById('mNom').value=m.nom;
+  document.getElementById('medSuggestions').style.display='none';
+  MED_SELECTED=m;
+  updateDosages();
+}
+
+// Compatibilité avec les fonctions qui utilisent MEDS_DB local
+function selectMedByIndex(idx){
+  var box=document.getElementById('medSuggestions');
+  if(box&&box._results&&box._results[idx]){
+    selectMedFromSearch(box._results[idx]);
+  }
+}
+function selectMed(nom){
+  document.getElementById('mNom').value=nom;
+  document.getElementById('medSuggestions').style.display='none';
+  // MED_SELECTED sera null — les selects dosage resteront vides (OK)
+}
   {nom:'Fluoxétine',classe:'Antidépresseur',dosages:[{dose:'20mg',conditionnements:[14,28]}]},
   {nom:'Acide folique',classe:'Vitamine',dosages:[{dose:'0.4mg',conditionnements:[30,90]},{dose:'5mg',conditionnements:[30,90]}]},
   {nom:'Sulfate ferreux',classe:'Minéral',dosages:[{dose:'200mg',conditionnements:[30,60,90]}]},
@@ -1558,47 +1497,6 @@ var MEDS_DB=[
   {nom:'Allopurinol',classe:'Hypouricémiant',dosages:[{dose:'100mg',conditionnements:[30,60]},{dose:'300mg',conditionnements:[30,60]}]},
   {nom:'Hydroxychloroquine',classe:'Rhumatologie',dosages:[{dose:'200mg',conditionnements:[30,60]}]},
   {nom:'Chlorphénamine',classe:'Antihistaminique',dosages:[{dose:'4mg',conditionnements:[20,30]}]},
-  {nom:'Cétirizine',classe:'Antihistaminique',dosages:[{dose:'10mg',conditionnements:[7,14,30]}]},
-  {nom:'Loratadine',classe:'Antihistaminique',dosages:[{dose:'10mg',conditionnements:[7,14,30]}]},
-  {nom:'Prométhazine',classe:'Antihistaminique',dosages:[{dose:'25mg',conditionnements:[20,30]}]},
-  {nom:'Misoprostol',classe:'Prostaglandine',dosages:[{dose:'200µg',conditionnements:[4,28]}]},
-  {nom:'Progestérone',classe:'Progestatif',dosages:[{dose:'100mg',conditionnements:[30]},{dose:'200mg',conditionnements:[30]}]},
-  {nom:'Lévonorgestrel',classe:'Contraceptif urgence',dosages:[{dose:'1.5mg',conditionnements:[1]}]},
-  {nom:'Tamsulosine',classe:'Alpha-bloquant',dosages:[{dose:'0.4mg',conditionnements:[30]}]},
-  {nom:'Finastéride',classe:'Urologie',dosages:[{dose:'5mg',conditionnements:[28,30]}]},
-  {nom:'Sels de réhydratation orale',classe:'Réhydratation',dosages:[{dose:'Sachet 500ml',conditionnements:[10,20]}]},
-];
-
-var MED_SELECTED=null; // médicament sélectionné dans l'autocomplete
-
-function medAutocomplete(val){
-  var box=document.getElementById('medSuggestions');
-  MED_SELECTED=null;
-  resetDosageCondit();
-  if(!val||val.length<2){box.style.display='none';return;}
-  var q=val.toLowerCase().trim();
-  var results=MEDS_DB.filter(function(m){
-    return m.nom.toLowerCase().indexOf(q)>=0;
-  }).slice(0,8);
-  // Auto-sélection si correspondance exacte
-  var exact=MEDS_DB.find(function(m){return m.nom.toLowerCase()===q;});
-  if(exact){
-    MED_SELECTED=exact;
-    updateDosages();
-    box.style.display='none';
-    return;
-  }
-  if(!results.length){box.style.display='none';return;}
-  box.style.display='block';
-  box.innerHTML=results.map(function(m){
-    var hl=m.nom.replace(new RegExp('('+val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<strong>$1</strong>');
-    var dbIdx=MEDS_DB.indexOf(m);
-    return '<div onclick="selectMedByIndex('+dbIdx+')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;" onmouseover="this.style.background=\'var(--card2)\'" onmouseout="this.style.background=\'\'">'+
-      hl+'<span style="font-size:10px;color:var(--text3);margin-left:8px;">'+m.classe+'</span>'+
-    '</div>';
-  }).join('');
-}
-
 // ── Génère la posologie structurée depuis les champs ──
 function updatePosoStr(){
   var prises=parseInt(document.getElementById('mPrises').value||'0')||0;
@@ -1630,22 +1528,6 @@ function getPosoStr(){
   if(prises>0) str=(prises===1?'1x/':prises+'x/')+periode;
   if(precision) str+=(str?' — ':'')+precision;
   return str;
-}
-
-function selectMedByIndex(idx){
-  var m=MEDS_DB[idx];
-  if(!m)return;
-  document.getElementById('mNom').value=m.nom;
-  document.getElementById('medSuggestions').style.display='none';
-  MED_SELECTED=m;
-  updateDosages();
-}
-
-function selectMed(nom){
-  document.getElementById('mNom').value=nom;
-  document.getElementById('medSuggestions').style.display='none';
-  MED_SELECTED=MEDS_DB.find(function(m){return m.nom===nom;})||null;
-  updateDosages();
 }
 
 function basculerSaisieLibre(){}   // désactivé — selects toujours fixes
@@ -1743,6 +1625,204 @@ function confirmMed(){
   }
   document.getElementById(listId).innerHTML=renderMeds(false,MODAL_MODE||undefined);
   closeMedModal();
+}
+
+// ══════════════════════════════
+// RECHERCHE RAPIDE (locale)
+// ══════════════════════════════
+function rechercheLocale(val){
+  var q=(val||'').toLowerCase().trim();
+  if(!q){renderDossiers();return;}
+  var ds=DOSSIERS.filter(function(d){
+    return (d.patient.nom||'').toLowerCase().indexOf(q)>=0
+      || (d.id||'').toLowerCase().indexOf(q)>=0;
+  });
+  var list=document.getElementById('dList');
+  if(!ds.length){
+    list.innerHTML='<div class="empty"><div class="empty-ico">🔍</div><div class="empty-txt">Aucun résultat local<br><span style="font-size:11px;color:var(--text3)">Utilisez "Avancée" pour chercher dans toute la base</span></div></div>';
+    return;
+  }
+  var backup=DOSSIERS;
+  DOSSIERS=ds;
+  renderDossiers();
+  DOSSIERS=backup;
+}
+
+// ══════════════════════════════
+// RECHERCHE AVANCÉE (Supabase patients)
+// ══════════════════════════════
+function ouvrirRechercheAvancee(){
+  document.getElementById('searchModal').classList.add('on');
+  setTimeout(function(){document.getElementById('sNom').focus();},100);
+}
+function fermerRechercheAvancee(){
+  document.getElementById('searchModal').classList.remove('on');
+  document.getElementById('searchResults').innerHTML='';
+}
+
+async function lancerRechercheAvancee(){
+  var nom=(document.getElementById('sNom').value||'').trim();
+  var ddn=(document.getElementById('sDDN').value||'').trim();
+  var tel=(document.getElementById('sTel').value||'').trim();
+  if(!nom&&!ddn&&!tel){toast('⚠️ Renseignez au moins un critère');return;}
+  var resEl=document.getElementById('searchResults');
+  resEl.innerHTML='<div style="text-align:center;padding:20px;color:var(--text2);font-size:13px;"><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>';
+  try{
+    var filters=[];
+    if(nom)filters.push('nom_complet=ilike.*'+nom+'*');
+    if(ddn)filters.push('date_naissance=eq.'+ddn);
+    if(tel)filters.push('telephone=ilike.*'+tel+'*');
+    var patientsData=await dbGet('patients',{filter:filters.join('&'),limit:'20'});
+    var patients=Array.isArray(patientsData)?patientsData:(patientsData.data||[]);
+    if(!patients.length){
+      resEl.innerHTML='<div class="empty"><div class="empty-ico">🔍</div><div class="empty-txt">Aucun patient trouvé</div></div>';
+      return;
+    }
+    var patientUuids=patients.map(function(p){return p.id;});
+    var consultData=await dbGet('consultations',{filter:'medecin_id=eq.'+CUR_MED.supabaseId,limit:'100'});
+    var allConsults=Array.isArray(consultData)?consultData:(consultData.data||[]);
+    var matching=allConsults.filter(function(c){
+      return patientUuids.indexOf(c.patient_uuid)>=0
+        ||patients.some(function(p){return (p.patient_id)===c.patient_id;});
+    });
+    if(!matching.length){
+      resEl.innerHTML='<div class="empty"><div class="empty-ico">📂</div><div class="empty-txt">Patient trouvé mais aucune consultation avec vous</div></div>';
+      return;
+    }
+    var bmap={en_attente:'⏳',en_attente_examen:'🔬',valide:'✅',cloture:'📁'};
+    resEl.innerHTML=matching.map(function(c){
+      var patInfo=patients.find(function(p){return p.id===c.patient_uuid||p.patient_id===c.patient_id;})||{};
+      var dateStr=c.created_at?(new Date(c.created_at)).toLocaleDateString('fr-FR'):'';
+      return '<div class="search-result-item" onclick="ouvrirDepuisRecherche(\''+c.id+'\')">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'+
+          '<span style="font-family:\'Syne\',sans-serif;font-size:13px;font-weight:700;color:var(--white);">'+escHtml(c.patient_nom||patInfo.nom_complet||'Patient')+'</span>'+
+          '<span style="font-size:14px;">'+(bmap[c.statut]||'')+'</span>'+
+        '</div>'+
+        '<div style="font-size:11px;color:var(--text2);">'+dateStr+(c.diagnostic_medecin?' • '+escHtml(c.diagnostic_medecin.slice(0,40)):'')+'</div>'+
+        '<div style="font-size:10px;color:var(--text3);margin-top:3px;">'+escHtml(c.consultation_id||c.id.slice(0,12))+'</div>'+
+      '</div>';
+    }).join('');
+  }catch(e){
+    resEl.innerHTML='<div style="color:var(--danger);font-size:12px;text-align:center;padding:16px;">Erreur: '+escHtml(e.message)+'</div>';
+  }
+}
+
+function ouvrirDepuisRecherche(consultId){
+  fermerRechercheAvancee();
+  var d=DOSSIERS.find(function(x){return x.supabaseId===consultId;});
+  if(d){openDos(consultId);return;}
+  dbGet('consultations',{filter:'id=eq.'+consultId,limit:'1'}).then(function(data){
+    var rows=Array.isArray(data)?data:(data.data||[]);
+    if(rows.length){
+      var parsed=parseDossierSupabase(rows[0]);
+      DOSSIERS.unshift(parsed);
+      openDos(parsed.supabaseId);
+    }
+  }).catch(function(e){toast('Erreur: '+e.message);});
+}
+
+// ══════════════════════════════
+// ORDONNANCE — affichage
+// ══════════════════════════════
+function afficherOrdo(){
+  var d=CUR_DOS;
+  if(!d){toast('⚠️ Aucun dossier ouvert');return;}
+  dbGet('ordonnances',{filter:'consultation_id=eq.'+d.supabaseId,limit:'1'}).then(function(data){
+    var rows=Array.isArray(data)?data:(data.data||[]);
+    var html=buildOrdoHtml(d,rows.length?rows[0]:null);
+    document.getElementById('ordoContent').innerHTML=html;
+    document.getElementById('ordoOverlay').classList.add('on');
+  }).catch(function(){
+    document.getElementById('ordoContent').innerHTML=buildOrdoHtml(d,null);
+    document.getElementById('ordoOverlay').classList.add('on');
+  });
+}
+
+function fermerOrdo(){
+  document.getElementById('ordoOverlay').classList.remove('on');
+}
+
+function imprimerOrdo(){
+  var html=document.getElementById('ordoContent').innerHTML;
+  var w=window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(function(){w.print();},500);
+}
+
+function buildOrdoHtml(d,ordo){
+  var p=d.patient;
+  var meds=[];
+  if(ordo&&ordo.prescription_finale){
+    var pf=typeof ordo.prescription_finale==='string'?JSON.parse(ordo.prescription_finale):ordo.prescription_finale;
+    meds=(pf.meds||[]).concat((pf.medsAld||[]).map(function(m){return Object.assign({},m,{_ald:true});}));
+  }
+  var dateOrdo=ordo&&ordo.prescription_medecin_at
+    ?(new Date(ordo.prescription_medecin_at)).toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'})
+    :(new Date()).toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'});
+  var diagnostic=d.diagMed||'';
+  var notes=d.notes||'';
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"/><style>'+
+    '@import url("https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap");'+
+    '*{margin:0;padding:0;box-sizing:border-box;}body{font-family:"DM Sans",sans-serif;background:#fff;color:#0A1628;}'+
+    '.pg{max-width:680px;margin:0 auto;padding:32px 24px;}'+
+    '.hdr{background:linear-gradient(135deg,#00C896,#0EA5E9);border-radius:16px;padding:24px;margin-bottom:24px;color:#fff;}'+
+    '.hdr h1{font-family:"Syne",sans-serif;font-size:22px;font-weight:800;}'+
+    '.hdr p{font-size:12px;opacity:.85;margin-top:4px;}'+
+    '.meta{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}'+
+    '.bloc{background:#F8FAFC;border-radius:12px;padding:16px;}'+
+    '.bloctit{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#64748B;margin-bottom:10px;}'+
+    '.row{font-size:13px;color:#0A1628;margin-bottom:4px;}'+
+    '.row b{font-weight:600;}'+
+    '.diag{background:#EFF6FF;border:1px solid #BFDBFE;border-radius:12px;padding:14px;margin-bottom:20px;}'+
+    '.diaglbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#3B82F6;margin-bottom:6px;}'+
+    '.diagval{font-family:"Syne",sans-serif;font-size:16px;font-weight:700;color:#1E3A5F;}'+
+    '.medstit{font-family:"Syne",sans-serif;font-size:13px;font-weight:700;color:#0A1628;margin-bottom:12px;}'+
+    '.med{background:#fff;border:1.5px solid #E2E8F0;border-radius:12px;padding:14px 16px;margin-bottom:10px;}'+
+    '.med.ald{border-color:#A78BFA;background:#FAF5FF;}'+
+    '.mname{font-family:"Syne",sans-serif;font-size:14px;font-weight:800;color:#0A1628;}'+
+    '.mdose{font-size:12px;color:#0EA5E9;font-weight:600;margin-top:2px;}'+
+    '.mposo{font-size:12px;color:#475569;margin-top:4px;line-height:1.6;}'+
+    '.aldtag{display:inline-block;background:#EDE9FE;color:#7C3AED;font-size:9px;font-weight:700;border-radius:4px;padding:2px 6px;margin-left:6px;text-transform:uppercase;}'+
+    '.notesbox{background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;padding:14px;margin-top:16px;font-size:12px;color:#92400E;line-height:1.6;}'+
+    '.foot{margin-top:28px;padding-top:20px;border-top:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:flex-end;}'+
+    '.footmed{font-size:13px;color:#0A1628;}'+
+    '.footmed strong{font-family:"Syne",sans-serif;font-size:14px;font-weight:800;display:block;margin-bottom:2px;}'+
+    '.sigbox{width:140px;height:60px;border:1.5px dashed #CBD5E1;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#94A3B8;}'+
+    '.empty{text-align:center;padding:24px;color:#94A3B8;font-size:13px;}'+
+    '@media print{.pg{padding:20px;}}'+
+  '</style></head><body><div class="pg">'+
+    '<div class="hdr"><h1>Ordonnance Médicale</h1><p>Dokita Pro • '+escHtml(CUR_MED.nom)+' • '+escHtml(CUR_MED.spec)+'</p></div>'+
+    '<div class="meta">'+
+      '<div class="bloc"><div class="bloctit">Patient</div>'+
+        '<div class="row"><b>'+escHtml(p.nom||'—')+'</b></div>'+
+        '<div class="row">'+p.age+' ans'+(p.poids?' • '+p.poids+'kg':'')+'</div>'+
+        (p.ville?'<div class="row">'+escHtml(p.ville)+'</div>':'')+
+      '</div>'+
+      '<div class="bloc"><div class="bloctit">Consultation</div>'+
+        '<div class="row"><b>'+dateOrdo+'</b></div>'+
+        '<div class="row" style="font-size:11px;color:#64748B;">'+escHtml(d.id||'')+'</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="diag"><div class="diaglbl">Diagnostic</div><div class="diagval">'+escHtml(diagnostic||'—')+'</div></div>'+
+    '<div class="medstit">💊 Traitement prescrit</div>'+
+    (meds.length?meds.map(function(m){
+      return '<div class="med'+(m._ald||m.ald?' ald':'')+'">'+
+        '<div class="mname">'+escHtml(m.nom||'')+(m._ald||m.ald?'<span class="aldtag">ALD</span>':'')+'</div>'+
+        (m.dose?'<div class="mdose">'+escHtml(m.dose)+'</div>':'')+
+        '<div class="mposo">'+
+          (m.poso?'<div>🕐 '+escHtml(m.poso)+'</div>':'')+
+          (m.duree?'<div>📅 Durée : '+escHtml(m.duree)+'</div>':'')+
+          (m.conditionnement?'<div>📦 '+escHtml(m.conditionnement)+'</div>':'')+
+        '</div></div>';
+    }).join(''):'<div class="empty">Aucun médicament enregistré</div>')+
+    (notes?'<div class="notesbox"><b style="display:block;margin-bottom:6px;">📝 Notes</b>'+escHtml(notes).replace(/\n/g,'<br>')+'</div>':'')+
+    '<div class="foot">'+
+      '<div class="footmed"><strong>'+escHtml(CUR_MED.nom)+'</strong>'+escHtml(CUR_MED.spec)+'<br><span style="font-size:11px;color:#64748B;">N° Ordre : '+escHtml(CUR_MED.ordre||'')+'</span></div>'+
+      '<div class="sigbox">Signature & Cachet</div>'+
+    '</div>'+
+  '</div></body></html>';
 }
 
 // ══════════════════════════════
