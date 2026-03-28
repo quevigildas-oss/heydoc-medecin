@@ -100,6 +100,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .dcard:active{transform:scale(.98);}
 .dcard.urg{border-left:3px solid var(--danger);}
 .dcard.exam{border-left:3px solid var(--exam);}
+.dcard.encours{border-left:3px solid #4a9eff;}
 .dcard-top{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
 .dcard-av{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--bg);flex-shrink:0;}
 .dcard-nom{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--white);}
@@ -109,6 +110,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .badge.t{background:rgba(0,200,150,.15);color:var(--accent);border:1px solid rgba(0,200,150,.3);}
 .badge.r{background:rgba(14,165,233,.15);color:var(--accent2);border:1px solid rgba(14,165,233,.3);}
 .badge.e{background:rgba(167,139,250,.15);color:var(--exam);border:1px solid rgba(167,139,250,.3);}
+.badge.b{background:rgba(74,158,255,.15);color:#4a9eff;border:1px solid rgba(74,158,255,.3);}
 .dcard-symp{font-size:12px;color:var(--text2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .dcard-foot{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
 .dcard-id{font-size:10px;color:var(--text3);}
@@ -676,7 +678,7 @@ function setFilter(f,el){FILTRE=f;document.querySelectorAll('.ftag').forEach(fun
 
 function renderDash(){
   document.getElementById('stA').textContent=DOSSIERS.filter(function(d){return d.statut==='en_attente';}).length;
-  document.getElementById('stE').textContent=DOSSIERS.filter(function(d){return d.statut==='en_attente_examen';}).length;
+  document.getElementById('stE').textContent=DOSSIERS.filter(function(d){return d.statut==='en_attente_examen'||d.statut==='en_cours';}).length;
   document.getElementById('stT').textContent=DOSSIERS.filter(function(d){return d.statut==='valide';}).length;
   document.getElementById('stR').textContent=DOSSIERS.filter(function(d){return d.statut==='cloture';}).length;
   renderDossiers();
@@ -684,7 +686,10 @@ function renderDash(){
 
 function renderDossiers(){
   var ds=DOSSIERS;
-  if(FILTRE!=='tous')ds=ds.filter(function(d){return d.statut===FILTRE;});
+  if(FILTRE!=='tous')ds=ds.filter(function(d){
+    if(FILTRE==='en_attente_examen')return d.statut==='en_attente_examen'||d.statut==='en_cours';
+    return d.statut===FILTRE;
+  });
   var list=document.getElementById('dList');
   if(!ds.length){
     list.innerHTML='<div class="empty"><div class="empty-ico">📂</div><div class="empty-txt">Aucun dossier</div></div>';
@@ -694,6 +699,7 @@ function renderDossiers(){
   var bmap={
     en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
     en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
+    en_cours:'<span class="badge b">📋 EN COURS</span>',
     valide:'<span class="badge t">✅ VALIDÉ</span>',
     cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
   };
@@ -702,8 +708,9 @@ function renderDossiers(){
     var nom=d.patient.nom||'Patient';
     var ci=nom.charCodeAt(0)%colors.length;
     var isExam=d.statut==='en_attente_examen';
+    var isEnCours=d.statut==='en_cours';
     var el=document.createElement('div');
-    el.className='dcard'+(d.urgent&&d.statut==='en_attente'?' urg':isExam?' exam':'');
+    el.className='dcard'+(d.urgent&&d.statut==='en_attente'?' urg':isExam?' exam':isEnCours?' encours':'');
     el.innerHTML=
       '<div class="dcard-top">'+
         '<div class="dcard-av" style="background:'+colors[ci]+'">'+nom.charAt(0).toUpperCase()+'</div>'+
@@ -791,6 +798,13 @@ function openDos(supabaseId){
       if(tousReçus){
         dbg('Tous les examens obligatoires reçus → EXAMENS_REQUIS=false');
         EXAMENS_REQUIS=false;
+        // PATCH statut consultation → en_cours
+        dbPatch('consultations',CUR_DOS.supabaseId,{statut:'en_cours'}).then(function(){
+          CUR_DOS.statut='en_cours';
+          dbg('Statut consultation → en_cours');
+          renderConsult();
+          appliquerEtatToggle();
+        }).catch(function(e){dbgWarn('PATCH statut: '+e.message);});
         appliquerEtatToggle();
         toast('✅ Tous les examens reçus — vous pouvez finaliser le traitement');
       } else {
@@ -802,6 +816,7 @@ function openDos(supabaseId){
   var bmap={
     en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
     en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
+    en_cours:'<span class="badge b">📋 EN COURS</span>',
     valide:'<span class="badge t">✅ VALIDÉ</span>',
     cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
   };
@@ -818,22 +833,37 @@ function appliquerEtatToggle(){
     var examSw=document.getElementById('examSwitch');
     var examWarn=document.getElementById('examWarn');
     var examSec=document.getElementById('examensSection');
+    var enCours=CUR_DOS&&CUR_DOS.statut==='en_cours';
+
     if(examTog)examTog.classList.toggle('on',EXAMENS_REQUIS);
     if(examSw)examSw.classList.toggle('on',EXAMENS_REQUIS);
     if(examWarn)examWarn.classList.toggle('on',EXAMENS_REQUIS);
-    if(examSec)examSec.style.display=EXAMENS_REQUIS?'block':'none';
+    // Section examens : visible si toggle ON ou si résultats reçus (en_cours)
+    if(examSec)examSec.style.display=(EXAMENS_REQUIS||enCours)?'block':'none';
+
+    // Bannière résultats reçus
+    if(enCours&&examSec){
+      var bannerExist=document.getElementById('examReçuBanner');
+      if(!bannerExist){
+        var banner=document.createElement('div');
+        banner.id='examReçuBanner';
+        banner.style.cssText='background:rgba(0,200,150,.08);border:1px solid rgba(0,200,150,.25);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--accent);font-weight:600;';
+        banner.textContent='✅ Résultats reçus — vous pouvez finaliser le traitement';
+        examSec.insertBefore(banner,examSec.firstChild);
+      }
+    }
+
     var aldTog=document.getElementById('aldToggle');
     var aldSw=document.getElementById('aldSw');
     if(aldTog)aldTog.classList.toggle('on',ALD);
     if(aldSw){aldSw.classList.toggle('on',ALD);aldSw.style.background=ALD?'var(--exam)':'';}
     var aldSec=document.getElementById('aldMedsSection');
     if(aldSec)aldSec.style.display=ALD?'block':'none';
-    // Remettre les listes de médicaments
     var medList=document.getElementById('medList');
     if(medList)medList.innerHTML=renderMeds(false);
     var aldMedList=document.getElementById('aldMedList');
     if(aldMedList)aldMedList.innerHTML=renderMeds(false,'ald');
-    dbg('Toggles+Meds restaurés — ALD:'+ALD+' EXAMENS:'+EXAMENS_REQUIS+' meds:'+MEDS.length+' medsALD:'+MEDS_ALD.length);
+    dbg('Toggles+Meds restaurés — ALD:'+ALD+' EXAMENS:'+EXAMENS_REQUIS+' statut:'+( CUR_DOS&&CUR_DOS.statut)+' meds:'+MEDS.length);
 }
 
 function parseMedsStr(str){
@@ -997,6 +1027,7 @@ function renderConsult(){
   var bmap={
     en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
     en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
+    en_cours:'<span class="badge b">📋 EN COURS</span>',
     valide:'<span class="badge t">✅ VALIDÉ</span>',
     cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
   };
@@ -1287,7 +1318,7 @@ async function lancerValidationIA(){
     '=== SOURCES ===\n'+(d.sourcesOMS||'Non renseignées')+'\n\n'+
     '=== DÉCISION MÉDECIN ===\n'+
     'Diagnostic final: '+diag+'\n'+
-    'Examens prescrits: '+(EXAMENS_REQUIS&&examens?examens:'Aucun')+'\n'+
+    'Examens prescrits: '+(examens||CUR_DOS.examensPrescrit||'Aucun')+'\n'+
     'Médicaments prescrits:\n'+(medsStr||'Aucun')+'\n'+
     (notes?'Notes: '+notes+'\n':'')+'\n'+
     '=== INSTRUCTIONS ===\n'+
@@ -1784,7 +1815,7 @@ async function lancerRechercheAvancee(){
       resEl.innerHTML='<div class="empty"><div class="empty-ico">📂</div><div class="empty-txt">Patient trouvé mais aucune consultation avec vous</div></div>';
       return;
     }
-    var bmap={en_attente:'⏳',en_attente_examen:'🔬',valide:'✅',cloture:'📁'};
+    var bmap={en_attente:'⏳',en_attente_examen:'🔬',en_cours:'📋',valide:'✅',cloture:'📁'};
     resEl.innerHTML=matching.map(function(c){
       var patInfo=patients.find(function(p){return p.id===c.patient_uuid||p.patient_id===c.patient_id;})||{};
       var dateStr=c.created_at?(new Date(c.created_at)).toLocaleDateString('fr-FR'):'';
