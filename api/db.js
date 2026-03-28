@@ -87,15 +87,19 @@ export default async function handler(req, res) {
     if (req.method === 'POST')  headers['Prefer'] = 'return=representation';
     if (req.method === 'PATCH') headers['Prefer'] = 'return=representation';
 
-    // Body : supporte format direct {col:val} et structuré {table, id, data:{col:val}}
+    // Body : supporte format direct {col:val}, structuré {table, id, data:{col:val}}, et tableau [{...}]
     let body = req.body;
     if (body && body.data && typeof body.data === 'object') {
       body = body.data;
     }
 
-    // Injecter is_test sur POST
+    // Injecter is_test sur POST — supporte objet ET tableau
     if (req.method === 'POST' && TABLES_AVEC_IS_TEST.includes(table)) {
-      body = { ...body, is_test: IS_TEST };
+      if (Array.isArray(body)) {
+        body = body.map(item => ({ ...item, is_test: IS_TEST }));
+      } else {
+        body = { ...body, is_test: IS_TEST };
+      }
     }
 
     const sbRes = await fetch(url, {
