@@ -1463,9 +1463,15 @@ function afficherValidation(rep,diag,examens,notes){
     '</div>'+
     '<div class="val-actions">'+
       (conf?
-        '<button class="vbtn ok" onclick="finaliser(\''+(EXAMENS_REQUIS?'en_attente_examen':'valide')+'\')">'+
-          (EXAMENS_REQUIS?'🔬 Envoyer — Att. examens':'✅ Envoyer au patient')+
-        '</button>'
+        // Si statut en_cours → examens reçus → envoyer l'ordonnance
+        // Si EXAMENS_REQUIS → encore en attente examens
+        (function(){
+          var enCours=CUR_DOS&&CUR_DOS.statut==='en_cours';
+          var attExam=EXAMENS_REQUIS&&!enCours;
+          var statut=attExam?'en_attente_examen':'valide';
+          var label=attExam?'🔬 Envoyer — Att. examens':'✅ Envoyer l\'ordonnance au patient';
+          return '<button class="vbtn ok" onclick="finaliser(\''+statut+'\')">'+label+'</button>';
+        })()
       :
         '<button class="vbtn warn" onclick="modifierPrescription()">✏️ Modifier la prescription</button>'+
         '<button class="vbtn ref" onclick="finaliser(\'valide_override\')">📋 Valider & Référer</button>'
