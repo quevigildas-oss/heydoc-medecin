@@ -1189,17 +1189,16 @@ async function lancerValidationIA(){
   var hasOMS=!!(d.recommandationsOMS||d.medicamentsOMS||d.contreIndications);
   var hasDiagIA=!!d.diagIA;
   if(!hasOMS){
-    dbgError('CLAUDE IMPROVISE — Champs OMS vides (recommandationsOMS, medicamentsOMS, contreIndications). La validation ne se base sur AUCUNE référence OMS — résultat non fiable.');
-  } else if(!hasDiagIA){
-    dbgWarn('Diagnostic IA absent — Claude valide sans contexte de consultation Relevance AI.');
+    dbgError('CLAUDE IMPROVISE — Champs OMS vides. La validation ne se base sur AUCUNE référence OMS — résultat non fiable.');
   } else {
-    dbg('Validation — Sources OMS présentes ✅ | DiagIA ✅ | Claude compare à la base documentaire.');
+    dbg('Validation — Sources OMS présentes ✅ | DiagIA: '+(hasDiagIA?'✅':'absent'));
   }
+
+  // ── Construction chaîne médicaments ──
   var medsStr=MEDS.concat(MEDS_ALD.map(function(m){return Object.assign({},m,{_ald:true});}))
     .map(function(m){
       var ligne=m.nom+(m.dose?' '+m.dose:'');
       var doseJour=null;
-      // Utiliser les champs structurés si disponibles
       if(m._prises&&m._periode==='jour'){
         var dMatch=m.dose&&m.dose.match(/^([\d.]+)\s*(mg|g|µg|mcg|UI|ml)?/i);
         if(dMatch){
@@ -1210,11 +1209,10 @@ async function lancerValidationIA(){
       } else {
         doseJour=calculDoseJournaliere(m.dose,m.poso);
       }
-      dbg('Dose calcul — '+m.nom+' | dose="'+m.dose+'" | poso="'+m.poso+'" | résultat='+( doseJour||'NON CALCULÉ'));
       if(doseJour)ligne+=' (= '+doseJour+'/jour total)';
       if(m.poso)ligne+=' — '+m.poso;
       if(m.duree)ligne+=' — '+m.duree;
-      if(m._ald)ligne+=' [ALD]';
+      if(m._ald)ligne+=' [ALD — traitement permanent]';
       return ligne;
     }).join('\n');
 
@@ -1224,40 +1222,47 @@ async function lancerValidationIA(){
     'Nom: '+p.nom+'\n'+
     'Âge: '+p.age+' ans\n'+
     'Poids: '+(p.poids||'non renseigné')+'kg\n'+
-    'Voyage récent: '+(p.voyage||'Aucun')+'\n\n'+
-    '=== DOSSIER MÉDICAL PATIENT (historique complet) ===\n'+
-    'Source: BDD Patients Dokita'+(PATIENT_DOSSIER?' (synchronisé)':' (consultation en cours)')+'\n'+
     'Allergies connues: '+(p.allergies||'Aucune renseignée')+'\n'+
     'Traitements en cours: '+(p.traitements||'Aucun')+'\n'+
     'Antécédents: '+(p.antecedents||'Aucun')+'\n\n'+
-    '=== SYMPTÔMES ===\n'+(d.symptomes||'Non renseignés')+'\n\n'+
-    '=== DIAGNOSTIC IA PATIENT ===\n'+(d.diagIA||'Non renseigné')+'\n\n'+
-    '=== RECOMMANDATIONS OMS ===\n'+(d.recommandationsOMS||'Non renseignees')+'\n\n'+'=== MEDICAMENTS OMS (1ere intention) ===\n'+(d.medicamentsOMS||'Non renseignes')+'\n\n'+'=== CONTRE-INDICATIONS OMS ===\n'+(d.contreIndications||'Aucune renseignee')+'\n\n'+'=== SOURCES OMS ===\n'+(d.sourcesOMS||'Non renseignees')+'\n\n'+
+    '=== DIAGNOSTIC IA ===\n'+(d.diagIA||'Non renseigné')+'\n\n'+
+    '=== EXAMENS RECOMMANDÉS OMS ===\n'+(d.examensRecommandes||'Non renseignés')+'\n\n'+
+    '=== RECOMMANDATIONS OMS ===\n'+(d.recommandationsOMS||'Non renseignées')+'\n\n'+
+    '=== MÉDICAMENTS OMS (1ère intention) ===\n'+(d.medicamentsOMS||'Non renseignés')+'\n\n'+
+    '=== CONTRE-INDICATIONS OMS ===\n'+(d.contreIndications||'Aucune renseignée')+'\n\n'+
+    '=== SOURCES ===\n'+(d.sourcesOMS||'Non renseignées')+'\n\n'+
     '=== DÉCISION MÉDECIN ===\n'+
     'Diagnostic final: '+diag+'\n'+
-    'Examens requis: '+(EXAMENS_REQUIS?'OUI — '+examens:'NON')+'\n'+
-    'Médicaments prescrits (dose unitaire × fréquence = dose journalière totale):\n'+(medsStr||'Aucun')+'\n'+
+    'Examens prescrits: '+(EXAMENS_REQUIS&&examens?examens:'Aucun')+'\n'+
+    'Médicaments prescrits:\n'+(medsStr||'Aucun')+'\n'+
     (notes?'Notes: '+notes+'\n':'')+'\n'+
     '=== INSTRUCTIONS ===\n'+
-    'Tu es un validateur de prescription. Ton rôle est de vérifier que la prescription du médecin est médicalement sûre — pas de la réécrire.\n\n'+
-    'RÈGLES STRICTES:\n'+
-    '1. TRAITEMENT CURATIF: Vérifier que le médicament principal correspond au diagnostic ET que la dose journalière totale est dans la fourchette OMS pour le poids ('+( p.poids||'?')+'kg) et l\'âge ('+p.age+' ans). Si la dose est dans la fourchette OMS → CONFORME même si ce n\'est pas la dose maximale.\n'+
-    '2. ADJUVANTS SYMPTOMATIQUES (Paracétamol, Ibuprofène, antalgiques, antipyrétiques): Accepter si la dose journalière totale ne dépasse pas la dose maximale pédiatrique pour le poids. Ne jamais rejeter un adjuvant au motif qu\'il ne figure pas dans les recommandations OMS du diagnostic principal.\n'+
-    '3. NE PAS exiger d\'examens complémentaires (EEG, biologie, imagerie) pour valider une prescription — les examens sont gérés séparément dans le workflow.\n'+
-    '4. NE PAS proposer de modifier la posologie si elle est dans la fourchette thérapeutique acceptée.\n'+
-    '5. Juger NON CONFORME UNIQUEMENT si: mauvais médicament pour le diagnostic, dose dangereuse (hors fourchette OMS ou toxique), contre-indication formelle avec allergie/antécédent connu du patient.\n\n'+
-    'FORMAT DE RÉPONSE:\n'+
+    'Tu es un validateur de décision médicale. Tu dois valider DEUX choses simultanément :\n\n'+
+    'A) EXAMENS PRESCRITS vs EXAMENS OMS\n'+
+    'Compare les examens prescrits par le médecin avec les examens recommandés OMS pour ce diagnostic.\n'+
+    'Vérifie que les examens OBLIGATOIRES selon les guidelines sont bien prescrits.\n'+
+    'Signal si des examens obligatoires sont manquants.\n'+
+    'Les examens recommandés (non obligatoires) ne sont pas bloquants.\n\n'+
+    'B) MÉDICAMENTS PRESCRITS vs MÉDICAMENTS OMS\n'+
+    '1. Vérifier que le médicament principal correspond au diagnostic ET que la dose journalière est dans la fourchette OMS pour le poids ('+( p.poids||'?')+'kg) et l\'âge ('+p.age+' ans).\n'+
+    '2. Adjuvants symptomatiques (Paracétamol, antalgiques): accepter si dose dans les limites.\n'+
+    '3. NE PAS proposer de modifier la posologie si elle est dans la fourchette thérapeutique.\n'+
+    '4. Juger NON CONFORME UNIQUEMENT si: mauvais médicament, dose dangereuse, contre-indication formelle.\n\n'+
+    'VERDICT GLOBAL: CONFORME si examens obligatoires couverts ET médicaments conformes. NON CONFORME si au moins un manque critique.\n\n'+
+    'FORMAT DE RÉPONSE OBLIGATOIRE:\n'+
     'VERDICT: CONFORME ou NON CONFORME\n\n'+
-    'ANALYSE:\n'+
-    '- Traitement principal: [médicament] [dose/jour calculée] vs OMS [fourchette] → [OK/NON]\n'+
-    '- Adjuvants: [liste] → [acceptables/problème si dose excessive]\n'+
-    '- Interactions/Contre-indications: [résultat]\n'+
-    '\nSi NON CONFORME seulement:\nCORRECTION: [correction précise et minimale]';
+    'EXAMENS:\n'+
+    '- [examen OMS]: [prescrit ✅ / manquant ⚠️ / non obligatoire ℹ️]\n\n'+
+    'MÉDICAMENTS:\n'+
+    '- [médicament] [dose/jour] vs OMS [fourchette] → [OK / NON]\n'+
+    '- Interactions/Contre-indications: [résultat]\n\n'+
+    'Si NON CONFORME seulement:\n'+
+    'CORRECTION: [correction précise et minimale]';
 
   try{
     var r=await fetch('/api/claude',{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-dokita-key':'dk-2026-prod-x9f7m'},
+      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
       body:JSON.stringify({prompt:prompt})
     });
     var data=await r.json();
