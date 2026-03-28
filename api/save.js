@@ -101,43 +101,8 @@ export default async function handler(req, res) {
 
     console.log(`✅ Consultation créée — ID: ${consultationId} | medecin_id: ${payload.medecin_id} | is_test: ${IS_TEST}`);
 
-    // ── Créer les examens si présents ──
-    if (consultId && payload.examens_recommandes) {
-      const examensTexte = payload.examens_recommandes;
-
-      const lignes = examensTexte.split(/[,|\n]/)
-        .map(l => l.trim())
-        .filter(l => l.length > 3);
-
-      const examensPayload = lignes.map(type_examen => ({
-        consultation_id:       consultId,
-        patient_id:            payload.patient_id,
-        type_examen:           type_examen.replace(/^(✅|⚠️|OUI|NON|—)\s*/i, '').trim(),
-        obligatoire:           /obligatoire/i.test(type_examen),
-        source_recommandation: payload.sources_oms || '',
-        statut:                'prescrit',
-        is_test:               IS_TEST
-      })).filter(e => e.type_examen.length > 2);
-
-      if (examensPayload.length > 0) {
-        const examRes = await fetch(`${SUPABASE_URL}/rest/v1/examens`, {
-          method: 'POST',
-          headers: {
-            'apikey':        SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
-            'Content-Type':  'application/json',
-            'Prefer':        'return=minimal'
-          },
-          body: JSON.stringify(examensPayload)
-        });
-
-        if (examRes.ok) {
-          console.log(`✅ ${examensPayload.length} examens créés`);
-        } else {
-          console.warn('⚠️ Erreur création examens:', await examRes.text());
-        }
-      }
-    }
+    // ── Examens : créés par le médecin lors de la finalisation dans Dokita Pro ──
+    // (pas ici — save.js ne connaît pas les examens prescrits par le médecin)
 
     return res.status(200).json({
       success:         true,
