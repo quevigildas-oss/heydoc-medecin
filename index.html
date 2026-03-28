@@ -1530,38 +1530,42 @@ async function finaliser(nouveauStatut){
     brouillonJson:null
   });
 
-  // 2. INSERT examens prescrits par le médecin
+  // 2. INSERT examens prescrits par le médecin (seulement si pas déjà dans Supabase)
   if(EXAMENS_REQUIS && examens && examens.trim()){
     try{
-      var examensOMS=CUR_DOS.examensRecommandes||'';
-      var lignes=examens.split(/[,\n]/).map(function(l){return l.trim();}).filter(function(l){return l.length>2;});
-      var examensPayload=lignes.map(function(type_examen){
-        // Vérifier si cet examen est obligatoire selon les guidelines OMS
-        var isObligatoire=/obligatoire/i.test(type_examen)||
-          (examensOMS&&examensOMS.toLowerCase().indexOf(type_examen.toLowerCase().split(' ')[0])>=0&&/obligatoire/i.test(examensOMS.slice(examensOMS.toLowerCase().indexOf(type_examen.toLowerCase().split(' ')[0]),examensOMS.toLowerCase().indexOf(type_examen.toLowerCase().split(' ')[0])+100)));
-        return {
-          consultation_id: CUR_DOS.supabaseId,
-          patient_id:      CUR_DOS.patient.patientId||'',
-          type_examen:     type_examen.replace(/^(✅|⚠️|—)\s*/i,'').trim(),
-          obligatoire:     isObligatoire,
-          source_recommandation: CUR_DOS.sourcesOMS||'',
-          statut:          'prescrit'
-        };
-      }).filter(function(e){return e.type_examen.length>2;});
-
-      if(examensPayload.length>0){
-        await dbInsert('examens',examensPayload);
-        dbg('✅ '+examensPayload.length+' examen(s) insérés dans Supabase');
+      // Vérifier si des examens existent déjà pour cette consultation
+      var existingExams=await dbGet('examens',{filter:'consultation_id=eq.'+CUR_DOS.supabaseId});
+      existingExams=Array.isArray(existingExams)?existingExams:(existingExams.data||[]);
+      if(existingExams.length===0){
+        var examensOMS=CUR_DOS.examensRecommandes||'';
+        var lignes=examens.split(/[,\n]/).map(function(l){return l.trim();}).filter(function(l){return l.length>2;});
+        var examensPayload=lignes.map(function(type_examen){
+          var isObligatoire=/obligatoire/i.test(type_examen)||
+            (examensOMS&&examensOMS.toLowerCase().indexOf(type_examen.toLowerCase().split(' ')[0])>=0&&/obligatoire/i.test(examensOMS.slice(examensOMS.toLowerCase().indexOf(type_examen.toLowerCase().split(' ')[0]),examensOMS.toLowerCase().indexOf(type_examen.toLowerCase().split(' ')[0])+100)));
+          return {
+            consultation_id: CUR_DOS.supabaseId,
+            patient_id:      CUR_DOS.patient.patientId||'',
+            type_examen:     type_examen.replace(/^(✅|⚠️|—)\s*/i,'').trim(),
+            obligatoire:     isObligatoire,
+            source_recommandation: CUR_DOS.sourcesOMS||'',
+            statut:          'prescrit'
+          };
+        }).filter(function(e){return e.type_examen.length>2;});
+        if(examensPayload.length>0){
+          await dbInsert('examens',examensPayload);
+          dbg('✅ '+examensPayload.length+' examen(s) insérés dans Supabase');
+        }
+      } else {
+        dbg('Examens déjà présents ('+existingExams.length+') — pas de duplication');
       }
     }catch(e){dbgWarn('Erreur INSERT examens: '+e.message);}
   }
 
   // 3. INSERT ordonnances (si pas en_attente_examen)
   if(nouveauStatut!=='en_attente_examen'){
-    var tousLesMeds=MEDS.concat(MEDS_ALD.map(function(m){
-      return {nom:m.nom,dose:m.dose,poso:m.poso+'(ALD — traitement permanent)',duree:''};
-    }));
     try{
+      // statut ordonnance selon schéma Supabase
+      var statutOrdonnance=nouveauStatut==='valide'||nouveauStatut==='valide_override'?'envoyee_patient':'brouillon';
       await dbInsert('ordonnances',{
         consultation_id: CUR_DOS.supabaseId,
         patient_id: CUR_DOS.patient.patientId||'',
@@ -1577,7 +1581,8 @@ async function finaliser(nouveauStatut){
         conforme_oms: conf,
         ald: ALD,
         meds_ald: MEDS_ALD.length?MEDS_ALD:null,
-        statut: statutFinal
+        statut: statutOrdonnance,
+        validee_at: new Date().toISOString()
       });
       dbg('✅ Ordonnance insérée dans Supabase');
     }catch(e){dbgWarn('Erreur INSERT ordonnances: '+e.message);}
