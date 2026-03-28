@@ -775,6 +775,8 @@ function openDos(supabaseId){
       CUR_DOS.patient.traitements=dp.traitements||CUR_DOS.patient.traitements||'';
       CUR_DOS.patient.email=dp.email||CUR_DOS.patient.email||'';
       renderConsult();
+      // Réappliquer les toggles après ce renderConsult asynchrone
+      appliquerEtatToggle();
     }
   });
   var bmap={
@@ -787,26 +789,31 @@ function openDos(supabaseId){
   document.getElementById('cSub').textContent=CUR_DOS.id+' • '+CUR_DOS.date;
   renderConsult();
   // Appliquer l'état des toggles ALD et EXAMENS après le render
-  setTimeout(function(){
-    // Toggle EXAMENS
+  setTimeout(function(){appliquerEtatToggle();},50);
+  showScreen('consultScreen');
+}
+
+function appliquerEtatToggle(){
     var examTog=document.getElementById('examToggle');
     var examSw=document.getElementById('examSwitch');
     var examWarn=document.getElementById('examWarn');
-    var examSec=document.getElementById('examSection');
+    var examSec=document.getElementById('examensSection');
     if(examTog)examTog.classList.toggle('on',EXAMENS_REQUIS);
     if(examSw)examSw.classList.toggle('on',EXAMENS_REQUIS);
     if(examWarn)examWarn.classList.toggle('on',EXAMENS_REQUIS);
     if(examSec)examSec.style.display=EXAMENS_REQUIS?'block':'none';
-    // Toggle ALD
     var aldTog=document.getElementById('aldToggle');
-    var aldSw=document.getElementById('aldSwitch');
+    var aldSw=document.getElementById('aldSw');
     if(aldTog)aldTog.classList.toggle('on',ALD);
     if(aldSw){aldSw.classList.toggle('on',ALD);aldSw.style.background=ALD?'var(--exam)':'';}
-    var aldSec=document.getElementById('aldSection');
+    var aldSec=document.getElementById('aldMedsSection');
     if(aldSec)aldSec.style.display=ALD?'block':'none';
-    dbg('Toggles restaurés — ALD:'+ALD+' EXAMENS:'+EXAMENS_REQUIS);
-  },50);
-  showScreen('consultScreen');
+    // Remettre les listes de médicaments
+    var medList=document.getElementById('medList');
+    if(medList)medList.innerHTML=renderMeds(false);
+    var aldMedList=document.getElementById('aldMedList');
+    if(aldMedList)aldMedList.innerHTML=renderMeds(false,'ald');
+    dbg('Toggles+Meds restaurés — ALD:'+ALD+' EXAMENS:'+EXAMENS_REQUIS+' meds:'+MEDS.length+' medsALD:'+MEDS_ALD.length);
 }
 
 function parseMedsStr(str){
