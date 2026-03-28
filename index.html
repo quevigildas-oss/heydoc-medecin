@@ -756,7 +756,14 @@ function openDos(supabaseId){
   if(!brouillonOk){
     MEDS=[];MEDS_ALD=[];ALD=false;
   }
-  EXAMENS_REQUIS=CUR_DOS.statut==='en_attente_examen';
+  // EXAMENS_REQUIS : priorité au brouillon, sinon déduire du statut
+  if(!brouillonOk){
+    EXAMENS_REQUIS=CUR_DOS.statut==='en_attente_examen';
+  } else if(!b.examensRequis&&CUR_DOS.statut==='en_attente_examen'){
+    // Brouillon ne l'avait pas mais statut indique examens requis
+    EXAMENS_REQUIS=true;
+  }
+  // Si brouillon avait examensRequis=true → déjà restauré ligne 743, ne pas écraser
   CID_VAL=null;
   PATIENT_DOSSIER=null;
   console.log('Recherche patient BDD:', CUR_DOS.patient.nom);
@@ -779,6 +786,26 @@ function openDos(supabaseId){
   document.getElementById('cTitre').textContent=(CUR_DOS.patient.nom||'Patient')+' • '+(CUR_DOS.patient.age||'?')+' ans';
   document.getElementById('cSub').textContent=CUR_DOS.id+' • '+CUR_DOS.date;
   renderConsult();
+  // Appliquer l'état des toggles ALD et EXAMENS après le render
+  setTimeout(function(){
+    // Toggle EXAMENS
+    var examTog=document.getElementById('examToggle');
+    var examSw=document.getElementById('examSwitch');
+    var examWarn=document.getElementById('examWarn');
+    var examSec=document.getElementById('examSection');
+    if(examTog)examTog.classList.toggle('on',EXAMENS_REQUIS);
+    if(examSw)examSw.classList.toggle('on',EXAMENS_REQUIS);
+    if(examWarn)examWarn.classList.toggle('on',EXAMENS_REQUIS);
+    if(examSec)examSec.style.display=EXAMENS_REQUIS?'block':'none';
+    // Toggle ALD
+    var aldTog=document.getElementById('aldToggle');
+    var aldSw=document.getElementById('aldSwitch');
+    if(aldTog)aldTog.classList.toggle('on',ALD);
+    if(aldSw){aldSw.classList.toggle('on',ALD);aldSw.style.background=ALD?'var(--exam)':'';}
+    var aldSec=document.getElementById('aldSection');
+    if(aldSec)aldSec.style.display=ALD?'block':'none';
+    dbg('Toggles restaurés — ALD:'+ALD+' EXAMENS:'+EXAMENS_REQUIS);
+  },50);
   showScreen('consultScreen');
 }
 
@@ -1299,10 +1326,24 @@ function _dbgLog(msg,color){
 
 
 function afficherValidation(rep,diag,examens,notes){
-  // Révéler l'analyse IA patient maintenant que le médecin a soumis sa décision
   var iaSection=document.getElementById('iaPatientSec');
   if(iaSection)iaSection.style.display='block';
-  var conf=rep&&rep.toLowerCase().indexOf('non conforme')<0&&rep.toLowerCase().indexOf('conforme')>=0;
+
+  // Chercher le dernier VERDICT dans la réponse (Claude peut s'auto-corriger)
+  var repUpper=rep?rep.toUpperCase():'';
+  var lastVerdictConf=-1, lastVerdictNon=-1;
+  var idx=0;
+  while((idx=repUpper.indexOf('VERDICT: CONFORME',idx))>=0){lastVerdictConf=idx;idx++;}
+  idx=0;
+  while((idx=repUpper.indexOf('VERDICT: NON CONFORME',idx))>=0){lastVerdictNon=idx;idx++;}
+  // Si les deux présents, c'est le dernier qui compte
+  var conf;
+  if(lastVerdictConf>=0||lastVerdictNon>=0){
+    conf=lastVerdictConf>lastVerdictNon;
+  } else {
+    // Fallback : cherche juste conforme/non conforme
+    conf=rep&&repUpper.indexOf('NON CONFORME')<0&&repUpper.indexOf('CONFORME')>=0;
+  }
   CUR_DOS.valIA={statut:conf?'CONFORME':'NON CONFORME',texte:rep};
 
   var vb=document.getElementById('valBox');
