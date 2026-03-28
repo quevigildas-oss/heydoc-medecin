@@ -775,10 +775,30 @@ function openDos(supabaseId){
       CUR_DOS.patient.traitements=dp.traitements||CUR_DOS.patient.traitements||'';
       CUR_DOS.patient.email=dp.email||CUR_DOS.patient.email||'';
       renderConsult();
-      // Réappliquer les toggles après ce renderConsult asynchrone
       appliquerEtatToggle();
     }
   });
+
+  // Si dossier en_attente_examen → vérifier si tous les examens obligatoires sont faits
+  if(CUR_DOS.statut==='en_attente_examen'&&CUR_DOS.supabaseId){
+    dbGet('examens',{filter:'consultation_id=eq.'+CUR_DOS.supabaseId}).then(function(rows){
+      rows=Array.isArray(rows)?rows:(rows.data||[]);
+      if(!rows.length)return;
+      var obligatoires=rows.filter(function(e){return e.obligatoire;});
+      var tousReçus=obligatoires.length>0&&obligatoires.every(function(e){
+        return e.statut==='resultat_recu';
+      });
+      if(tousReçus){
+        dbg('Tous les examens obligatoires reçus → EXAMENS_REQUIS=false');
+        EXAMENS_REQUIS=false;
+        appliquerEtatToggle();
+        toast('✅ Tous les examens reçus — vous pouvez finaliser le traitement');
+      } else {
+        var reçus=obligatoires.filter(function(e){return e.statut==='resultat_recu';}).length;
+        dbg('Examens obligatoires: '+reçus+'/'+obligatoires.length+' reçus');
+      }
+    }).catch(function(e){dbgWarn('Vérif examens: '+e.message);});
+  }
   var bmap={
     en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
     en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
