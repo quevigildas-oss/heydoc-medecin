@@ -284,6 +284,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
     <div class="stats-row">
       <div class="stat-card"><div class="stat-num w" id="stA">0</div><div class="stat-label">En attente</div></div>
       <div class="stat-card"><div class="stat-num p" id="stE">0</div><div class="stat-label">Att. examen</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:#4a9eff;" id="stEC">0</div><div class="stat-label">Exam reçus</div></div>
       <div class="stat-card"><div class="stat-num g" id="stT">0</div><div class="stat-label">Traités</div></div>
       <div class="stat-card"><div class="stat-num b" id="stR">0</div><div class="stat-label">Clôturés</div></div>
     </div>
@@ -291,6 +292,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
       <div class="ftag on" onclick="setFilter('tous',this)">Tous</div>
       <div class="ftag" onclick="setFilter('en_attente',this)">⏳ En attente</div>
       <div class="ftag" onclick="setFilter('en_attente_examen',this)">🔬 Att. examen</div>
+      <div class="ftag" onclick="setFilter('en_cours',this)">📋 Exam reçus</div>
       <div class="ftag" onclick="setFilter('valide',this)">✅ Validés</div>
       <div class="ftag" onclick="setFilter('cloture',this)">📁 Clôturés</div>
     </div>
@@ -678,7 +680,8 @@ function setFilter(f,el){FILTRE=f;document.querySelectorAll('.ftag').forEach(fun
 
 function renderDash(){
   document.getElementById('stA').textContent=DOSSIERS.filter(function(d){return d.statut==='en_attente';}).length;
-  document.getElementById('stE').textContent=DOSSIERS.filter(function(d){return d.statut==='en_attente_examen'||d.statut==='en_cours';}).length;
+  document.getElementById('stE').textContent=DOSSIERS.filter(function(d){return d.statut==='en_attente_examen';}).length;
+  document.getElementById('stEC').textContent=DOSSIERS.filter(function(d){return d.statut==='en_cours';}).length;
   document.getElementById('stT').textContent=DOSSIERS.filter(function(d){return d.statut==='valide';}).length;
   document.getElementById('stR').textContent=DOSSIERS.filter(function(d){return d.statut==='cloture';}).length;
   renderDossiers();
@@ -686,10 +689,7 @@ function renderDash(){
 
 function renderDossiers(){
   var ds=DOSSIERS;
-  if(FILTRE!=='tous')ds=ds.filter(function(d){
-    if(FILTRE==='en_attente_examen')return d.statut==='en_attente_examen'||d.statut==='en_cours';
-    return d.statut===FILTRE;
-  });
+  if(FILTRE!=='tous')ds=ds.filter(function(d){return d.statut===FILTRE;});
   var list=document.getElementById('dList');
   if(!ds.length){
     list.innerHTML='<div class="empty"><div class="empty-ico">📂</div><div class="empty-txt">Aucun dossier</div></div>';
@@ -851,6 +851,33 @@ function appliquerEtatToggle(){
         banner.textContent='✅ Résultats reçus — vous pouvez finaliser le traitement';
         examSec.insertBefore(banner,examSec.firstChild);
       }
+    }
+
+    // Charger résultats examens si dossier en_cours ou en_attente_examen
+    var resList=document.getElementById('examensResultatsList');
+    if(resList&&CUR_DOS&&CUR_DOS.supabaseId&&!resList.dataset.loaded){
+      resList.dataset.loaded='1';
+      resList.innerHTML='<div style="font-size:11px;color:var(--text3);padding:6px 0;">⏳ Chargement résultats...</div>';
+      dbGet('examens',{filter:'consultation_id=eq.'+CUR_DOS.supabaseId}).then(function(rows){
+        rows=Array.isArray(rows)?rows:(rows.data||[]);
+        if(!rows.length){resList.innerHTML='';return;}
+        var html='<div style="margin-top:10px;">';
+        rows.forEach(function(ex){
+          var statut=ex.statut||'prescrit';
+          var statutLabel=statut==='resultat_recu'?'✅ Reçu':'⏳ En attente';
+          var statutColor=statut==='resultat_recu'?'var(--accent)':'#F59E0B';
+          html+='<div style="background:var(--bg);border:1px solid '+(statut==='resultat_recu'?'rgba(0,200,150,.25)':'var(--border)')+';border-radius:10px;padding:10px 12px;margin-bottom:8px;">'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
+              '<div style="font-size:12px;font-weight:700;color:var(--text);">'+escHtml(ex.type_examen)+'</div>'+
+              '<span style="font-size:10px;font-weight:700;color:'+statutColor+';">'+statutLabel+'</span>'+
+            '</div>'+
+            (ex.resultat?'<div style="font-size:12px;color:var(--text2);margin-top:4px;">'+escHtml(ex.resultat)+'</div>':
+              '<div style="font-size:11px;color:var(--text3);font-style:italic;">Résultat non encore saisi</div>')+
+          '</div>';
+        });
+        html+='</div>';
+        resList.innerHTML=html;
+      }).catch(function(e){resList.innerHTML='';dbgWarn('Résultats examens: '+e.message);});
     }
 
     var aldTog=document.getElementById('aldToggle');
@@ -1101,6 +1128,7 @@ function renderConsult(){
         '<div id="examensSection" style="display:'+(EXAMENS_REQUIS?'block':'none')+';">'+
           '<div class="frow"><div class="flabel">Examens demandés</div>'+
           '<textarea class="finput" id="examensInput" rows="2" placeholder="ex: NFS, Frottis goutte épaisse, Widal...">'+escHtml(d.examensPrescrit)+'</textarea></div>'+
+          '<div id="examensResultatsList"></div>'+
         '</div>'+
 
         // Toggle ALD
