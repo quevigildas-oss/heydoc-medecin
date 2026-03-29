@@ -825,11 +825,76 @@ function openDos(supabaseId){
   renderConsult();
   // Appliquer l'état des toggles ALD et EXAMENS après le render
   setTimeout(function(){appliquerEtatToggle();},50);
+  // Charger documents patient en arrière-plan
+  chargerDocsPatient();
   showScreen('consultScreen');
 }
 
+// ══════════════════════════════
+// DOCUMENTS PATIENT (vue médecin)
+// ══════════════════════════════
+async function chargerDocsPatient(){
+  var sec=document.getElementById('docPatientSec');
+  var list=document.getElementById('docPatientList');
+  if(!sec||!list||!CUR_DOS)return;
+  var patId=CUR_DOS.patient.patientId||'';
+  if(!patId){sec.style.display='none';return;}
+  try{
+    var r=await fetch(DB_URL+'?table=documents_patients&filter=patient_id=eq.'+encodeURIComponent(patId)+'&filter2=visible_medecin=eq.true&order=created_at.desc&limit=20',{
+      headers:{'x-dokita-key':DOKITA_KEY}
+    });
+    var data=await r.json();
+    var rows=Array.isArray(data)?data:(data.data||[]);
+    if(!rows.length){sec.style.display='none';return;}
+    sec.style.display='block';
+    var TYPES={
+      'ordonnance':{ico:'📋',color:'rgba(99,102,241,.15)',border:'rgba(99,102,241,.3)'},
+      'analyse':   {ico:'🧪',color:'rgba(130,80,220,.12)',border:'rgba(130,80,220,.3)'},
+      'radio':     {ico:'🩻',color:'rgba(14,165,233,.12)',border:'rgba(14,165,233,.3)'},
+      'certificat':{ico:'📄',color:'rgba(0,200,150,.12)', border:'rgba(0,200,150,.3)'},
+      'autre':     {ico:'📎',color:'rgba(245,158,11,.12)',border:'rgba(245,158,11,.3)'}
+    };
+    list.innerHTML=rows.map(function(doc){
+      var t=TYPES[doc.type_document]||TYPES['autre'];
+      var dateAff=doc.created_at?new Date(doc.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}):'';
+      return '<div style="background:var(--bg);border:1px solid '+t.border+';border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="voirDocPro(\''+doc.id+'\',\''+escHtml(doc.mime_type||'image/jpeg')+'\')">'+
+        '<div style="width:40px;height:40px;border-radius:10px;background:'+t.color+';display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">'+t.ico+'</div>'+
+        '<div style="flex:1;min-width:0;">'+
+          '<div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escHtml(doc.nom||'Document')+'</div>'+
+          '<div style="font-size:10px;color:var(--text3);margin-top:2px;">'+dateAff+(doc.taille_octets?' · '+Math.round(doc.taille_octets/1024)+'KB':'')+'</div>'+
+        '</div>'+
+        '<div style="font-size:11px;font-weight:700;color:var(--accent);background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.25);border-radius:6px;padding:2px 8px;flex-shrink:0;">Voir</div>'+
+      '</div>';
+    }).join('');
+  }catch(e){sec.style.display='none';dbgWarn('Docs patient: '+e.message);}
+}
+
+async function voirDocPro(docId,mime){
+  toast('⏳ Chargement...');
+  try{
+    var r=await fetch(DB_URL+'?table=documents_patients&filter=id=eq.'+encodeURIComponent(docId)+'&limit=1',{
+      headers:{'x-dokita-key':DOKITA_KEY}
+    });
+    var data=await r.json();
+    var rows=Array.isArray(data)?data:(data.data||[]);
+    if(!rows.length){toast('Document introuvable');return;}
+    var doc=rows[0];
+    if(doc.url){window.open(doc.url,'_blank');return;}
+    if(doc.contenu_base64){
+      var mimeType=doc.mime_type||mime||'image/jpeg';
+      var byteStr=atob(doc.contenu_base64);
+      var ab=new ArrayBuffer(byteStr.length);
+      var ia=new Uint8Array(ab);
+      for(var i=0;i<byteStr.length;i++)ia[i]=byteStr.charCodeAt(i);
+      var blob=new Blob([ab],{type:mimeType});
+      window.open(URL.createObjectURL(blob),'_blank');
+      return;
+    }
+    toast('Document non disponible');
+  }catch(e){toast('❌ '+e.message);}
+}
+
 function appliquerEtatToggle(){
-    var examTog=document.getElementById('examToggle');
     var examSw=document.getElementById('examSwitch');
     var examWarn=document.getElementById('examWarn');
     var examSec=document.getElementById('examensSection');
@@ -1108,7 +1173,13 @@ function renderConsult(){
       '</div>'
     :'')+
 
-    // 3. Symptômes
+    // 3. Documents patient (chargés async après render)
+    '<div class="fsec" id="docPatientSec" style="display:none">'+
+      '<div class="fsec-title"><div class="fsec-ico" style="background:rgba(99,102,241,.15);">📁</div><div class="fsec-label">Documents médicaux</div></div>'+
+      '<div id="docPatientList"><div style="font-size:12px;color:var(--text3);padding:8px 0;">⏳ Chargement...</div></div>'+
+    '</div>'+
+
+    // 4. Symptômes
     '<div class="fsec">'+
       '<div class="fsec-title"><div class="fsec-ico wa">🤒</div><div class="fsec-label">Symptômes</div></div>'+
       sympToList(d.symptomes)+
