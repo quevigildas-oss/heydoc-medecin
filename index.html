@@ -1502,13 +1502,41 @@ async function finaliser(nouveauStatut){
   var examens=(document.getElementById('examensInput')||{}).value||CUR_DOS.examensPrescrit||'';
   var notes=(document.getElementById('notesInput')||{}).value||CUR_DOS.notes||'';
 
-  // JSON médicaments pour Supabase JSONB
+  // Helper : calculer date_fin depuis durée
+  function calcDateFin(dureeStr){
+    if(!dureeStr)return null;
+    var m=dureeStr.match(/^(\d+)\s*(jours?|semaines?|mois)$/i);
+    if(!m)return null;
+    var n=parseInt(m[1]);
+    var unite=m[2].toLowerCase();
+    var d=new Date();
+    if(/jour/.test(unite))d.setDate(d.getDate()+n);
+    else if(/semaine/.test(unite))d.setDate(d.getDate()+n*7);
+    else if(/mois/.test(unite))d.setMonth(d.getMonth()+n);
+    return d.toISOString().split('T')[0];
+  }
+
+  // JSON médicaments pour Supabase JSONB — avec date_fin calculée
   var prescriptionJson={
     meds:MEDS.map(function(m){
-      return {nom:m.nom,dose:m.dose||'',poso:m.poso||'',duree:m.duree||'',conditionnement:m.conditionnement||''};
+      return {
+        nom:m.nom,
+        dose:m.dose||'',
+        poso:m.poso||'',
+        duree:m.duree||'',
+        conditionnement:m.conditionnement||'',
+        date_fin:calcDateFin(m.duree)||null
+      };
     }),
     medsAld:MEDS_ALD.map(function(m){
-      return {nom:m.nom,dose:m.dose||'',poso:m.poso||'',duree:m.duree||'',ald:true};
+      return {
+        nom:m.nom,
+        dose:m.dose||'',
+        poso:m.poso||'',
+        duree:m.duree||'',
+        ald:true,
+        date_fin:null // ALD = indéfini
+      };
     })
   };
 
