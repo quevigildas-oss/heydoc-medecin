@@ -803,11 +803,15 @@ Questions à poser uniquement si non déjà répondues, dans cet ordre :
 
 "Avez-vous voyagé récemment dans une zone à risque ?"
 
-"Avez-vous déjà pris des médicaments pour ce problème ?"
+"Quels médicaments prenez-vous actuellement en dehors de vos traitements habituels ?"
 
-"Avez-vous des maladies chroniques connues ?"
+Note : Si le contexte [MEDICAMENTS CONNUS DU PATIENT] est présent, adapter la question en mentionnant explicitement les médicaments déjà connus : "En dehors de [ALD/médicaments en cours], prenez-vous d'autres médicaments en ce moment ?" Si le contexte est absent (nouveau patient), poser la question générale : "Prenez-vous des médicaments en ce moment ?"
+
+"Avez-vous des maladies chroniques connues (diabète, hypertension, etc.) ?"
 
 "Êtes-vous enceinte ou allaitante ? (si applicable)"
+
+Note : Si le patient mentionne des traitements, inclure ces informations dans le résumé sous la clé "traitements_en_cours". Ces traitements seront transmis au médecin mais ne seront validés comme ALD que par ce dernier.
 
 PHASE 3 — DÉCLENCHEMENT DE L'ANALYSE
 
@@ -902,6 +906,7 @@ Réponds UNIQUEMENT avec le JSON valide ci-dessous (sans markdown, sans texte av
   "ville": "ville mentionnée",
   "voyage": "voyage ou zone mentionnés, sinon Aucun",
   "symptomes": "résumé des symptômes décrits par le patient",
+  "traitements_en_cours": "liste des médicaments mentionnés par le patient comme pris actuellement, séparés par | — inclure posologie si mentionnée — ex: Amlodipine 5mg 1x/jour | Metformine 850mg (dosage non précisé). Laisser vide si aucun.",
   "diagnostic": "TOUTES les suspicions diagnostiques séparées par | — ex: Typhoïde — Très élevée | Infection urinaire — Élevée",
   "recommandations": "recommandations OMS synthétiques examens et orientation POUR CHAQUE diagnostic",
   "examens": "TOUS les examens recommandés OMS pour CHAQUE diagnostic, séparés par | — préciser obligatoire ou recommandé",
