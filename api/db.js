@@ -1,12 +1,7 @@
 // /api/db.js
 // DOKITA — Proxy Supabase sécurisé
-// V4.3 — 2026-03-27
-// FIXES :
-//   - id lu depuis req.query.id OU req.body.id (fix PATCH depuis pharmacie.html)
-//   - filter2 supporté (double filtre GET)
-//   - Body PATCH : lit req.body.data si présent, sinon req.body direct
-//   - POST structuré {table, data} supporté
-//   - medecins retiré de TABLES_AVEC_IS_TEST (données permanentes)
+// Remplace /api/notion.js
+// Utilisé par Dokita Pro pour lire/écrire les données
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -15,6 +10,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  // Auth
   const dokitaKey = req.headers['x-dokita-key'];
   if (dokitaKey !== process.env.DOKITA_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -24,82 +20,83 @@ export default async function handler(req, res) {
   const SUPABASE_KEY = process.env.SUPABASE_KEY;
   const IS_TEST      = process.env.DOKITA_ENV !== 'prod';
 
-  // table : req.query en priorité, sinon req.body (POST structuré)
-  const table   = req.query.table  || req.body?.table;
-  const select  = req.query.select;
-  const filter  = req.query.filter;
-  const filter2 = req.query.filter2;
-  const order   = req.query.order;
-  const limit   = req.query.limit;
+  // Paramètres de la requête
+  // Ex: GET /api/db?table=consultations&filter=statut=eq.en_attente&order=created_at.desc&limit=50
+  // Ex: GET /api/db?table=medecins&filter=numero_ordre=eq.CI-2018-00456
+  // Ex: POST /api/db?table=consultations (body = payload)
+  // Ex: PATCH /api/db?table=consultations&id=uuid (body = updates)
 
-  // id : req.query.id (PATCH via URL) OU req.body.id (PATCH via body)
-  const id = req.query.id || req.body?.id;
+  const { table, filter, order, limit, id, select } = req.query;
 
   if (!table) {
     return res.status(400).json({ error: 'Paramètre table requis' });
   }
 
+  // Tables autorisées
   const TABLES_AUTORISEES = [
     'consultations', 'patients', 'medecins', 'lieux_exercice',
     'examens', 'ordonnances', 'pharmacies', 'appels_offres',
-    'familles', 'medicaments'
+    'familles', 'medicaments', 'dossier_medical'
   ];
   if (!TABLES_AUTORISEES.includes(table)) {
     return res.status(403).json({ error: `Table non autorisée: ${table}` });
   }
 
-  // medecins exclu : données permanentes, is_test géré manuellement
-  const TABLES_AVEC_IS_TEST = [
-    'consultations', 'patients', 'examens',
-    'ordonnances', 'pharmacies', 'appels_offres', 'familles', 'lieux_exercice'
-  ];
-
   try {
     let url    = `${SUPABASE_URL}/rest/v1/${table}`;
     let params = [];
 
-    if (select)  params.push(`select=${select}`);
-    if (filter)  params.push(filter);
-    if (filter2) params.push(filter2);
+    // ── SELECT (colonnes à retourner) ──
+    if (select) {
+      params.push(`select=${select}`);
+    }
 
-    // is_test automatique sur GET (si pas déjà dans les filtres)
-    const filterStr = (filter || '') + (filter2 || '');
-    if (req.method === 'GET' && TABLES_AVEC_IS_TEST.includes(table) && !filterStr.includes('is_test')) {
+    // ── FILTRE ──
+    // Injecter automatiquement is_test pour les tables qui le supportent
+    // (sauf medicaments qui n'a pas de is_test par défaut)
+    const TABLES_AVEC_IS_TEST = [
+      'consultations', 'patients', 'medecins', 'examens',
+      'ordonnances', 'pharmacies', 'appels_offres', 'familles', 'lieux_exercice', 'dossier_medical'
+    ];
+
+    if (filter) {
+      params.push(filter);
+    }
+
+    // Ajouter filtre is_test automatiquement sur les lectures GET
+    // sauf si filtre explicite déjà présent
+    if (req.method === 'GET' && TABLES_AVEC_IS_TEST.includes(table) && !filter?.includes('is_test')) {
       params.push(`is_test=eq.${IS_TEST}`);
     }
 
+    // ── ORDER ──
     if (order) params.push(`order=${order}`);
     else if (req.method === 'GET') params.push('order=created_at.desc');
 
+    // ── LIMIT ──
     if (limit) params.push(`limit=${limit}`);
     else if (req.method === 'GET') params.push('limit=100');
 
+    // ── ID pour PATCH/DELETE ──
     if (id) params.push(`id=eq.${id}`);
 
     if (params.length > 0) url += '?' + params.join('&');
 
+    // ── Headers Supabase ──
     const headers = {
       'apikey':        SUPABASE_KEY,
       'Authorization': `Bearer ${SUPABASE_KEY}`,
       'Content-Type':  'application/json'
     };
 
+    // Retourner la représentation pour POST/PATCH
     if (req.method === 'POST')  headers['Prefer'] = 'return=representation';
     if (req.method === 'PATCH') headers['Prefer'] = 'return=representation';
 
-    // Body : supporte format direct {col:val}, structuré {table, id, data:{col:val}}, et tableau [{...}]
+    // ── Injecter is_test sur les écritures ──
     let body = req.body;
-    if (body && body.data && typeof body.data === 'object') {
-      body = body.data;
-    }
-
-    // Injecter is_test sur POST — supporte objet ET tableau
-    if (req.method === 'POST' && TABLES_AVEC_IS_TEST.includes(table)) {
-      if (Array.isArray(body)) {
-        body = body.map(item => ({ ...item, is_test: IS_TEST }));
-      } else {
-        body = { ...body, is_test: IS_TEST };
-      }
+    if ((req.method === 'POST') && TABLES_AVEC_IS_TEST.includes(table)) {
+      body = { ...body, is_test: IS_TEST };
     }
 
     const sbRes = await fetch(url, {
