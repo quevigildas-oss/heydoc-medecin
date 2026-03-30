@@ -831,7 +831,7 @@ function openDos(supabaseId){
 }
 
 // ══════════════════════════════
-// DOCUMENTS PATIENT (vue médecin)
+// DOSSIER MÉDICAL PATIENT (vue médecin)
 // ══════════════════════════════
 async function chargerDocsPatient(){
   var sec=document.getElementById('docPatientSec');
@@ -840,13 +840,13 @@ async function chargerDocsPatient(){
   var patId=CUR_DOS.patient.patientId||'';
   if(!patId){sec.style.display='none';return;}
   try{
-    var r=await fetch(DB_URL+'?table=documents_patients&filter=patient_id=eq.'+encodeURIComponent(patId)+'&filter2=visible_medecin=eq.true&order=created_at.desc&limit=20',{
+    var r=await fetch(DB_URL+'?table=dossier_medical&filter=patient_id=eq.'+encodeURIComponent(patId)+'&filter2=statut=eq.actif&order=created_at.desc&limit=30',{
       headers:{'x-dokita-key':DOKITA_KEY}
     });
     var data=await r.json();
     var rows=Array.isArray(data)?data:(data.data||[]);
-    if(!rows.length){sec.style.display='none';return;}
     sec.style.display='block';
+
     var TYPES={
       'ordonnance':{ico:'📋',color:'rgba(99,102,241,.15)',border:'rgba(99,102,241,.3)'},
       'analyse':   {ico:'🧪',color:'rgba(130,80,220,.12)',border:'rgba(130,80,220,.3)'},
@@ -854,25 +854,235 @@ async function chargerDocsPatient(){
       'certificat':{ico:'📄',color:'rgba(0,200,150,.12)', border:'rgba(0,200,150,.3)'},
       'autre':     {ico:'📎',color:'rgba(245,158,11,.12)',border:'rgba(245,158,11,.3)'}
     };
-    list.innerHTML=rows.map(function(doc){
-      var t=TYPES[doc.type_document]||TYPES['autre'];
-      var dateAff=doc.created_at?new Date(doc.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}):'';
-      return '<div style="background:var(--bg);border:1px solid '+t.border+';border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="voirDocPro(\''+doc.id+'\',\''+escHtml(doc.mime_type||'image/jpeg')+'\')">'+
-        '<div style="width:40px;height:40px;border-radius:10px;background:'+t.color+';display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">'+t.ico+'</div>'+
-        '<div style="flex:1;min-width:0;">'+
-          '<div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escHtml(doc.nom||'Document')+'</div>'+
-          '<div style="font-size:10px;color:var(--text3);margin-top:2px;">'+dateAff+(doc.taille_octets?' · '+Math.round(doc.taille_octets/1024)+'KB':'')+'</div>'+
+
+    // Bouton ajouter ALD/médicament
+    var addBtn='<button onclick="ouvrirModalAjoutDossierPro()" style="width:100%;padding:10px;background:rgba(0,200,150,.08);border:1px solid rgba(0,200,150,.3);border-radius:10px;font-family:\'DM Sans\',sans-serif;font-size:12px;font-weight:700;color:var(--accent);cursor:pointer;margin-bottom:10px;">＋ Ajouter ALD / médicament en cours</button>';
+
+    if(!rows.length){
+      list.innerHTML=addBtn+'<div style="font-size:12px;color:var(--text3);padding:8px 0;font-style:italic;">Aucun document ou déclaration</div>';
+      return;
+    }
+
+    // Séparer déclaratifs (à confirmer) et confirmés
+    var declaratifs=rows.filter(function(d){return d.source==='declaratif_patient';});
+    var confirmes=rows.filter(function(d){return d.source!=='declaratif_patient';});
+
+    var html=addBtn;
+
+    // Section déclaratifs — à confirmer ou infirmer
+    if(declaratifs.length){
+      html+='<div style="font-size:10px;font-weight:700;color:var(--warn);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📝 Déclaré par le patient — à vérifier</div>';
+      html+=declaratifs.map(function(doc){
+        var t=TYPES[doc.type_document]||TYPES['autre'];
+        var dateAff=doc.created_at?new Date(doc.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}):'';
+        var hasFile=!!(doc.contenu_base64||doc.url);
+        return '<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:12px;margin-bottom:8px;">'+
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'+
+            '<div style="width:36px;height:36px;border-radius:8px;background:'+t.color+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+t.ico+'</div>'+
+            '<div style="flex:1;min-width:0;">'+
+              '<div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escHtml(doc.nom||'Document')+'</div>'+
+              '<div style="font-size:10px;color:var(--text3);">'+dateAff+(doc.valeur?' · '+escHtml(doc.valeur):'')+' · Déclaratif patient</div>'+
+            '</div>'+
+            (hasFile?'<div onclick="voirDocPro(\''+doc.id+'\',\''+escHtml(doc.mime_type||'image/jpeg')+'\')" style="font-size:11px;font-weight:700;color:var(--accent2);background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.3);border-radius:6px;padding:2px 8px;cursor:pointer;flex-shrink:0;">Voir</div>':'')+ 
+          '</div>'+
+          '<div style="display:flex;gap:8px;">'+
+            '<button onclick="confirmerDoc(\''+doc.id+'\')" style="flex:1;padding:8px;background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.3);border-radius:8px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;">✅ Confirmer</button>'+
+            '<button onclick="infirmerDoc(\''+doc.id+'\')" style="flex:1;padding:8px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;font-size:11px;font-weight:700;color:#ef4444;cursor:pointer;">❌ Infirmer</button>'+
+          '</div>'+
+        '</div>';
+      }).join('');
+    }
+
+    // Section confirmés / Dokita
+    if(confirmes.length){
+      if(declaratifs.length)html+='<div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin:12px 0 6px;">✅ Documents confirmés</div>';
+      html+=confirmes.map(function(doc){
+        var t=TYPES[doc.type_document]||TYPES['autre'];
+        var dateAff=doc.created_at?new Date(doc.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}):'';
+        var sourceBadge=doc.source==='confirme_medecin'?
+          '<span style="font-size:9px;font-weight:700;color:var(--accent);background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.3);border-radius:4px;padding:1px 5px;">✅ Confirmé</span>':
+          '<span style="font-size:9px;font-weight:700;color:#4a9eff;background:rgba(74,158,255,.1);border:1px solid rgba(74,158,255,.3);border-radius:4px;padding:1px 5px;">📋 Dokita</span>';
+        var hasFile=!!(doc.contenu_base64||doc.url);
+        return '<div style="background:var(--bg);border:1px solid '+t.border+';border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">'+
+          '<div style="width:36px;height:36px;border-radius:8px;background:'+t.color+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+t.ico+'</div>'+
+          '<div style="flex:1;min-width:0;">'+
+            '<div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escHtml(doc.nom||'Document')+'</div>'+
+            '<div style="font-size:10px;color:var(--text3);margin-top:2px;">'+dateAff+(doc.valeur?' · '+escHtml(doc.valeur):'')+'</div>'+
+            '<div style="margin-top:3px;">'+sourceBadge+'</div>'+
+          '</div>'+
+          (hasFile?'<div onclick="voirDocPro(\''+doc.id+'\',\''+escHtml(doc.mime_type||'image/jpeg')+'\')" style="font-size:11px;font-weight:700;color:var(--accent);background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.25);border-radius:6px;padding:2px 8px;cursor:pointer;flex-shrink:0;">Voir</div>':'')+
+        '</div>';
+      }).join('');
+    }
+
+    list.innerHTML=html;
+  }catch(e){sec.style.display='none';dbgWarn('Dossier médical: '+e.message);}
+}
+
+async function confirmerDoc(docId){
+  try{
+    await fetch(DB_URL+'?table=dossier_medical&id='+docId,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
+      body:JSON.stringify({source:'confirme_medecin',confirme_par:CUR_MED&&CUR_MED.supabaseId||null,confirme_at:new Date().toISOString()})
+    });
+    toast('✅ Document confirmé');
+    chargerDocsPatient();
+  }catch(e){toast('❌ '+e.message);}
+}
+
+async function infirmerDoc(docId){
+  try{
+    await fetch(DB_URL+'?table=dossier_medical&id='+docId,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
+      body:JSON.stringify({statut:'infirme'})
+    });
+    toast('Document infirmé');
+    chargerDocsPatient();
+  }catch(e){toast('❌ '+e.message);}
+}
+
+function ouvrirModalAjoutDossierPro(){
+  var modal=document.createElement('div');
+  modal.id='modalAjoutDossierPro';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:300;display:flex;align-items:flex-end;';
+  modal.innerHTML=
+    '<div style="background:var(--bg2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;padding-bottom:calc(24px + var(--sb));">'+
+      '<div style="font-family:\'Syne\',sans-serif;font-size:17px;font-weight:800;color:var(--text);margin-bottom:4px;">➕ Ajouter au dossier</div>'+
+      '<div style="font-size:12px;color:var(--text2);margin-bottom:20px;">Ajout confirmé par le médecin — visible dans la tuile ALD du patient</div>'+
+
+      '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Type</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;" id="dossierProTypeGrid">'+
+        '<div onclick="selectDossierProType(\'ald\',this)" data-type="ald" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:12px;padding:10px;text-align:center;cursor:pointer;">'+
+          '<div style="font-size:20px;margin-bottom:4px;">🏥</div>'+
+          '<div style="font-size:11px;font-weight:700;color:var(--text);">ALD</div>'+
         '</div>'+
-        '<div style="font-size:11px;font-weight:700;color:var(--accent);background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.25);border-radius:6px;padding:2px 8px;flex-shrink:0;">Voir</div>'+
-      '</div>';
-    }).join('');
-  }catch(e){sec.style.display='none';dbgWarn('Docs patient: '+e.message);}
+        '<div onclick="selectDossierProType(\'medicament_cours\',this)" data-type="medicament_cours" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:12px;padding:10px;text-align:center;cursor:pointer;">'+
+          '<div style="font-size:20px;margin-bottom:4px;">💊</div>'+
+          '<div style="font-size:11px;font-weight:700;color:var(--text);">Médicament en cours</div>'+
+        '</div>'+
+        '<div onclick="selectDossierProType(\'antecedent\',this)" data-type="antecedent" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:12px;padding:10px;text-align:center;cursor:pointer;">'+
+          '<div style="font-size:20px;margin-bottom:4px;">📋</div>'+
+          '<div style="font-size:11px;font-weight:700;color:var(--text);">Antécédent</div>'+
+        '</div>'+
+        '<div onclick="selectDossierProType(\'allergie\',this)" data-type="allergie" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:12px;padding:10px;text-align:center;cursor:pointer;">'+
+          '<div style="font-size:20px;margin-bottom:4px;">⚠️</div>'+
+          '<div style="font-size:11px;font-weight:700;color:var(--text);">Allergie</div>'+
+        '</div>'+
+      '</div>'+
+
+      '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Nom / Pathologie</div>'+
+      '<input id="dossierProNom" type="text" placeholder="Ex: Hypertension artérielle / Amlodipine / Pénicilline" style="width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;font-family:\'DM Sans\',sans-serif;font-size:14px;color:var(--text);outline:none;box-sizing:border-box;margin-bottom:10px;">'+
+
+      '<div id="dossierProDoseRow" style="display:none;">'+
+        '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Dosage &amp; Posologie</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">'+
+          '<input id="dossierProDose" type="text" placeholder="Ex: 5mg" style="background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;font-family:\'DM Sans\',sans-serif;font-size:13px;color:var(--text);outline:none;">'+
+          '<input id="dossierProPoso" type="text" placeholder="Ex: 1x/jour" style="background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;font-family:\'DM Sans\',sans-serif;font-size:13px;color:var(--text);outline:none;">'+
+        '</div>'+
+      '</div>'+
+
+      '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Note (optionnel)</div>'+
+      '<textarea id="dossierProNote" rows="2" placeholder="Contexte, précisions..." style="width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;font-family:\'DM Sans\',sans-serif;font-size:13px;color:var(--text);outline:none;resize:none;box-sizing:border-box;margin-bottom:16px;"></textarea>'+
+
+      '<button onclick="soumettreDossierPro()" style="width:100%;padding:14px;background:var(--grad);border:none;border-radius:12px;font-family:\'Syne\',sans-serif;font-size:14px;font-weight:700;color:#fff;cursor:pointer;margin-bottom:10px;">✅ Ajouter au dossier</button>'+
+      '<button onclick="document.getElementById(\'modalAjoutDossierPro\').remove()" style="width:100%;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;font-family:\'DM Sans\',sans-serif;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;">Annuler</button>'+
+    '</div>';
+  document.body.appendChild(modal);
+  window._dossierProType='ald';
+  var first=modal.querySelector('[data-type="ald"]');
+  if(first)selectDossierProType('ald',first);
+}
+
+function selectDossierProType(type,el){
+  window._dossierProType=type;
+  document.querySelectorAll('#dossierProTypeGrid [data-type]').forEach(function(t){
+    t.style.border='1.5px solid var(--border)';t.style.background='var(--bg3)';
+  });
+  if(el){el.style.border='1.5px solid var(--accent)';el.style.background='rgba(0,200,150,.08)';}
+  var doseRow=document.getElementById('dossierProDoseRow');
+  if(doseRow)doseRow.style.display=(type==='ald'||type==='medicament_cours')?'block':'none';
+}
+
+async function soumettreDossierPro(){
+  var type=window._dossierProType||'ald';
+  var nom=(document.getElementById('dossierProNom').value||'').trim();
+  var dose=(document.getElementById('dossierProDose')&&document.getElementById('dossierProDose').value)||'';
+  var poso=(document.getElementById('dossierProPoso')&&document.getElementById('dossierProPoso').value)||'';
+  var note=(document.getElementById('dossierProNote').value||'').trim();
+  var patId=CUR_DOS&&CUR_DOS.patient.patientId||'';
+
+  if(!nom){toast('⚠️ Renseignez le nom');return;}
+  if(!patId){toast('⚠️ Patient non identifié');return;}
+
+  var btn=document.querySelector('#modalAjoutDossierPro button[onclick="soumettreDossierPro()"]');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Ajout...';}
+
+  try{
+    await fetch(DB_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
+      body:JSON.stringify({
+        table:'dossier_medical',
+        data:{
+          patient_id:patId,
+          nom:nom+(dose?' — '+dose:'')+(poso?' — '+poso:''),
+          type_document:'autre',
+          type:type,
+          valeur:nom,
+          dose:dose,
+          posologie:poso,
+          note:note,
+          source:'confirme_medecin',
+          confirme_par:CUR_MED&&CUR_MED.supabaseId||null,
+          confirme_at:new Date().toISOString(),
+          visible_medecin:true,
+          statut:'actif'
+        }
+      })
+    });
+
+    // Aussi mettre à jour patients.traitements_reguliers ou allergies selon le type
+    if(CUR_DOS.patient.supabaseId){
+      var updates={};
+      if(type==='ald'||type==='medicament_cours'){
+        var existants=CUR_DOS.patient.traitements||'';
+        var ligne=nom+(dose?' '+dose:'')+(poso?' — '+poso:'')+(type==='ald'?' [ALD]':'');
+        updates.traitements_reguliers=existants?(existants+'\n'+ligne):ligne;
+        CUR_DOS.patient.traitements=updates.traitements_reguliers;
+      } else if(type==='allergie'){
+        var existAllerg=CUR_DOS.patient.allergies||'';
+        updates.allergies=existAllerg?(existAllerg+', '+nom):nom;
+        CUR_DOS.patient.allergies=updates.allergies;
+      } else if(type==='antecedent'){
+        var existAnt=CUR_DOS.patient.antecedents||'';
+        updates.antecedents=existAnt?(existAnt+', '+nom):nom;
+        CUR_DOS.patient.antecedents=updates.antecedents;
+      }
+      if(Object.keys(updates).length){
+        await fetch(DB_URL+'?table=patients&id='+CUR_DOS.patient.supabaseId,{
+          method:'PATCH',
+          headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
+          body:JSON.stringify(updates)
+        });
+        dbg('Patient mis à jour: '+JSON.stringify(updates).slice(0,80));
+      }
+    }
+
+    document.getElementById('modalAjoutDossierPro').remove();
+    toast('✅ Ajouté au dossier patient');
+    chargerDocsPatient();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='✅ Ajouter au dossier';}
+    toast('❌ '+e.message);
+  }
 }
 
 async function voirDocPro(docId,mime){
   toast('⏳ Chargement...');
   try{
-    var r=await fetch(DB_URL+'?table=documents_patients&filter=id=eq.'+encodeURIComponent(docId)+'&limit=1',{
+    var r=await fetch(DB_URL+'?table=dossier_medical&filter=id=eq.'+encodeURIComponent(docId)+'&limit=1',{
       headers:{'x-dokita-key':DOKITA_KEY}
     });
     var data=await r.json();
