@@ -1894,6 +1894,61 @@ async function finaliser(nouveauStatut){
         validee_at: new Date().toISOString()
       });
       dbg('✅ Ordonnance insérée dans Supabase');
+
+      // Fusion → dossier_medical : médicaments prescrits
+      if(statutOrdonnance==='envoyee_patient'){
+        var patId=CUR_DOS.patient.patientId||'';
+        var medNom=CUR_MED.nom||'Médecin Dokita';
+        var entries=[];
+        // Médicaments standards
+        prescriptionJson.meds.forEach(function(m){
+          if(!m.nom)return;
+          entries.push({
+            patient_id:patId,
+            nom:m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:'')+(m.duree?' ('+m.duree+')':''),
+            type_document:'ordonnance',
+            type:'medicament_cours',
+            valeur:m.nom,
+            dose:m.dose||'',
+            posologie:m.poso||'',
+            visible_medecin:true,
+            source:'prescrit_dokita',
+            confirme_par:CUR_MED.supabaseId||null,
+            confirme_at:new Date().toISOString(),
+            note:'Prescrit par '+medNom+(m.date_fin?' — jusqu\'au '+m.date_fin:''),
+            statut:'actif'
+          });
+        });
+        // ALD
+        prescriptionJson.medsAld.forEach(function(m){
+          if(!m.nom)return;
+          entries.push({
+            patient_id:patId,
+            nom:m.nom+(m.dose?' '+m.dose:'')+(m.poso?' — '+m.poso:''),
+            type_document:'ordonnance',
+            type:'ald',
+            valeur:m.nom,
+            dose:m.dose||'',
+            posologie:m.poso||'',
+            visible_medecin:true,
+            source:'prescrit_dokita',
+            confirme_par:CUR_MED.supabaseId||null,
+            confirme_at:new Date().toISOString(),
+            note:'ALD prescrit par '+medNom,
+            statut:'actif'
+          });
+        });
+        if(entries.length){
+          await Promise.all(entries.map(function(entry){
+            return fetch(DB_URL,{
+              method:'POST',
+              headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
+              body:JSON.stringify({table:'dossier_medical',data:entry})
+            }).catch(function(e){dbgWarn('dossier_medical ord: '+e.message);});
+          }));
+          dbg('dossier_medical: '+entries.length+' entrées créées depuis ordonnance');
+        }
+      }
     }catch(e){dbgWarn('Erreur INSERT ordonnances: '+e.message);}
   }
 
