@@ -36,7 +36,8 @@ export default async function handler(req, res) {
   const TABLES_AUTORISEES = [
     'consultations', 'patients', 'medecins', 'lieux_exercice',
     'examens', 'ordonnances', 'pharmacies', 'appels_offres',
-    'familles', 'medicaments', 'dossier_medical'
+    'familles', 'medicaments', 'dossier_medical',
+    'etablissements', 'rendez_vous', 'cache_version'
   ];
   if (!TABLES_AUTORISEES.includes(table)) {
     return res.status(403).json({ error: `Table non autorisée: ${table}` });
@@ -56,7 +57,8 @@ export default async function handler(req, res) {
     // (sauf medicaments qui n'a pas de is_test par défaut)
     const TABLES_AVEC_IS_TEST = [
       'consultations', 'patients', 'medecins', 'examens',
-      'ordonnances', 'pharmacies', 'appels_offres', 'familles', 'lieux_exercice', 'dossier_medical'
+      'ordonnances', 'pharmacies', 'appels_offres', 'familles', 'lieux_exercice', 'dossier_medical',
+    'rendez_vous'
     ];
 
     if (filter) {
