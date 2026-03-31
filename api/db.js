@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     'consultations', 'patients', 'medecins', 'lieux_exercice',
     'examens', 'ordonnances', 'pharmacies', 'appels_offres',
     'familles', 'medicaments', 'dossier_medical',
-    'etablissements', 'rendez_vous', 'cache_version'
+    'etablissements', 'rendez_vous'
   ];
   if (!TABLES_AUTORISEES.includes(table)) {
     return res.status(403).json({ error: `Table non autorisée: ${table}` });
