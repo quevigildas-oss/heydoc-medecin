@@ -1454,10 +1454,15 @@ function appliquerEtatToggle(){
 
     var aldTog=document.getElementById('aldToggle');
     var aldSw=document.getElementById('aldSw');
+    // Si examens requis → ALD bloqué
+    if(EXAMENS_REQUIS && ALD){ ALD=false; }
     if(aldTog){
       aldTog.classList.toggle('on',ALD);
       aldTog.style.borderColor=ALD?'#F59E0B':'var(--border)';
       aldTog.style.background=ALD?'rgba(245,158,11,.06)':'var(--bg)';
+      aldTog.style.opacity=EXAMENS_REQUIS?'0.4':'1';
+      aldTog.style.pointerEvents=EXAMENS_REQUIS?'none':'auto';
+      aldTog.title=EXAMENS_REQUIS?'Disponible après réception des résultats':'';
     }
     if(aldSw){aldSw.classList.toggle('on',ALD);aldSw.style.background=ALD?'#F59E0B':'';}
     var aldSec=document.getElementById('aldMedsSection');
@@ -1530,6 +1535,10 @@ function toggleExamen(){
 }
 
 function toggleALD(){
+  if(EXAMENS_REQUIS){
+    toast('⚠️ Examens requis — l\'ALD sera activable après réception des résultats');
+    return;
+  }
   ALD=!ALD;
   var tog=document.getElementById('aldToggle');
   var sw=document.getElementById('aldSw');
