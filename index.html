@@ -2265,8 +2265,9 @@ async function finaliser(nouveauStatut){
     }catch(e){dbgWarn('Erreur INSERT ordonnances: '+e.message);}
   }
 
-  // 3. MAJ dossier patient si ALD
-  if(ALD&&PATIENT_DOSSIER){
+  // 3. MAJ dossier patient si ALD — UNIQUEMENT quand ordonnance envoyée au patient
+  var statutOrdFinal=nouveauStatut==='valide'||nouveauStatut==='valide_override'?'envoyee_patient':'brouillon';
+  if(ALD&&PATIENT_DOSSIER&&statutOrdFinal==='envoyee_patient'){
     var dateAujourdhui=new Date().toISOString().slice(0,10);
     var nouvTraits=MEDS_ALD.map(function(m){
       var ligne=m.nom+(m.dose?' '+m.dose:'');
