@@ -1971,31 +1971,49 @@ async function lancerValidationIA(){
     '=== SOURCES ===\n'+(d.sourcesOMS||'Non renseignées')+'\n\n'+
     '=== DÉCISION MÉDECIN ===\n'+
     'Diagnostic final: '+diag+'\n'+
-    'Examens prescrits: '+(examens||CUR_DOS.examensPrescrit||'Aucun')+'\n'+
-    'Médicaments prescrits:\n'+(medsStr||'Aucun')+'\n'+
+    'Examens prescrits:\n'+examens+'\n'+
+    (EXAMENS_REQUIS?'MODE: Examens requis avant traitement — les médicaments seront prescrits après réception des résultats.\n':'Médicaments prescrits:\n'+(medsStr||'Aucun')+'\n')+
     (notes?'Notes: '+notes+'\n':'')+'\n'+
-    '=== INSTRUCTIONS ===\n'+
-    'Tu es un validateur de décision médicale. Tu dois valider DEUX choses simultanément :\n\n'+
-    'A) EXAMENS PRESCRITS vs EXAMENS OMS\n'+
-    'Compare les examens prescrits par le médecin avec les examens recommandés OMS pour ce diagnostic.\n'+
-    'Vérifie que les examens OBLIGATOIRES selon les guidelines sont bien prescrits.\n'+
-    'Signal si des examens obligatoires sont manquants.\n'+
-    'Les examens recommandés (non obligatoires) ne sont pas bloquants.\n\n'+
-    'B) MÉDICAMENTS PRESCRITS vs MÉDICAMENTS OMS\n'+
-    '1. Vérifier que le médicament principal correspond au diagnostic ET que la dose journalière est dans la fourchette OMS pour le poids ('+( p.poids||'?')+'kg) et l\'âge ('+p.age+' ans).\n'+
-    '2. Adjuvants symptomatiques (Paracétamol, antalgiques): accepter si dose dans les limites.\n'+
-    '3. NE PAS proposer de modifier la posologie si elle est dans la fourchette thérapeutique.\n'+
-    '4. Juger NON CONFORME UNIQUEMENT si: mauvais médicament, dose dangereuse, contre-indication formelle.\n\n'+
-    'VERDICT GLOBAL: CONFORME si examens obligatoires couverts ET médicaments conformes. NON CONFORME si au moins un manque critique.\n\n'+
-    'FORMAT DE RÉPONSE OBLIGATOIRE:\n'+
-    'VERDICT: CONFORME ou NON CONFORME\n\n'+
-    'EXAMENS:\n'+
-    '- [examen OMS]: [prescrit ✅ / manquant ⚠️ / non obligatoire ℹ️]\n\n'+
-    'MÉDICAMENTS:\n'+
-    '- [médicament] [dose/jour] vs OMS [fourchette] → [OK / NON]\n'+
-    '- Interactions/Contre-indications: [résultat]\n\n'+
-    'Si NON CONFORME seulement:\n'+
-    'CORRECTION: [correction précise et minimale]';
+
+    (EXAMENS_REQUIS?
+      // MODE EXAMENS UNIQUEMENT
+      '=== INSTRUCTIONS ===\n'+
+      'Le médecin est en phase de bilan diagnostique. Les médicaments NE SONT PAS encore prescrits — ils le seront après réception des résultats. Tu dois UNIQUEMENT valider les examens prescrits.\n\n'+
+      'RÈGLE ABSOLUE : NE PAS évaluer les médicaments. NE PAS mentionner l\'absence de médicaments. NE PAS marquer NON CONFORME pour absence de médicaments.\n\n'+
+      'Compare les examens prescrits avec les examens OMS recommandés pour ce diagnostic.\n'+
+      'CONFORME si tous les examens OBLIGATOIRES OMS sont prescrits.\n'+
+      'NON CONFORME si un examen OBLIGATOIRE manque.\n\n'+
+      'FORMAT DE RÉPONSE OBLIGATOIRE:\n'+
+      'VERDICT: CONFORME ou NON CONFORME\n\n'+
+      'EXAMENS:\n'+
+      '- [examen OMS]: [prescrit ✅ / manquant ⚠️ / non obligatoire ℹ️]\n\n'+
+      'Si NON CONFORME seulement:\n'+
+      'CORRECTION: [examen manquant à ajouter]'
+    :
+      // MODE COMPLET
+      '=== INSTRUCTIONS ===\n'+
+      'Tu es un validateur de décision médicale. Tu dois valider DEUX choses simultanément :\n\n'+
+      'A) EXAMENS PRESCRITS vs EXAMENS OMS\n'+
+      'Compare les examens prescrits par le médecin avec les examens recommandés OMS pour ce diagnostic.\n'+
+      'Vérifie que les examens OBLIGATOIRES selon les guidelines sont bien prescrits.\n'+
+      'Signal si des examens obligatoires sont manquants.\n'+
+      'Les examens recommandés (non obligatoires) ne sont pas bloquants.\n\n'+
+      'B) MÉDICAMENTS PRESCRITS vs MÉDICAMENTS OMS\n'+
+      '1. Vérifier que le médicament principal correspond au diagnostic ET que la dose journalière est dans la fourchette OMS pour le poids ('+(p.poids||'?')+'kg) et l\'âge ('+p.age+' ans).\n'+
+      '2. Adjuvants symptomatiques (Paracétamol, antalgiques): accepter si dose dans les limites.\n'+
+      '3. NE PAS proposer de modifier la posologie si elle est dans la fourchette thérapeutique.\n'+
+      '4. Juger NON CONFORME UNIQUEMENT si: mauvais médicament, dose dangereuse, contre-indication formelle.\n\n'+
+      'VERDICT GLOBAL: CONFORME si examens obligatoires couverts ET médicaments conformes. NON CONFORME si au moins un manque critique.\n\n'+
+      'FORMAT DE RÉPONSE OBLIGATOIRE:\n'+
+      'VERDICT: CONFORME ou NON CONFORME\n\n'+
+      'EXAMENS:\n'+
+      '- [examen OMS]: [prescrit ✅ / manquant ⚠️ / non obligatoire ℹ️]\n\n'+
+      'MÉDICAMENTS:\n'+
+      '- [médicament] [dose/jour] vs OMS [fourchette] → [OK / NON]\n'+
+      '- Interactions/Contre-indications: [résultat]\n\n'+
+      'Si NON CONFORME seulement:\n'+
+      'CORRECTION: [correction précise et minimale]'
+    );
 
   try{
     var r=await fetch('/api/claude',{
