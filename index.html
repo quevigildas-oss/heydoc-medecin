@@ -1697,6 +1697,7 @@ function renderConsult(){
           '<div class="frow">'+
             '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'+
               '<div class="flabel" style="margin-bottom:0;">Examens demandés</div>'+
+              '<button onclick="openExamModal()" style="background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:#818cf8;cursor:pointer;font-family:\'DM Sans\',sans-serif;">＋ Ajouter</button>'+
             '</div>'+
             '<textarea class="finput" id="examensInput" rows="2" placeholder="ex: Fréquence respiratoire + SpO2, Auscultation pulmonaire..." style="display:none;">'+escHtml(d.examensPrescrit)+'</textarea>'+
             '<div id="examensResultatsList">'+
@@ -2401,6 +2402,93 @@ document.addEventListener('click',function(e){
 // MODAL MÉDICAMENT
 // ══════════════════════════════
 var MODAL_MODE='';
+function openExamModal(){
+  var modal=document.createElement('div');
+  modal.id='examModal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:300;display:flex;align-items:flex-end;';
+  modal.innerHTML=
+    '<div style="background:var(--bg2);border-radius:20px 20px 0 0;padding:20px;width:100%;padding-bottom:calc(20px + var(--sb,0px));">'+
+      '<div style="font-family:\'Syne\',sans-serif;font-size:16px;font-weight:800;color:var(--text);margin-bottom:16px;">🔬 Ajouter un examen</div>'+
+
+      '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Type d\'examen *</div>'+
+      '<input id="examNomInput" class="finput" placeholder="ex: Glycémie à jeun, NFS, CRP, HbA1c..." autocomplete="off" style="margin-bottom:12px;" oninput="filtrerSuggestionsExam(this.value)"/>'+
+      '<div id="examSuggestions" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:10px;margin-bottom:12px;max-height:150px;overflow-y:auto;"></div>'+
+
+      '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Priorité</div>'+
+      '<div style="display:flex;gap:8px;margin-bottom:14px;">'+
+        '<div id="examOblBtn" onclick="setExamObl(true)" style="flex:1;padding:9px;background:rgba(239,68,68,.15);border:1.5px solid rgba(239,68,68,.5);border-radius:8px;text-align:center;font-size:12px;font-weight:700;color:#ef4444;cursor:pointer;">⚠️ Obligatoire</div>'+
+        '<div id="examRecBtn" onclick="setExamObl(false)" style="flex:1;padding:9px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;text-align:center;font-size:12px;font-weight:700;color:var(--text3);cursor:pointer;">💡 Recommandé</div>'+
+      '</div>'+
+
+      '<button onclick="saveExam()" style="width:100%;padding:13px;background:var(--grad);border:none;border-radius:12px;font-family:\'Syne\',sans-serif;font-size:14px;font-weight:700;color:#fff;cursor:pointer;margin-bottom:10px;">✅ Ajouter l\'examen</button>'+
+      '<button onclick="document.getElementById(\'examModal\').remove()" style="width:100%;padding:11px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;font-size:13px;color:var(--text2);cursor:pointer;font-family:\'DM Sans\',sans-serif;">Annuler</button>'+
+    '</div>';
+  document.body.appendChild(modal);
+  // Focus
+  setTimeout(function(){var el=document.getElementById('examNomInput');if(el)el.focus();},100);
+}
+
+var EXAM_OBL=true;
+function setExamObl(obl){
+  EXAM_OBL=obl;
+  var oblBtn=document.getElementById('examOblBtn');
+  var recBtn=document.getElementById('examRecBtn');
+  if(oblBtn){oblBtn.style.background=obl?'rgba(239,68,68,.15)':'var(--bg3)';oblBtn.style.borderColor=obl?'rgba(239,68,68,.5)':'var(--border)';oblBtn.style.color=obl?'#ef4444':'var(--text3)';}
+  if(recBtn){recBtn.style.background=obl?'var(--bg3)':'rgba(99,102,241,.12)';recBtn.style.borderColor=obl?'var(--border)':'rgba(99,102,241,.3)';recBtn.style.color=obl?'var(--text3)':'#818cf8';}
+}
+
+var EXAMENS_CATALOGUE=['Glycémie à jeun','HbA1c','NFS (Numération Formule Sanguine)','CRP (Protéine C réactive)','VS (Vitesse de sédimentation)','Créatininémie','Urée sanguine','Transaminases (ALAT/ASAT)','Bilan lipidique (cholestérol total, HDL, LDL, TG)','TDR Paludisme','Frottis sanguin','Goutte épaisse','ECBU (Examen cytobactériologique des urines)','Hémoculture','TP/INR','Groupe sanguin + Rhésus','Test de grossesse (bHCG)','TSH (Thyroïde)','Radiographie thoracique','Échographie abdominale','Électrocardiogramme (ECG)','Widal (à éviter — Guide MSF 2024)'];
+
+function filtrerSuggestionsExam(val){
+  var sug=document.getElementById('examSuggestions');
+  if(!sug)return;
+  if(!val||val.length<2){sug.style.display='none';return;}
+  var matches=EXAMENS_CATALOGUE.filter(function(e){return e.toLowerCase().includes(val.toLowerCase());}).slice(0,6);
+  if(!matches.length){sug.style.display='none';return;}
+  sug.style.display='block';
+  sug.innerHTML=matches.map(function(e){
+    return '<div onclick="selectionnerExam(\''+escHtml(e)+'\')" style="padding:10px 12px;cursor:pointer;font-size:13px;color:var(--text);border-bottom:1px solid var(--border);" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'+escHtml(e)+'</div>';
+  }).join('');
+}
+
+function selectionnerExam(nom){
+  var inp=document.getElementById('examNomInput');
+  if(inp)inp.value=nom;
+  var sug=document.getElementById('examSuggestions');
+  if(sug)sug.style.display='none';
+}
+
+async function saveExam(){
+  var nom=(document.getElementById('examNomInput').value||'').trim();
+  if(!nom){toast('⚠️ Précisez le type d\'examen');return;}
+  if(!CUR_DOS||!CUR_DOS.supabaseId){toast('⚠️ Dossier non sauvegardé');return;}
+
+  try{
+    var r=await fetch(DB_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
+      body:JSON.stringify({
+        table:'examens',
+        data:{
+          consultation_id:CUR_DOS.supabaseId,
+          patient_id:CUR_DOS.patient&&CUR_DOS.patient.id||null,
+          medecin_id:CUR_MED&&CUR_MED.supabaseId||null,
+          type_examen:nom,
+          obligatoire:EXAM_OBL,
+          statut:'prescrit',
+          is_test:false
+        }
+      })
+    });
+    if(!r.ok)throw new Error('Erreur '+r.status);
+    document.getElementById('examModal').remove();
+    toast('✅ Examen ajouté');
+    // Recharger la liste
+    var resList=document.getElementById('examensResultatsList');
+    if(resList){delete resList.dataset.loaded;appliquerEtatToggle();}
+  }catch(e){toast('❌ '+e.message);}
+}
+
 function openMedModal(mode){
   MODAL_MODE=mode||'';
   MODAL_EDIT_IDX=-1;
