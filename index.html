@@ -165,7 +165,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 /* Toggle examen */
 .exam-toggle{display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;cursor:pointer;transition:border-color .2s;}
 .exam-toggle.on{border-color:var(--exam);background:rgba(167,139,250,.05);}
-#aldToggle.on{border-color:var(--exam);background:rgba(167,139,250,.05);}
+#aldToggle.on{border-color:#F59E0B;background:rgba(245,158,11,.06);}
 .exam-toggle-label{font-size:13px;font-weight:600;color:var(--text);}
 .exam-toggle-sub{font-size:11px;color:var(--text3);margin-top:2px;}
 .toggle-sw{width:44px;height:24px;border-radius:12px;background:var(--border);position:relative;transition:background .3s;flex-shrink:0;}
@@ -1448,8 +1448,12 @@ function appliquerEtatToggle(){
 
     var aldTog=document.getElementById('aldToggle');
     var aldSw=document.getElementById('aldSw');
-    if(aldTog)aldTog.classList.toggle('on',ALD);
-    if(aldSw){aldSw.classList.toggle('on',ALD);aldSw.style.background=ALD?'var(--exam)':'';}
+    if(aldTog){
+      aldTog.classList.toggle('on',ALD);
+      aldTog.style.borderColor=ALD?'#F59E0B':'var(--border)';
+      aldTog.style.background=ALD?'rgba(245,158,11,.06)':'var(--bg)';
+    }
+    if(aldSw){aldSw.classList.toggle('on',ALD);aldSw.style.background=ALD?'#F59E0B':'';}
     var aldSec=document.getElementById('aldMedsSection');
     if(aldSec)aldSec.style.display=ALD?'block':'none';
     var medList=document.getElementById('medList');
@@ -1524,8 +1528,12 @@ function toggleALD(){
   var tog=document.getElementById('aldToggle');
   var sw=document.getElementById('aldSw');
   var sec=document.getElementById('aldMedsSection');
-  if(tog)tog.classList.toggle('on',ALD);
-  if(sw){sw.classList.toggle('on',ALD);sw.style.background=ALD?'var(--exam)':'';}
+  if(tog){
+    tog.classList.toggle('on',ALD);
+    tog.style.borderColor=ALD?'#F59E0B':'var(--border)';
+    tog.style.background=ALD?'rgba(245,158,11,.06)':'var(--bg)';
+  }
+  if(sw){sw.classList.toggle('on',ALD);sw.style.background=ALD?'#F59E0B':'';}
   if(sec)sec.style.display=ALD?'block':'none';
   toast(ALD?'🏥 ALD activée — ajoutez les médicaments permanents':'ALD désactivée');
 }
