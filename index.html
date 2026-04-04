@@ -1035,10 +1035,10 @@ function openDos(supabaseId){
   if(!brouillonOk){
     EXAMENS_REQUIS=CUR_DOS.statut==='en_attente_examen';
   } else if(!b.examensRequis&&CUR_DOS.statut==='en_attente_examen'){
-    // Brouillon ne l'avait pas mais statut indique examens requis
     EXAMENS_REQUIS=true;
   }
-  // Si brouillon avait examensRequis=true → déjà restauré ligne 743, ne pas écraser
+  // Si examens requis → ALD impossible
+  if(EXAMENS_REQUIS){ ALD=false; MEDS_ALD=[]; }
   CID_VAL=null;
   PATIENT_DOSSIER=null;
   console.log('Recherche patient BDD:', CUR_DOS.patient.nom);
