@@ -1400,10 +1400,11 @@ function appliquerEtatToggle(){
     var resList=document.getElementById('examensResultatsList');
     if(resList&&CUR_DOS&&CUR_DOS.supabaseId&&!resList.dataset.loaded){
       resList.dataset.loaded='1';
-      dbGet('examens',{filter:'consultation_id=eq.'+CUR_DOS.supabaseId}).then(function(rows){
-        rows=Array.isArray(rows)?rows:(rows.data||[]);
+      fetch(DB_URL+'?table=examens&filter=consultation_id=eq.'+encodeURIComponent(CUR_DOS.supabaseId)+'&order=created_at.asc',{
+        headers:{'x-dokita-key':DOKITA_KEY}
+      }).then(function(r){return r.json();}).then(function(data){
+        var rows=Array.isArray(data)?data:(data.data||[]);
         if(!rows.length){
-          // Afficher les examens depuis le texte du dossier si pas encore dans Supabase
           var examsTxt=CUR_DOS.examensPrescrit||'';
           if(!examsTxt){resList.innerHTML='<div style="font-size:11px;color:var(--text3);padding:8px 0;">Aucun examen prescrit</div>';return;}
           var lignes=examsTxt.split('\n').map(function(l){return l.trim();}).filter(function(l){return l.length>2;});
@@ -1430,13 +1431,14 @@ function appliquerEtatToggle(){
               '</div>'+
               '<span style="font-size:10px;font-weight:700;color:'+(reçu?'var(--accent)':'#F59E0B')+';white-space:nowrap;">'+(reçu?'✅ Reçu':'⏳ En attente')+'</span>'+
             '</div>'+
-            (ex.resultat?
-              '<div style="font-size:12px;color:var(--text2);background:rgba(0,200,150,.05);border-radius:6px;padding:6px 8px;">'+escHtml(ex.resultat)+'</div>'
-            :'')+
+            (ex.resultat?'<div style="font-size:12px;color:var(--text2);background:rgba(0,200,150,.05);border-radius:6px;padding:6px 8px;">'+escHtml(ex.resultat)+'</div>':'')+
           '</div>';
         });
         resList.innerHTML=html||'<div style="font-size:11px;color:var(--text3);">Aucun examen</div>';
-      }).catch(function(e){resList.innerHTML='';dbgWarn('Résultats examens: '+e.message);});
+      }).catch(function(e){
+        resList.innerHTML='<div style="font-size:11px;color:var(--text3);padding:8px 0;">Aucun examen prescrit</div>';
+        dbgWarn('Résultats examens: '+e.message);
+      });
     }
 
     var aldTog=document.getElementById('aldToggle');
