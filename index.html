@@ -1820,12 +1820,23 @@ async function sauvegarderBrouillon(){
 // ══════════════════════════════
 // ENVOI PRESCRIPTION
 // ══════════════════════════════
-function envoyerPrescription(){
+async function envoyerPrescription(){
   var diag=(document.getElementById('diagMedInput')||{}).value||'';
   if(!diag.trim()){toast('⚠️ Renseignez le diagnostic');return;}
 
-  var examens=(document.getElementById('examensInput')||{}).value||'';
-  if(EXAMENS_REQUIS&&!examens.trim()){toast('⚠️ Précisez les examens demandés');return;}
+  // Vérifier examens depuis Supabase (source de vérité)
+  if(EXAMENS_REQUIS){
+    if(!CUR_DOS||!CUR_DOS.supabaseId){toast('⚠️ Dossier non sauvegardé');return;}
+    try{
+      var r=await fetch(DB_URL+'?table=examens&filter=consultation_id=eq.'+encodeURIComponent(CUR_DOS.supabaseId)+'&limit=1',{
+        headers:{'x-dokita-key':DOKITA_KEY}
+      });
+      var data=await r.json();
+      var rows=Array.isArray(data)?data:(data.data||[]);
+      if(!rows.length){toast('⚠️ Ajoutez au moins un examen');return;}
+    }catch(e){toast('⚠️ Impossible de vérifier les examens');return;}
+  }
+
   if(!EXAMENS_REQUIS&&!MEDS.length&&!MEDS_ALD.length){toast('⚠️ Ajoutez au moins un médicament');return;}
 
   var btn=document.getElementById('btnSend');
