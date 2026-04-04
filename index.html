@@ -1887,8 +1887,26 @@ async function lancerValidationIA(){
   var d=CUR_DOS;
   var p=d.patient;
   var diag=(document.getElementById('diagMedInput')||{}).value||'';
-  var examens=(document.getElementById('examensInput')||{}).value||'';
   var notes=(document.getElementById('notesInput')||{}).value||'';
+
+  // ── Récupérer examens depuis Supabase (source de vérité) ──
+  var examens='';
+  if(CUR_DOS&&CUR_DOS.supabaseId){
+    try{
+      var er=await fetch(DB_URL+'?table=examens&filter=consultation_id=eq.'+encodeURIComponent(CUR_DOS.supabaseId)+'&order=created_at.asc',{
+        headers:{'x-dokita-key':DOKITA_KEY}
+      });
+      var edata=await er.json();
+      var erows=Array.isArray(edata)?edata:(edata.data||[]);
+      if(erows.length){
+        examens=erows.map(function(ex){
+          return (ex.obligatoire?'[OBL] ':'[REC] ')+ex.type_examen;
+        }).join('\n');
+      }
+    }catch(e){dbgWarn('Examens pour validation: '+e.message);}
+  }
+  // Fallback textarea si rien en Supabase
+  if(!examens) examens=(document.getElementById('examensInput')||{}).value||'';
 
   // ── Détection : Claude improvise ? ──
   var hasOMS=!!(d.recommandationsOMS||d.medicamentsOMS||d.contreIndications);
