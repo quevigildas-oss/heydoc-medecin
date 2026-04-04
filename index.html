@@ -1379,8 +1379,12 @@ function appliquerEtatToggle(){
     var examSec=document.getElementById('examensSection');
     var enCours=CUR_DOS&&CUR_DOS.statut==='en_cours';
 
-    if(examTog)examTog.classList.toggle('on',EXAMENS_REQUIS);
-    if(examSw)examSw.classList.toggle('on',EXAMENS_REQUIS);
+    if(examTog){
+      examTog.classList.toggle('on',EXAMENS_REQUIS);
+      examTog.style.borderColor=EXAMENS_REQUIS?'#818cf8':'var(--border)';
+      examTog.style.background=EXAMENS_REQUIS?'rgba(99,102,241,.06)':'var(--bg)';
+    }
+    if(examSw){examSw.classList.toggle('on',EXAMENS_REQUIS);examSw.style.background=EXAMENS_REQUIS?'#818cf8':'';}
     if(examWarn)examWarn.classList.toggle('on',EXAMENS_REQUIS);
     // Section examens : visible si toggle ON ou si résultats reçus (en_cours)
     if(examSec)examSec.style.display=(EXAMENS_REQUIS||enCours)?'block':'none';
@@ -1683,48 +1687,44 @@ function renderConsult(){
         '<div class="dtags">'+renderDiseaseTags(d.diagMed)+'</div>'+
         '<textarea class="finput" id="diagMedInput" rows="2" placeholder="Diagnostic précis...">'+escHtml(d.diagMed)+'</textarea></div>'+
 
-        // Toggle examens
-        '<div class="exam-toggle'+(EXAMENS_REQUIS?' on':'')+'" id="examToggle" onclick="toggleExamen()">'+
-          '<div><div class="exam-toggle-label">🔬 Examens complémentaires requis</div><div class="exam-toggle-sub">Active si des examens sont nécessaires avant traitement</div></div>'+
-          '<div class="toggle-sw'+(EXAMENS_REQUIS?' on':'')+'" id="examSw"></div>'+
+        // Toggle examens — BLEU/VIOLET
+        '<div class="exam-toggle'+(EXAMENS_REQUIS?' on':'')+'" id="examToggle" onclick="toggleExamen()" style="border-color:'+(EXAMENS_REQUIS?'#818cf8':'var(--border)')+';background:'+(EXAMENS_REQUIS?'rgba(99,102,241,.06)':'var(--bg)')+';">'+
+          '<div><div class="exam-toggle-label" style="color:#818cf8;">🔬 Examens complémentaires requis</div><div class="exam-toggle-sub">Active si des examens sont nécessaires avant traitement</div></div>'+
+          '<div class="toggle-sw'+(EXAMENS_REQUIS?' on':'')+'" id="examSw" style="background:'+(EXAMENS_REQUIS?'#818cf8':'')+'"></div>'+
         '</div>'+
-        '<div class="exam-warning'+(EXAMENS_REQUIS?' on':'')+'" id="examWarn">'+
+        '<div class="exam-warning'+(EXAMENS_REQUIS?' on':'')+'" id="examWarn" style="background:rgba(99,102,241,.08);border-color:rgba(99,102,241,.25);color:#818cf8;">'+
           '⚠️ Avec examens requis : seuls les médicaments symptomatiques sont autorisés. Le dossier restera en attente jusqu\'aux résultats.'+
         '</div>'+
 
-        // Section examens (masquée par défaut, révélée par toggle)
-        '<div id="examensSection" style="display:'+(EXAMENS_REQUIS?'block':'none')+';">'+
-          '<div class="frow">'+
-            '<div class="flabel" style="margin-bottom:8px;">Examens demandés</div>'+
-            '<textarea class="finput" id="examensInput" rows="2" placeholder="ex: Fréquence respiratoire + SpO2, Auscultation pulmonaire..." style="display:none;">'+escHtml(d.examensPrescrit)+'</textarea>'+
-            '<div id="examensResultatsList">'+
-              '<div style="font-size:11px;color:var(--text3);padding:8px 0;">⏳ Chargement examens...</div>'+
-            '</div>'+
-            '<button class="add-med" style="border-color:var(--exam);color:var(--exam);margin-top:6px;" onclick="openExamModal()">＋ Ajouter un examen</button>'+
+        // Section examens — fond violet léger
+        '<div id="examensSection" style="display:'+(EXAMENS_REQUIS?'block':'none')+';background:rgba(99,102,241,.04);border:1.5px solid rgba(99,102,241,.2);border-radius:12px;padding:12px 14px;margin-bottom:12px;">'+
+          '<div class="flabel" style="color:#818cf8;margin-bottom:8px;">EXAMENS DEMANDÉS</div>'+
+          '<textarea class="finput" id="examensInput" rows="2" placeholder="ex: Fréquence respiratoire + SpO2..." style="display:none;">'+escHtml(d.examensPrescrit)+'</textarea>'+
+          '<div id="examensResultatsList">'+
+            '<div style="font-size:11px;color:var(--text3);padding:8px 0;">⏳ Chargement examens...</div>'+
           '</div>'+
+          '<button class="add-med" style="border-color:#818cf8;color:#818cf8;margin-top:6px;" onclick="openExamModal()">＋ Ajouter un examen</button>'+
         '</div>'+
 
-        // Toggle ALD
-        '<div class="exam-toggle'+(ALD?' on':'')+'" id="aldToggle" onclick="toggleALD()">'+
-          '<div><div class="exam-toggle-label">🏥 Affection longue durée (ALD)</div><div class="exam-toggle-sub">Tague le diagnostic et les traitements comme permanents dans le dossier</div></div>'+
-          '<div class="toggle-sw'+(ALD?' on':'')+'" id="aldSw" style="background:'+(ALD?'var(--exam)':'')+'"></div>'+
+        // Toggle ALD — ORANGE/AMBRE
+        '<div class="exam-toggle'+(ALD?' on':'')+'" id="aldToggle" onclick="toggleALD()" style="border-color:'+(ALD?'#F59E0B':'var(--border)')+';background:'+(ALD?'rgba(245,158,11,.06)':'var(--bg)')+';">'+
+          '<div><div class="exam-toggle-label" style="color:#F59E0B;">🏥 Affection longue durée (ALD)</div><div class="exam-toggle-sub">Tague le diagnostic et les traitements comme permanents dans le dossier</div></div>'+
+          '<div class="toggle-sw'+(ALD?' on':'')+'" id="aldSw" style="background:'+(ALD?'#F59E0B':'')+'"></div>'+
         '</div>'+
 
-        // Médicaments ALD (visibles uniquement si ALD cochée)
-        '<div id="aldMedsSection" style="display:'+(ALD?'block':'none')+';">'+
-          '<div class="frow" style="margin-top:4px;">'+
-            '<div class="flabel" style="color:var(--exam);">💊 Médicaments ALD (traitement permanent)</div>'+
-            '<div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Ces médicaments seront enregistrés comme traitements réguliers dans le dossier patient.</div>'+
-            '<div id="aldMedList">'+renderMeds(false,'ald')+'</div>'+
-            '<button class="add-med" style="border-color:var(--exam);color:var(--exam);" onclick="openMedModal(\'ald\')">＋ Ajouter médicament ALD</button>'+
-          '</div>'+
+        // Médicaments ALD — fond orange léger
+        '<div id="aldMedsSection" style="display:'+(ALD?'block':'none')+';background:rgba(245,158,11,.05);border:1.5px solid rgba(245,158,11,.25);border-radius:12px;padding:12px 14px;margin-bottom:12px;">'+
+          '<div class="flabel" style="color:#F59E0B;">💊 MÉDICAMENTS ALD (TRAITEMENT PERMANENT)</div>'+
+          '<div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Ces médicaments seront enregistrés comme traitements réguliers dans le dossier patient.</div>'+
+          '<div id="aldMedList">'+renderMeds(false,'ald')+'</div>'+
+          '<button class="add-med" style="border-color:#F59E0B;color:#F59E0B;" onclick="openMedModal(\'ald\')">＋ Ajouter médicament ALD</button>'+
         '</div>'+
 
-        // Médicaments de la consultation
+        // Médicaments de la consultation — VERT DOKITA
         '<div class="exam-toggle on" style="display:block;cursor:default;border-color:var(--accent);background:rgba(0,200,150,.05);">'+
-          '<div class="exam-toggle-label" style="color:var(--accent);margin-bottom:8px;">💊 Médicaments prescrits</div>'+
+          '<div class="flabel" style="color:var(--accent);margin-bottom:8px;">💊 MÉDICAMENTS PRESCRITS</div>'+
           '<div id="medList">'+renderMeds(false)+'</div>'+
-          '<button class="add-med" style="margin-top:8px;" onclick="openMedModal()">＋ Ajouter un médicament</button>'+
+          '<button class="add-med" style="margin-top:8px;border-color:var(--accent);color:var(--accent);" onclick="openMedModal()">＋ Ajouter un médicament</button>'+
         '</div>'+
 
         // Notes
