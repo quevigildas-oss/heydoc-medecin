@@ -1695,14 +1695,12 @@ function renderConsult(){
         // Section examens (masquée par défaut, révélée par toggle)
         '<div id="examensSection" style="display:'+(EXAMENS_REQUIS?'block':'none')+';">'+
           '<div class="frow">'+
-            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'+
-              '<div class="flabel" style="margin-bottom:0;">Examens demandés</div>'+
-              '<button onclick="openExamModal()" style="background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:#818cf8;cursor:pointer;font-family:\'DM Sans\',sans-serif;">＋ Ajouter</button>'+
-            '</div>'+
+            '<div class="flabel" style="margin-bottom:8px;">Examens demandés</div>'+
             '<textarea class="finput" id="examensInput" rows="2" placeholder="ex: Fréquence respiratoire + SpO2, Auscultation pulmonaire..." style="display:none;">'+escHtml(d.examensPrescrit)+'</textarea>'+
             '<div id="examensResultatsList">'+
               '<div style="font-size:11px;color:var(--text3);padding:8px 0;">⏳ Chargement examens...</div>'+
             '</div>'+
+            '<button class="add-med" style="border-color:var(--exam);color:var(--exam);margin-top:6px;" onclick="openExamModal()">＋ Ajouter un examen</button>'+
           '</div>'+
         '</div>'+
 
@@ -2461,19 +2459,16 @@ async function saveExam(){
   if(!CUR_DOS||!CUR_DOS.supabaseId){toast('⚠️ Dossier non sauvegardé');return;}
   try{
     var patientId=CUR_DOS.patient&&(CUR_DOS.patient.patientId||CUR_DOS.patient.id)||null;
-    var r=await fetch(DB_URL,{
+    var r=await fetch(DB_URL+'?table=examens',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
       body:JSON.stringify({
-        table:'examens',
-        data:{
-          consultation_id:CUR_DOS.supabaseId,
-          patient_id:patientId,
-          medecin_id:CUR_MED&&CUR_MED.supabaseId||null,
-          type_examen:nom,
-          obligatoire:EXAM_OBL,
-          statut:'prescrit'
-        }
+        consultation_id:CUR_DOS.supabaseId,
+        patient_id:patientId,
+        medecin_id:CUR_MED&&CUR_MED.supabaseId||null,
+        type_examen:nom,
+        obligatoire:EXAM_OBL,
+        statut:'prescrit'
       })
     });
     if(!r.ok){var t=await r.text();throw new Error('Erreur '+r.status+' — '+t.slice(0,100));}
