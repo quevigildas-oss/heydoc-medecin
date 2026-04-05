@@ -2315,6 +2315,39 @@ async function finaliser(nouveauStatut){
     toast(aldOk?'🏥 Dossier patient mis à jour (ALD — '+MEDS_ALD.length+' traitement'+(MEDS_ALD.length>1?'s':'')+')':'⚠️ Erreur MAJ dossier patient');
   }
 
+  // 4. Vérifier examens obligatoires + annuler recommandés non reçus
+  if(CUR_DOS.supabaseId&&EXAMENS_REQUIS){
+    try{
+      var erCheck=await fetch(DB_URL+'?table=examens&filter=consultation_id=eq.'+encodeURIComponent(CUR_DOS.supabaseId),{
+        headers:{'x-dokita-key':DOKITA_KEY}
+      });
+      var erData=await erCheck.json();
+      var erRows=Array.isArray(erData)?erData:(erData.data||[]);
+
+      // Bloquer si un examen OBLIGATOIRE n'est pas reçu
+      var oblNonRecus=erRows.filter(function(ex){return ex.obligatoire&&ex.statut!=='resultat_recu';});
+      if(oblNonRecus.length>0){
+        var btn2=document.getElementById('btnSend');
+        if(btn2){btn2.disabled=false;btn2.innerHTML='🤖 Valider avec l\'IA →';}
+        toast('⚠️ '+oblNonRecus.length+' examen(s) obligatoire(s) non reçu(s) : '+oblNonRecus.map(function(e){return e.type_examen;}).join(', '));
+        return;
+      }
+
+      // Annuler les examens RECOMMANDÉS non reçus
+      var recNonRecus=erRows.filter(function(ex){return !ex.obligatoire&&ex.statut==='prescrit';});
+      if(recNonRecus.length>0){
+        await Promise.all(recNonRecus.map(function(ex){
+          return fetch(DB_URL+'?table=examens&id='+ex.id,{
+            method:'PATCH',
+            headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
+            body:JSON.stringify({statut:'annule'})
+          });
+        }));
+        dbg('Examens recommandés non reçus → annulés: '+recNonRecus.length);
+      }
+    }catch(e){dbgWarn('Vérification examens finalisation: '+e.message);}
+  }
+
   // Notification patient — à implémenter via WhatsApp (pas email)
   // TODO : POST /api/whatsapp quand WhatsApp Cloud API intégré
 
