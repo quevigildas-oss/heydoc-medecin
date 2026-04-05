@@ -26,7 +26,7 @@ export default async function handler(req, res) {
   // Ex: POST /api/db?table=consultations (body = payload)
   // Ex: PATCH /api/db?table=consultations&id=uuid (body = updates)
 
-  const { table, filter, order, limit, id, select } = req.query;
+  const { table, filter, filter2, filter3, order, limit, id, select } = req.query;
 
   if (!table) {
     return res.status(400).json({ error: 'Paramètre table requis' });
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     'consultations', 'patients', 'medecins', 'lieux_exercice',
     'examens', 'ordonnances', 'pharmacies', 'appels_offres',
     'familles', 'medicaments', 'dossier_medical',
-    'etablissements', 'rendez_vous'
+    'etablissements', 'rendez_vous', 'disponibilites'
   ];
   if (!TABLES_AUTORISEES.includes(table)) {
     return res.status(403).json({ error: `Table non autorisée: ${table}` });
@@ -52,18 +52,16 @@ export default async function handler(req, res) {
       params.push(`select=${select}`);
     }
 
-    // ── FILTRE ──
-    // Injecter automatiquement is_test pour les tables qui le supportent
-    // (sauf medicaments qui n'a pas de is_test par défaut)
+    // ── FILTRES ──
     const TABLES_AVEC_IS_TEST = [
       'consultations', 'patients', 'medecins', 'examens',
       'ordonnances', 'pharmacies', 'appels_offres', 'familles', 'lieux_exercice', 'dossier_medical',
     'rendez_vous'
     ];
 
-    if (filter) {
-      params.push(filter);
-    }
+    if (filter)  params.push(filter);
+    if (filter2) params.push(filter2);
+    if (filter3) params.push(filter3);
 
     // Ajouter filtre is_test automatiquement sur les lectures GET
     // sauf si filtre explicite déjà présent
