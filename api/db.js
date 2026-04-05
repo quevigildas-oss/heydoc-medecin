@@ -75,7 +75,7 @@ export default async function handler(req, res) {
 
     // ── LIMIT ──
     if (limit) params.push(`limit=${limit}`);
-    else if (req.method === 'GET') params.push('limit=100');
+    else if (req.method === 'GET') params.push('limit=500');
 
     // ── ID pour PATCH/DELETE ──
     if (id) params.push(`id=eq.${id}`);
