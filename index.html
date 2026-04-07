@@ -6,7 +6,7 @@
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
-       V4.6 — 2026-04-01 : Agenda médecin 📅 dans header dashboard
+       V4.7 — 2026-04-01 : Agenda médecin 📅 dans header dashboard
                            Onglets Disponibilités / Demandes RDV
                            ouvrirAjoutDispo() : slots 30min sur 14 jours
                            Confirmer/Refuser demandes RDV patients
@@ -814,7 +814,7 @@ async function chargerDemandesRDV(){
           (rdv.motif?'<div style="font-size:11px;color:var(--text3);margin-top:4px;">'+escHtml(rdv.motif)+'</div>':'')+
           (isDemande?
             '<div style="display:flex;gap:8px;margin-top:10px;">'+
-              '<button onclick="proposerCreneauRDV(\''+rdv.id+'\',\''+rdv.disponibilite_id+'\')" style="flex:1;padding:9px;background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.3);border-radius:8px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;">✅ Confirmer</button>'+
+              '<button onclick="proposerCreneauRDV(\''+rdv.id+'\')" style="flex:1;padding:9px;background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.3);border-radius:8px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;">📅 Proposer des créneaux</button>'+
               '<button onclick="refuserRDV(\''+rdv.id+'\',\''+rdv.disponibilite_id+'\')" style="flex:1;padding:9px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;font-size:11px;font-weight:700;color:#ef4444;cursor:pointer;">❌ Refuser</button>'+
             '</div>'
           :'')+
@@ -906,14 +906,98 @@ async function supprimerDispo(slotId, date, heure, statut){
   }catch(e){toast('❌ '+e.message);}
 }
 
-async function proposerCreneauRDV(rdvId, dispoId){
+async function proposerCreneauRDV(rdvId){
+  // Ouvrir modal calendrier 15min 8h-20h pour sélection multiple
+  var old=document.getElementById('proposerModal');if(old)old.remove();
+  var modal=document.createElement('div');
+  modal.id='proposerModal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:300;display:flex;align-items:flex-end;';
+
+  var JOURS=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  var MOIS=['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
+
+  // Générer 7 prochains jours
+  var joursHtml='';
+  var PROPOSER_SEL={}; // {date: [heure, heure...]}
+  window._proposerSel=PROPOSER_SEL;
+  window._proposerRdvId=rdvId;
+
+  for(var di=0;di<7;di++){
+    var d=new Date();d.setDate(d.getDate()+di);
+    var iso=d.toISOString().split('T')[0];
+    var label=JOURS[d.getDay()]+' '+d.getDate()+' '+MOIS[d.getMonth()];
+    // Créneaux 15min 8h-20h
+    var creneauxHtml='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:4px;">';
+    for(var h=8;h<20;h++){
+      for(var m=0;m<60;m+=15){
+        var heure=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+        creneauxHtml+='<div data-date="'+iso+'" data-heure="'+heure+'" onclick="toggleCreneau(this)" '+
+          'style="padding:6px 2px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;text-align:center;cursor:pointer;font-size:10px;font-weight:600;color:var(--text2);">'+heure+'</div>';
+      }
+    }
+    creneauxHtml+='</div>';
+    joursHtml+='<div style="margin-bottom:12px;">'+
+      '<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px;">'+label+'</div>'+
+      creneauxHtml+
+    '</div>';
+  }
+
+  modal.innerHTML=
+    '<div style="background:var(--bg2);border-radius:20px 20px 0 0;padding:20px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-sizing:border-box;">'+
+      '<div style="font-family:\'Syne\',sans-serif;font-size:16px;font-weight:800;color:var(--text);margin-bottom:4px;">📅 Proposer des créneaux</div>'+
+      '<div style="font-size:12px;color:var(--text2);margin-bottom:14px;">Sélectionnez plusieurs créneaux disponibles</div>'+
+      '<div style="overflow-y:auto;flex:1;margin-bottom:12px;">'+joursHtml+'</div>'+
+      '<div id="proposerCount" style="font-size:11px;color:var(--text3);text-align:center;margin-bottom:8px;">Aucun créneau sélectionné</div>'+
+      '<div style="display:flex;gap:10px;">'+
+        '<button onclick="document.getElementById(\'proposerModal\').remove()" style="flex:1;padding:13px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;">Annuler</button>'+
+        '<button onclick="envoyerCreneaux()" style="flex:2;padding:13px;background:var(--grad);border:none;border-radius:12px;font-family:\'Syne\',sans-serif;font-size:13px;font-weight:700;color:#fff;cursor:pointer;">📤 Envoyer au patient</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+function toggleCreneau(el){
+  var date=el.dataset.date;
+  var heure=el.dataset.heure;
+  var sel=window._proposerSel;
+  if(!sel[date])sel[date]=[];
+  var idx=sel[date].indexOf(heure);
+  if(idx>=0){
+    sel[date].splice(idx,1);
+    el.style.background='var(--bg3)';
+    el.style.borderColor='var(--border)';
+    el.style.color='var(--text2)';
+  } else {
+    sel[date].push(heure);
+    el.style.background='rgba(0,200,150,.15)';
+    el.style.borderColor='var(--accent)';
+    el.style.color='var(--accent)';
+  }
+  // Compte total
+  var total=Object.values(sel).reduce(function(s,a){return s+a.length;},0);
+  var countEl=document.getElementById('proposerCount');
+  if(countEl)countEl.textContent=total>0?total+' créneau'+(total>1?'x':'')+ ' sélectionné'+(total>1?'s':''):'Aucun créneau sélectionné';
+}
+
+async function envoyerCreneaux(){
+  var sel=window._proposerSel||{};
+  var rdvId=window._proposerRdvId;
+  var creneaux=[];
+  Object.keys(sel).sort().forEach(function(date){
+    sel[date].sort().forEach(function(heure){
+      creneaux.push({date:date,heure:heure});
+    });
+  });
+  if(!creneaux.length){toast('⚠️ Sélectionnez au moins un créneau');return;}
+
   try{
-    await fetch(DB_URL+'?table=rendez_vous&id='+rdvId,{
+    await fetch(DB_URL+'?table=rendez_vous&filter=id=eq.'+encodeURIComponent(rdvId),{
       method:'PATCH',
       headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-      body:JSON.stringify({statut:'confirme'})
+      body:JSON.stringify({statut:'propose',creneaux_proposes:creneaux})
     });
-    toast('✅ RDV confirmé — patient notifié');
+    var m=document.getElementById('proposerModal');if(m)m.remove();
+    toast('✅ '+creneaux.length+' créneau(x) envoyé(s) au patient');
     chargerDemandesRDV();
   }catch(e){toast('❌ '+e.message);}
 }
