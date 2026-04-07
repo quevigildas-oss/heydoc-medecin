@@ -804,18 +804,21 @@ async function chargerDemandesRDV(){
     rows.forEach(function(rdv){
       var dateAff=rdv.date_souhaitee?new Date(rdv.date_souhaitee+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short'}):'';
       var isDemande=rdv.statut==='demande';
+      var isPropose=rdv.statut==='propose';
+      var isConfirme=rdv.statut==='confirme';
       html+=
-        '<div style="background:var(--bg2);border:1px solid '+(isDemande?'rgba(245,158,11,.3)':'rgba(0,200,150,.3)')+';border-radius:12px;padding:14px;margin-bottom:10px;">'+
+        '<div style="background:var(--bg2);border:1px solid '+(isDemande?'rgba(245,158,11,.3)':isConfirme?'rgba(0,200,150,.3)':'var(--border)')+';border-radius:12px;padding:14px;margin-bottom:10px;">'+
           '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'+
             '<div style="font-family:\'Syne\',sans-serif;font-size:13px;font-weight:700;color:var(--text);">'+escHtml(rdv.patient_nom||rdv.patient_id)+'</div>'+
-            '<span style="font-size:10px;font-weight:700;color:'+(isDemande?'#F59E0B':'var(--accent)')+';">'+(isDemande?'⏳ Demande':'✅ Confirmé')+'</span>'+
+            '<span style="font-size:10px;font-weight:700;color:'+(isDemande?'#F59E0B':isConfirme?'var(--accent)':isPropose?'#4a9eff':'var(--text3)')+';">'+(isDemande?'⏳ Demande':isConfirme?'✅ Confirmé':isPropose?'📋 Proposé':rdv.statut)+'</span>'+
           '</div>'+
-          '<div style="font-size:12px;color:var(--text2);">'+dateAff+' · '+escHtml(rdv.heure_souhaitee||'')+'</div>'+
-          (rdv.motif?'<div style="font-size:11px;color:var(--text3);margin-top:4px;">'+escHtml(rdv.motif)+'</div>':'')+
+          (rdv.motif?'<div style="font-size:12px;color:var(--text2);margin-bottom:6px;">'+escHtml(rdv.motif)+'</div>':'')+
+          (isConfirme?'<div style="font-size:12px;color:var(--accent);font-weight:600;">📆 '+escHtml(rdv.date_confirmee||'')+(rdv.heure_confirmee?' à '+rdv.heure_confirmee:'')+'</div>':'')+
+          (isPropose?'<div style="font-size:11px;color:#4a9eff;">'+((rdv.creneaux_proposes&&rdv.creneaux_proposes.length)||0)+' créneau(x) proposé(s) — en attente patient</div>':'')+
           (isDemande?
             '<div style="display:flex;gap:8px;margin-top:10px;">'+
-              '<button onclick="proposerCreneauRDV(\''+rdv.id+'\')" style="flex:1;padding:9px;background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.3);border-radius:8px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;">📅 Proposer des créneaux</button>'+
-              '<button onclick="refuserRDV(\''+rdv.id+'\',\''+rdv.disponibilite_id+'\')" style="flex:1;padding:9px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;font-size:11px;font-weight:700;color:#ef4444;cursor:pointer;">❌ Refuser</button>'+
+              '<button onclick="proposerCreneauRDV(\''+rdv.id+'\')" style="flex:2;padding:10px;background:var(--grad);border:none;border-radius:8px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;font-family:\'Syne\',sans-serif;">📅 Proposer des créneaux</button>'+
+              '<button onclick="refuserRDV(\''+rdv.id+'\',\''+rdv.disponibilite_id+'\')" style="flex:1;padding:10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;font-size:11px;font-weight:700;color:#ef4444;cursor:pointer;">❌ Refuser</button>'+
             '</div>'
           :'')+
         '</div>';
