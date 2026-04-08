@@ -789,7 +789,7 @@ async function chargerDemandesRDV(){
   if(!AGENDA_ETAB_ID){el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">Aucun établissement lié.</div>';return;}
 
   try{
-    var r=await fetch(DB_URL+'?table=rendez_vous&filter=etablissement_id=eq.'+encodeURIComponent(AGENDA_ETAB_ID)+'&filter2=statut=in.(demande,confirme)&order=date_souhaitee.asc&limit=50',{
+    var r=await fetch(DB_URL+'?table=rendez_vous&filter=etablissement_id=eq.'+encodeURIComponent(AGENDA_ETAB_ID)+'&order=created_at.desc&limit=50',{
       headers:{'x-dokita-key':DOKITA_KEY}
     });
     var data=await r.json();
