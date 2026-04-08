@@ -738,25 +738,47 @@ async function chargerDispos(){
 
   try{
     var aujourd=new Date().toISOString().split('T')[0];
-    var r=await fetch(DB_URL+'?table=disponibilites&filter=etablissement_id=eq.'+encodeURIComponent(AGENDA_ETAB_ID)+'&filter2=date_specifique=gte.'+aujourd+'&order=date_specifique.asc,heure_debut.asc&limit=100',{
-      headers:{'x-dokita-key':DOKITA_KEY}
+
+    // Charger dispos ET RDV confirmés en parallèle
+    var [rDispos, rRDV]=await Promise.all([
+      fetch(DB_URL+'?table=disponibilites&filter=etablissement_id=eq.'+encodeURIComponent(AGENDA_ETAB_ID)+'&filter2=date_specifique=gte.'+aujourd+'&order=date_specifique.asc,heure_debut.asc&limit=100',{headers:{'x-dokita-key':DOKITA_KEY}}),
+      fetch(DB_URL+'?table=rendez_vous&filter=etablissement_id=eq.'+encodeURIComponent(AGENDA_ETAB_ID)+'&filter2=statut=eq.confirme&order=date_confirmee.asc&limit=100',{headers:{'x-dokita-key':DOKITA_KEY}})
+    ]);
+    var dispos=Array.isArray(await rDispos.clone().json())?await rDispos.json():(await rDispos.json()).data||[];
+    var rdvData=await rRDV.json();
+    var rdvConfirmes=Array.isArray(rdvData)?rdvData:(rdvData.data||[]);
+
+    // Index RDV confirmés par date+heure
+    var rdvBySlot={};
+    rdvConfirmes.forEach(function(r){
+      if(r.date_confirmee&&r.heure_confirmee){
+        var key=r.date_confirmee+'|'+r.heure_confirmee;
+        rdvBySlot[key]=r;
+      }
     });
-    var data=await r.json();
-    var dispos=Array.isArray(data)?data:(data.data||[]);
 
     var JOURS=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
     var MOIS=['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
 
-    // Grouper par date
+    // Grouper dispos par date
     var byDate={};
     dispos.forEach(function(d){
       if(!byDate[d.date_specifique])byDate[d.date_specifique]=[];
       byDate[d.date_specifique].push(d);
     });
 
-    var html='<div style="font-size:11px;color:var(--text3);margin-bottom:14px;">Vos créneaux disponibles — cliquez pour modifier</div>';
+    // Ajouter les RDV confirmés qui n'ont pas de dispo associée
+    rdvConfirmes.forEach(function(r){
+      if(!r.date_confirmee)return;
+      var date=r.date_confirmee;
+      if(!byDate[date])byDate[date]=[];
+      var dejaPresent=byDate[date].some(function(s){return s.heure_debut===r.heure_confirmee;});
+      if(!dejaPresent)byDate[date].push({id:'rdv_'+r.id,heure_debut:r.heure_confirmee,statut:'confirme',_rdv:r});
+    });
 
-    if(!dispos.length){
+    var html='<div style="font-size:11px;color:var(--text3);margin-bottom:14px;">Vos créneaux — rouge = RDV confirmé</div>';
+
+    if(!Object.keys(byDate).length){
       html='<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">Aucune disponibilité configurée.<br>Appuyez sur <strong>＋ Dispo</strong> pour ajouter des créneaux.</div>';
       el.innerHTML=html;
       return;
@@ -766,17 +788,29 @@ async function chargerDispos(){
       var d=new Date(date+'T00:00:00');
       var jourLabel=JOURS[d.getDay()]+' '+d.getDate()+' '+MOIS[d.getMonth()];
       html+='<div style="font-family:\'Syne\',sans-serif;font-size:12px;font-weight:700;color:var(--text);margin:14px 0 8px;">'+jourLabel+'</div>';
-      html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">';
-      byDate[date].forEach(function(slot){
-        var isReserve=slot.statut==='reserve';
-        html+=
-          '<div style="padding:10px 6px;background:'+(isReserve?'rgba(239,68,68,.08)':'var(--bg2)')+';border:1.5px solid '+(isReserve?'rgba(239,68,68,.3)':'var(--border)')+';border-radius:10px;text-align:center;cursor:pointer;" '+
-          'onclick="supprimerDispo(\''+slot.id+'\',\''+date+'\',\''+slot.heure_debut+'\',\''+slot.statut+'\')">'+
-            '<div style="font-family:\'Syne\',sans-serif;font-size:13px;font-weight:700;color:'+(isReserve?'#ef4444':'var(--text)')+';">'+slot.heure_debut+'</div>'+
-            '<div style="font-size:9px;color:var(--text3);">'+(isReserve?'Réservé':'Libre')+'</div>'+
-          '</div>';
+      byDate[date].sort(function(a,b){return a.heure_debut>b.heure_debut?1:-1;}).forEach(function(slot){
+        var rdv=slot._rdv||rdvBySlot[date+'|'+slot.heure_debut];
+        var isConfirme=!!rdv||slot.statut==='confirme';
+        var isReserve=slot.statut==='reserve'&&!isConfirme;
+        if(isConfirme){
+          html+=
+            '<div style="padding:10px 12px;background:rgba(239,68,68,.1);border:1.5px solid rgba(239,68,68,.4);border-radius:10px;margin-bottom:8px;">'+
+              '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'+
+                '<div style="font-family:\'Syne\',sans-serif;font-size:13px;font-weight:700;color:#ef4444;">🔴 '+slot.heure_debut+'</div>'+
+                '<div style="font-size:9px;font-weight:700;color:#ef4444;background:rgba(239,68,68,.15);border-radius:4px;padding:2px 6px;">Confirmé</div>'+
+              '</div>'+
+              '<div style="font-size:12px;font-weight:600;color:var(--text);">'+escHtml(rdv?rdv.patient_nom||'-':'-')+'</div>'+
+              '<div style="font-size:11px;color:var(--text2);margin-top:2px;">'+escHtml(rdv?rdv.motif||'':'')+' </div>'+
+            '</div>';
+        } else {
+          html+=
+            '<div style="padding:10px 6px;background:'+(isReserve?'rgba(245,158,11,.08)':'var(--bg2)')+';border:1.5px solid '+(isReserve?'rgba(245,158,11,.3)':'var(--border)')+';border-radius:10px;text-align:center;margin-bottom:8px;cursor:pointer;" '+
+            'onclick="supprimerDispo(\''+slot.id+'\',\''+date+'\',\''+slot.heure_debut+'\',\''+slot.statut+'\')">'+
+              '<div style="font-family:\'Syne\',sans-serif;font-size:13px;font-weight:700;color:'+(isReserve?'#d97706':'var(--text)')+';">'+slot.heure_debut+'</div>'+
+              '<div style="font-size:9px;color:var(--text3);">'+(isReserve?'En attente':'Libre')+'</div>'+
+            '</div>';
+        }
       });
-      html+='</div>';
     });
 
     el.innerHTML=html;
