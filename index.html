@@ -974,19 +974,17 @@ function renderCalendrier(){
 
   function colonneJour(iso, jourLabel){
     var matin='',aprem='';
-    for(var h=8;h<12;h++) for(var m=0;m<60;m+=15) matin+=creneauHtml(iso,h,m);
-    // 12h00
-    matin+=creneauHtml(iso,12,0);
-    for(var h=12;h<20;h++) for(var m=(h===12?15:0);m<60;m+=15) aprem+=creneauHtml(iso,h,m);
+    for(var h=8;h<14;h++) for(var m=0;m<60;m+=15) matin+=creneauHtml(iso,h,m);
+    for(var h=14;h<20;h++) for(var m=0;m<60;m+=15) aprem+=creneauHtml(iso,h,m);
     return '<div style="flex:1;min-width:0;">'+
       '<div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;text-align:center;">'+jourLabel+'</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">'+
         '<div>'+
-          '<div style="font-size:9px;color:var(--text3);text-align:center;margin-bottom:4px;">Matin</div>'+
+          '<div style="font-size:9px;color:var(--text3);text-align:center;margin-bottom:4px;">8h — 13h45</div>'+
           matin+
         '</div>'+
         '<div>'+
-          '<div style="font-size:9px;color:var(--text3);text-align:center;margin-bottom:4px;">Après-midi</div>'+
+          '<div style="font-size:9px;color:var(--text3);text-align:center;margin-bottom:4px;">14h — 19h45</div>'+
           aprem+
         '</div>'+
       '</div>'+
