@@ -948,44 +948,61 @@ function renderCalendrier(){
   var MOIS=['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
   var vue=window._proposerVue;
   var offset=window._proposerOffset;
-  var nbJours=vue==='semaine'?7:1;
+  var nbJours=vue==='semaine'?7:2;
 
   // Label navigation
   var d0=new Date();d0.setDate(d0.getDate()+offset);
-  var label=JOURS[d0.getDay()]+' '+d0.getDate()+' '+MOIS[d0.getMonth()];
-  if(vue==='semaine'){
-    var d1=new Date();d1.setDate(d1.getDate()+offset+6);
-    label=d0.getDate()+' '+MOIS[d0.getMonth()]+' → '+d1.getDate()+' '+MOIS[d1.getMonth()];
-  }
+  var d1=new Date();d1.setDate(d1.getDate()+offset+nbJours-1);
+  var label=JOURS[d0.getDay()]+' '+d0.getDate()+' '+MOIS[d0.getMonth()]+' — '+JOURS[d1.getDay()]+' '+d1.getDate()+' '+MOIS[d1.getMonth()];
   var navEl=document.getElementById('calNavLabel');
   if(navEl)navEl.textContent=label;
   var toggleBtn=document.getElementById('btnVueToggle');
-  if(toggleBtn)toggleBtn.textContent=vue==='jour'?'Vue semaine':'Vue jour';
+  if(toggleBtn)toggleBtn.textContent=vue==='semaine'?'Vue 2 jours':'Vue semaine';
 
-  // Générer créneaux
-  var html='';
+  function creneauHtml(iso, h, m){
+    var heure=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+    var sel=window._proposerSel;
+    var isSel=sel[iso]&&sel[iso].indexOf(heure)>=0;
+    return '<div data-date="'+iso+'" data-heure="'+heure+'" onclick="toggleCreneau(this)" '+
+      'style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;margin-bottom:3px;border-radius:7px;cursor:pointer;'+
+      'background:'+(isSel?'rgba(0,200,150,.15)':'var(--bg3)')+';'+
+      'border:1px solid '+(isSel?'var(--accent)':'var(--border)')+';">'+
+      '<span style="font-size:12px;font-weight:600;color:'+(isSel?'var(--accent)':'var(--text)')+';">'+heure+'</span>'+
+      (isSel?'<span style="font-size:10px;color:var(--accent);">✓</span>':'')+
+    '</div>';
+  }
+
+  function colonneJour(iso, jourLabel){
+    var matin='',aprem='';
+    for(var h=8;h<12;h++) for(var m=0;m<60;m+=15) matin+=creneauHtml(iso,h,m);
+    // 12h00
+    matin+=creneauHtml(iso,12,0);
+    for(var h=12;h<20;h++) for(var m=(h===12?15:0);m<60;m+=15) aprem+=creneauHtml(iso,h,m);
+    return '<div style="flex:1;min-width:0;">'+
+      '<div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;text-align:center;">'+jourLabel+'</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">'+
+        '<div>'+
+          '<div style="font-size:9px;color:var(--text3);text-align:center;margin-bottom:4px;">Matin</div>'+
+          matin+
+        '</div>'+
+        '<div>'+
+          '<div style="font-size:9px;color:var(--text3);text-align:center;margin-bottom:4px;">Après-midi</div>'+
+          aprem+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }
+
+  // 2 jours côte à côte (ou 7 en vue semaine défilables)
+  var html='<div style="display:flex;gap:10px;">';
   for(var di=0;di<nbJours;di++){
     var d=new Date();d.setDate(d.getDate()+offset+di);
     var iso=d.toISOString().split('T')[0];
-    var jourLabel=JOURS[d.getDay()]+' '+d.getDate()+' '+MOIS[d.getMonth()];
-    html+='<div style="margin-bottom:14px;">'+
-      '<div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border);">'+jourLabel+'</div>';
-    for(var h=8;h<20;h++){
-      for(var m=0;m<60;m+=15){
-        var heure=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
-        var sel=window._proposerSel;
-        var isSel=sel[iso]&&sel[iso].indexOf(heure)>=0;
-        html+='<div data-date="'+iso+'" data-heure="'+heure+'" onclick="toggleCreneau(this)" '+
-          'style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin-bottom:4px;border-radius:8px;cursor:pointer;'+
-          'background:'+(isSel?'rgba(0,200,150,.15)':'var(--bg3)')+';'+
-          'border:1px solid '+(isSel?'var(--accent)':'var(--border)')+';">'+
-          '<span style="font-size:13px;font-weight:600;color:'+(isSel?'var(--accent)':'var(--text)')+';">'+heure+'</span>'+
-          (isSel?'<span style="font-size:11px;color:var(--accent);">✓ Sélectionné</span>':'')+
-        '</div>';
-      }
-    }
-    html+='</div>';
+    var jourLabel=JOURS[d.getDay()]+' '+d.getDate();
+    html+=colonneJour(iso,jourLabel);
   }
+  html+='</div>';
+
   var calBody=document.getElementById('calBody');
   if(calBody)calBody.innerHTML=html;
 }
