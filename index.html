@@ -995,21 +995,25 @@ function renderCalendrier(){
 
   function creneauHtml(iso, h, m){
     var heure=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+    var mFin=m+30, hFin=h;
+    if(mFin>=60){mFin-=60;hFin++;}
+    var heureFin=String(hFin).padStart(2,'0')+':'+String(mFin).padStart(2,'0');
+    var plage=heure+' – '+heureFin;
     var sel=window._proposerSel;
     var isSel=sel[iso]&&sel[iso].indexOf(heure)>=0;
     return '<div data-date="'+iso+'" data-heure="'+heure+'" onclick="toggleCreneau(this)" '+
       'style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;margin-bottom:3px;border-radius:7px;cursor:pointer;'+
       'background:'+(isSel?'rgba(0,200,150,.15)':'var(--bg3)')+';'+
       'border:1px solid '+(isSel?'var(--accent)':'var(--border)')+';">'+
-      '<span style="font-size:12px;font-weight:600;color:'+(isSel?'var(--accent)':'var(--text)')+';">'+heure+'</span>'+
+      '<span style="font-size:11px;font-weight:600;color:'+(isSel?'var(--accent)':'var(--text)')+';">'+plage+'</span>'+
       (isSel?'<span style="font-size:10px;color:var(--accent);">✓</span>':'')+
     '</div>';
   }
 
   function colonneJour(iso, jourLabel){
     var matin='',aprem='';
-    for(var hm=8;hm<14;hm++) for(var mm=0;mm<60;mm+=15) matin+=creneauHtml(iso,hm,mm);
-    for(var ha=14;ha<20;ha++) for(var ma=0;ma<60;ma+=15) aprem+=creneauHtml(iso,ha,ma);
+    for(var hm=8;hm<14;hm++) for(var mm=0;mm<60;mm+=30) matin+=creneauHtml(iso,hm,mm);
+    for(var ha=14;ha<20;ha++) for(var ma=0;ma<60;ma+=30) aprem+=creneauHtml(iso,ha,ma);
     return '<div style="flex:1;min-width:0;">'+
       '<div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;text-align:center;">'+jourLabel+'</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">'+
@@ -1064,7 +1068,12 @@ async function envoyerCreneaux(){
   var creneaux=[];
   Object.keys(sel).sort().forEach(function(date){
     sel[date].sort().forEach(function(heure){
-      creneaux.push({date:date,heure:heure});
+      var parts=heure.split(':');
+      var h=parseInt(parts[0]),m=parseInt(parts[1]);
+      var mFin=m+30,hFin=h;
+      if(mFin>=60){mFin-=60;hFin++;}
+      var heureFin=String(hFin).padStart(2,'0')+':'+String(mFin).padStart(2,'0');
+      creneaux.push({date:date,heure:heure,heure_fin:heureFin});
     });
   });
   if(!creneaux.length){toast('⚠️ Sélectionnez au moins un créneau');return;}
