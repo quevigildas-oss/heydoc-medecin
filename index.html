@@ -974,8 +974,8 @@ function renderCalendrier(){
 
   function colonneJour(iso, jourLabel){
     var matin='',aprem='';
-    for(var h=8;h<14;h++) for(var m=0;m<60;m+=15) matin+=creneauHtml(iso,h,m);
-    for(var h=14;h<20;h++) for(var m=0;m<60;m+=15) aprem+=creneauHtml(iso,h,m);
+    for(var hm=8;hm<14;hm++) for(var mm=0;mm<60;mm+=15) matin+=creneauHtml(iso,hm,mm);
+    for(var ha=14;ha<20;ha++) for(var ma=0;ma<60;ma+=15) aprem+=creneauHtml(iso,ha,ma);
     return '<div style="flex:1;min-width:0;">'+
       '<div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;text-align:center;">'+jourLabel+'</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">'+
@@ -993,10 +993,10 @@ function renderCalendrier(){
 
   // 2 jours côte à côte (ou 7 en vue semaine défilables)
   var html='<div style="display:flex;gap:10px;">';
-  for(var di=0;di<nbJours;di++){
-    var d=new Date();d.setDate(d.getDate()+offset+di);
-    var iso=d.toISOString().split('T')[0];
-    var jourLabel=JOURS[d.getDay()]+' '+d.getDate();
+  for(var dj=0;dj<nbJours;dj++){
+    var dj2=new Date();dj2.setDate(dj2.getDate()+offset+dj);
+    var iso=dj2.toISOString().split('T')[0];
+    var jourLabel=JOURS[dj2.getDay()]+' '+dj2.getDate();
     html+=colonneJour(iso,jourLabel);
   }
   html+='</div>';
