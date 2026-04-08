@@ -1003,7 +1003,7 @@ function renderCalendrier(){
     var isSel=sel[iso]&&sel[iso].indexOf(heure)>=0;
     return '<div data-date="'+iso+'" data-heure="'+heure+'" onclick="toggleCreneau(this)" '+
       'style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;margin-bottom:3px;border-radius:7px;cursor:pointer;'+
-      'background:'+(isSel?'rgba(0,200,150,.15)':'var(--bg3)')+';'+
+      'background:'+(isSel?'rgba(0,200,150,.15)':'var(--bg)')+';'+
       'border:1px solid '+(isSel?'var(--accent)':'var(--border)')+';">'+
       '<span style="font-size:11px;font-weight:600;color:'+(isSel?'var(--accent)':'var(--text)')+';">'+plage+'</span>'+
       (isSel?'<span style="font-size:10px;color:var(--accent);">✓</span>':'')+
