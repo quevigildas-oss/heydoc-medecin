@@ -284,7 +284,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
     <div class="hdr-ico">🏥</div>
     <div class="hdr-info"><div class="hdr-title" id="dashNom">Dr. —</div><div class="hdr-sub" id="dashSpec">Médecin</div></div>
     <div class="hdr-refresh" id="refreshBtn" onclick="chargerDossiers()" title="Actualiser">↻</div>
-    <button class="hdr-btn" onclick="ouvrirAgenda()" style="background:rgba(217,48,37,.15);color:#ef4444;border-color:rgba(217,48,37,.3);">📅</button>
+    <button class="hdr-btn" onclick="ouvrirAgenda()" style="background:rgba(217,48,37,.15);color:#ef4444;border-color:rgba(217,48,37,.3);position:relative;">📅<span id="agendaBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:99px;padding:1px 5px;font-family:'Syne',sans-serif;"></span></button>
     <button class="hdr-btn" onclick="doLogout()">Déconnexion</button>
   </div>
   <div class="dash-body">
@@ -320,6 +320,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
   <div class="hdr">
     <div class="hdr-back" onclick="showScreen('dashScreen')">←</div>
     <div class="hdr-info"><div class="hdr-title">Mon Agenda</div><div class="hdr-sub">Disponibilités & RDV</div></div>
+    <button class="hdr-btn" onclick="actualiserAgenda()" style="background:var(--bg3);color:var(--text2);border-color:var(--border);">↻</button>
     <button class="hdr-btn" onclick="ouvrirAjoutDispo()" style="background:rgba(0,200,150,.15);color:var(--accent);border-color:rgba(0,200,150,.3);">＋ Dispo</button>
   </div>
   <div class="dash-body">
@@ -692,6 +693,22 @@ async function doLogin(){
     document.getElementById('dashSpec').textContent=spec;
     showScreen('dashScreen');
     chargerDossiers();
+    // Polling badge agenda toutes les 60s
+    setTimeout(function pollAgenda(){
+      if(AGENDA_ETAB_ID)mettreAJourBadgeAgenda();
+      else{
+        // Charger ETAB_ID si pas encore fait
+        if(CUR_MED&&CUR_MED.supabaseId){
+          fetch(DB_URL+'?table=etablissements&filter=medecin_id=eq.'+encodeURIComponent(CUR_MED.supabaseId)+'&limit=1',{
+            headers:{'x-dokita-key':DOKITA_KEY}
+          }).then(function(r){return r.json();}).then(function(data){
+            var rows=Array.isArray(data)?data:(data.data||[]);
+            if(rows.length){AGENDA_ETAB_ID=rows[0].id;mettreAJourBadgeAgenda();}
+          }).catch(function(){});
+        }
+      }
+      setTimeout(pollAgenda,60000);
+    },3000);
   }catch(e){errEl.textContent='Erreur connexion: '+e.message;errEl.classList.add('on');}
 }
 // ══════════════════════════════
@@ -702,7 +719,6 @@ var AGENDA_ETAB_ID=null; // établissement du médecin connecté
 
 async function ouvrirAgenda(){
   showScreen('agendaScreen');
-  // Trouver l'établissement lié au médecin
   if(CUR_MED&&CUR_MED.supabaseId&&!AGENDA_ETAB_ID){
     try{
       var r=await fetch(DB_URL+'?table=etablissements&filter=medecin_id=eq.'+encodeURIComponent(CUR_MED.supabaseId)+'&limit=1',{
@@ -715,6 +731,26 @@ async function ouvrirAgenda(){
   }
   AGENDA_TAB='dispo';
   switchAgendaTab('dispo');
+  // Reset badge à l'ouverture
+  var badge=document.getElementById('agendaBadge');
+  if(badge)badge.style.display='none';
+}
+
+function actualiserAgenda(){
+  switchAgendaTab(AGENDA_TAB||'dispo');
+}
+
+function mettreAJourBadgeAgenda(){
+  if(!AGENDA_ETAB_ID)return;
+  fetch(DB_URL+'?table=rendez_vous&filter=etablissement_id=eq.'+encodeURIComponent(AGENDA_ETAB_ID)+'&filter2=statut=eq.demande&limit=50',{
+    headers:{'x-dokita-key':DOKITA_KEY}
+  }).then(function(r){return r.json();}).then(function(data){
+    var rows=Array.isArray(data)?data:(data.data||[]);
+    var badge=document.getElementById('agendaBadge');
+    if(!badge)return;
+    if(rows.length){badge.textContent=rows.length;badge.style.display='inline-block';}
+    else badge.style.display='none';
+  }).catch(function(){});
 }
 
 function switchAgendaTab(tab){
@@ -794,16 +830,16 @@ async function chargerDispos(){
         var isReserve=slot.statut==='reserve'&&!isConfirme;
         if(isConfirme){
           html+=
-            '<div style="padding:10px 12px;background:rgba(239,68,68,.1);border:1.5px solid rgba(239,68,68,.4);border-radius:10px;margin-bottom:8px;">'+
-              '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'+
-                '<div style="font-family:\'Syne\',sans-serif;font-size:13px;font-weight:700;color:#ef4444;">🔴 '+slot.heure_debut+'</div>'+
-                '<div style="font-size:9px;font-weight:700;color:#ef4444;background:rgba(239,68,68,.15);border-radius:4px;padding:2px 6px;">Confirmé</div>'+
+            '<div style="padding:12px;background:var(--bg2);border:1.5px solid rgba(0,200,150,.3);border-radius:10px;margin-bottom:8px;">'+
+              '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'+
+                '<div style="font-family:\'Syne\',sans-serif;font-size:14px;font-weight:700;color:var(--accent);">'+slot.heure_debut+'</div>'+
+                '<div style="font-size:9px;font-weight:700;color:var(--accent);background:rgba(0,200,150,.1);border-radius:4px;padding:2px 8px;">✅ Confirmé</div>'+
               '</div>'+
-              '<div style="font-size:12px;font-weight:600;color:var(--text);">'+escHtml(rdv?rdv.patient_nom||'-':'-')+'</div>'+
+              '<div style="font-size:13px;font-weight:600;color:var(--text);">'+escHtml(rdv?rdv.patient_nom||'-':'-')+'</div>'+
               '<div style="font-size:11px;color:var(--text2);margin-top:2px;margin-bottom:8px;">'+escHtml(rdv?rdv.motif||'':'')+' </div>'+
               '<div style="display:flex;gap:6px;">'+
-                '<button onclick="modifierRDV(\''+( rdv?rdv.id:'')+'\')" style="flex:1;padding:7px;background:var(--grad);border:none;border-radius:8px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;">✏️ Modifier</button>'+
-                '<button onclick="annulerRDVMedecin(\''+( rdv?rdv.id:'')+'\')" style="flex:1;padding:7px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:8px;font-size:11px;font-weight:700;color:#ef4444;cursor:pointer;">❌ Annuler</button>'+
+                '<button onclick="modifierRDV(\''+( rdv?rdv.id:'')+'\')" style="flex:1;padding:7px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:11px;font-weight:600;color:var(--text2);cursor:pointer;">✏️ Modifier</button>'+
+                '<button onclick="annulerRDVMedecin(\''+( rdv?rdv.id:'')+'\')" style="flex:1;padding:7px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:8px;font-size:11px;font-weight:600;color:#ef4444;cursor:pointer;">✕ Annuler</button>'+
               '</div>'+
             '</div>';
         } else {
