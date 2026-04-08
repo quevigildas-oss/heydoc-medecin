@@ -800,7 +800,11 @@ async function chargerDispos(){
                 '<div style="font-size:9px;font-weight:700;color:#ef4444;background:rgba(239,68,68,.15);border-radius:4px;padding:2px 6px;">Confirmé</div>'+
               '</div>'+
               '<div style="font-size:12px;font-weight:600;color:var(--text);">'+escHtml(rdv?rdv.patient_nom||'-':'-')+'</div>'+
-              '<div style="font-size:11px;color:var(--text2);margin-top:2px;">'+escHtml(rdv?rdv.motif||'':'')+' </div>'+
+              '<div style="font-size:11px;color:var(--text2);margin-top:2px;margin-bottom:8px;">'+escHtml(rdv?rdv.motif||'':'')+' </div>'+
+              '<div style="display:flex;gap:6px;">'+
+                '<button onclick="modifierRDV(\''+( rdv?rdv.id:'')+'\')" style="flex:1;padding:7px;background:var(--grad);border:none;border-radius:8px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;">✏️ Modifier</button>'+
+                '<button onclick="annulerRDVMedecin(\''+( rdv?rdv.id:'')+'\')" style="flex:1;padding:7px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:8px;font-size:11px;font-weight:700;color:#ef4444;cursor:pointer;">❌ Annuler</button>'+
+              '</div>'+
             '</div>';
         } else {
           html+=
@@ -828,6 +832,9 @@ async function chargerDemandesRDV(){
     });
     var data=await r.json();
     var rows=Array.isArray(data)?data:(data.data||[]);
+
+    // Garder uniquement demande et propose
+    rows=rows.filter(function(r){return r.statut==='demande'||r.statut==='propose';});
 
     if(!rows.length){
       el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);font-size:13px;">Aucune demande de RDV en attente.</div>';
@@ -1088,6 +1095,26 @@ async function envoyerCreneaux(){
     toast('✅ '+creneaux.length+' créneau(x) envoyé(s) au patient');
     chargerDemandesRDV();
   }catch(e){toast('❌ '+e.message);}
+}
+
+async function annulerRDVMedecin(rdvId){
+  if(!rdvId){toast('Erreur — RDV introuvable');return;}
+  if(!confirm('Annuler ce rendez-vous ? Le patient sera notifié.'))return;
+  try{
+    await fetch(DB_URL+'?table=rendez_vous&filter=id=eq.'+encodeURIComponent(rdvId),{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
+      body:JSON.stringify({statut:'annule_praticien',creneaux_proposes:[]})
+    });
+    toast('✅ RDV annulé');
+    chargerDispos();
+  }catch(e){toast('❌ '+e.message);}
+}
+
+function modifierRDV(rdvId){
+  if(!rdvId){toast('Erreur — RDV introuvable');return;}
+  // Réouvrir le calendrier pour proposer de nouveaux créneaux
+  proposerCreneauRDV(rdvId);
 }
 
 async function refuserRDV(rdvId, dispoId){
