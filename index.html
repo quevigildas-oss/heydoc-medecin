@@ -1057,7 +1057,7 @@ function renderCalendrier(){
     var matin='',aprem='';
     for(var hm=8;hm<14;hm++) for(var mm=0;mm<60;mm+=30) matin+=creneauHtml(iso,hm,mm);
     for(var ha=14;ha<20;ha++) for(var ma=0;ma<60;ma+=30) aprem+=creneauHtml(iso,ha,ma);
-    return '<div style="flex:1;min-width:0;background:#fff;border-radius:12px;padding:10px;border:1px solid var(--border);">'+
+    return '<div style="flex:1;min-width:0;background:rgba(255,255,255,.15);border-radius:12px;padding:10px;border:1px solid rgba(255,255,255,.3);">'+
       '<div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;text-align:center;padding-bottom:6px;border-bottom:1px solid var(--border);">'+jourLabel+'</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;">'+
         '<div style="padding-right:6px;border-right:1px solid var(--border);">'+
