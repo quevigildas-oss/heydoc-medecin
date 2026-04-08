@@ -947,7 +947,7 @@ async function proposerCreneauRDV(rdvId){
   var old=document.getElementById('proposerModal');if(old)old.remove();
   var modal=document.createElement('div');
   modal.id='proposerModal';
-  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:300;display:flex;align-items:flex-end;';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;display:flex;align-items:flex-end;';
 
   window._proposerSel={};
   window._proposerRdvId=rdvId;
@@ -1016,12 +1016,12 @@ function renderCalendrier(){
     for(var ha=14;ha<20;ha++) for(var ma=0;ma<60;ma+=30) aprem+=creneauHtml(iso,ha,ma);
     return '<div style="flex:1;min-width:0;">'+
       '<div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;text-align:center;">'+jourLabel+'</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">'+
-        '<div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;">'+
+        '<div style="padding-right:6px;border-right:1px solid var(--border);">'+
           '<div style="font-size:9px;color:var(--text3);text-align:center;margin-bottom:4px;">8h — 13h45</div>'+
           matin+
         '</div>'+
-        '<div>'+
+        '<div style="padding-left:6px;">'+
           '<div style="font-size:9px;color:var(--text3);text-align:center;margin-bottom:4px;">14h — 19h45</div>'+
           aprem+
         '</div>'+
