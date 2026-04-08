@@ -910,46 +910,29 @@ async function supprimerDispo(slotId, date, heure, statut){
 }
 
 async function proposerCreneauRDV(rdvId){
-  // Ouvrir modal calendrier 15min 8h-20h pour sélection multiple
   var old=document.getElementById('proposerModal');if(old)old.remove();
   var modal=document.createElement('div');
   modal.id='proposerModal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:300;display:flex;align-items:flex-end;';
 
-  var JOURS=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
-  var MOIS=['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
-
-  // Générer 7 prochains jours
-  var joursHtml='';
-  var PROPOSER_SEL={}; // {date: [heure, heure...]}
-  window._proposerSel=PROPOSER_SEL;
+  window._proposerSel={};
   window._proposerRdvId=rdvId;
-
-  for(var di=0;di<7;di++){
-    var d=new Date();d.setDate(d.getDate()+di);
-    var iso=d.toISOString().split('T')[0];
-    var label=JOURS[d.getDay()]+' '+d.getDate()+' '+MOIS[d.getMonth()];
-    // Créneaux 15min 8h-20h
-    var creneauxHtml='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:4px;">';
-    for(var h=8;h<20;h++){
-      for(var m=0;m<60;m+=15){
-        var heure=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
-        creneauxHtml+='<div data-date="'+iso+'" data-heure="'+heure+'" onclick="toggleCreneau(this)" '+
-          'style="padding:6px 2px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;text-align:center;cursor:pointer;font-size:10px;font-weight:600;color:var(--text2);">'+heure+'</div>';
-      }
-    }
-    creneauxHtml+='</div>';
-    joursHtml+='<div style="margin-bottom:12px;">'+
-      '<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px;">'+label+'</div>'+
-      creneauxHtml+
-    '</div>';
-  }
+  window._proposerOffset=0; // offset en jours depuis aujourd'hui
+  window._proposerVue='jour'; // 'jour' ou 'semaine'
 
   modal.innerHTML=
-    '<div style="background:var(--bg2);border-radius:20px 20px 0 0;padding:20px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-sizing:border-box;">'+
-      '<div style="font-family:\'Syne\',sans-serif;font-size:16px;font-weight:800;color:var(--text);margin-bottom:4px;">📅 Proposer des créneaux</div>'+
-      '<div style="font-size:12px;color:var(--text2);margin-bottom:14px;">Sélectionnez plusieurs créneaux disponibles</div>'+
-      '<div style="overflow-y:auto;flex:1;margin-bottom:12px;">'+joursHtml+'</div>'+
+    '<div style="background:var(--bg2);border-radius:20px 20px 0 0;padding:20px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-sizing:border-box;">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'+
+        '<div style="font-family:\'Syne\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">📅 Proposer des créneaux</div>'+
+        '<button onclick="window._proposerVue=window._proposerVue===\'jour\'?\'semaine\':\'jour\';renderCalendrier()" style="padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:11px;font-weight:600;color:var(--text2);cursor:pointer;" id="btnVueToggle">Vue semaine</button>'+
+      '</div>'+
+      '<div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Sélectionnez plusieurs créneaux</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+
+        '<button onclick="window._proposerOffset=Math.max(0,window._proposerOffset-1);renderCalendrier()" style="width:36px;height:36px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);font-size:18px;cursor:pointer;color:var(--text);">‹</button>'+
+        '<div id="calNavLabel" style="flex:1;text-align:center;font-size:13px;font-weight:700;color:var(--text);"></div>'+
+        '<button onclick="window._proposerOffset++;renderCalendrier()" style="width:36px;height:36px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);font-size:18px;cursor:pointer;color:var(--text);">›</button>'+
+      '</div>'+
+      '<div id="calBody" style="overflow-y:auto;flex:1;margin-bottom:10px;"></div>'+
       '<div id="proposerCount" style="font-size:11px;color:var(--text3);text-align:center;margin-bottom:8px;">Aucun créneau sélectionné</div>'+
       '<div style="display:flex;gap:10px;">'+
         '<button onclick="document.getElementById(\'proposerModal\').remove()" style="flex:1;padding:13px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;">Annuler</button>'+
@@ -957,6 +940,54 @@ async function proposerCreneauRDV(rdvId){
       '</div>'+
     '</div>';
   document.body.appendChild(modal);
+  renderCalendrier();
+}
+
+function renderCalendrier(){
+  var JOURS=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  var MOIS=['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
+  var vue=window._proposerVue;
+  var offset=window._proposerOffset;
+  var nbJours=vue==='semaine'?7:1;
+
+  // Label navigation
+  var d0=new Date();d0.setDate(d0.getDate()+offset);
+  var label=JOURS[d0.getDay()]+' '+d0.getDate()+' '+MOIS[d0.getMonth()];
+  if(vue==='semaine'){
+    var d1=new Date();d1.setDate(d1.getDate()+offset+6);
+    label=d0.getDate()+' '+MOIS[d0.getMonth()]+' → '+d1.getDate()+' '+MOIS[d1.getMonth()];
+  }
+  var navEl=document.getElementById('calNavLabel');
+  if(navEl)navEl.textContent=label;
+  var toggleBtn=document.getElementById('btnVueToggle');
+  if(toggleBtn)toggleBtn.textContent=vue==='jour'?'Vue semaine':'Vue jour';
+
+  // Générer créneaux
+  var html='';
+  for(var di=0;di<nbJours;di++){
+    var d=new Date();d.setDate(d.getDate()+offset+di);
+    var iso=d.toISOString().split('T')[0];
+    var jourLabel=JOURS[d.getDay()]+' '+d.getDate()+' '+MOIS[d.getMonth()];
+    html+='<div style="margin-bottom:14px;">'+
+      '<div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border);">'+jourLabel+'</div>';
+    for(var h=8;h<20;h++){
+      for(var m=0;m<60;m+=15){
+        var heure=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+        var sel=window._proposerSel;
+        var isSel=sel[iso]&&sel[iso].indexOf(heure)>=0;
+        html+='<div data-date="'+iso+'" data-heure="'+heure+'" onclick="toggleCreneau(this)" '+
+          'style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin-bottom:4px;border-radius:8px;cursor:pointer;'+
+          'background:'+(isSel?'rgba(0,200,150,.15)':'var(--bg3)')+';'+
+          'border:1px solid '+(isSel?'var(--accent)':'var(--border)')+';">'+
+          '<span style="font-size:13px;font-weight:600;color:'+(isSel?'var(--accent)':'var(--text)')+';">'+heure+'</span>'+
+          (isSel?'<span style="font-size:11px;color:var(--accent);">✓ Sélectionné</span>':'')+
+        '</div>';
+      }
+    }
+    html+='</div>';
+  }
+  var calBody=document.getElementById('calBody');
+  if(calBody)calBody.innerHTML=html;
 }
 
 function toggleCreneau(el){
@@ -967,19 +998,15 @@ function toggleCreneau(el){
   var idx=sel[date].indexOf(heure);
   if(idx>=0){
     sel[date].splice(idx,1);
-    el.style.background='var(--bg3)';
-    el.style.borderColor='var(--border)';
-    el.style.color='var(--text2)';
+    if(!sel[date].length)delete sel[date];
   } else {
     sel[date].push(heure);
-    el.style.background='rgba(0,200,150,.15)';
-    el.style.borderColor='var(--accent)';
-    el.style.color='var(--accent)';
   }
-  // Compte total
   var total=Object.values(sel).reduce(function(s,a){return s+a.length;},0);
   var countEl=document.getElementById('proposerCount');
   if(countEl)countEl.textContent=total>0?total+' créneau'+(total>1?'x':'')+ ' sélectionné'+(total>1?'s':''):'Aucun créneau sélectionné';
+  // Re-rendre pour mise à jour visuelle
+  renderCalendrier();
 }
 
 async function envoyerCreneaux(){
