@@ -1,9 +1,8 @@
 // /api/save.js
 // DOKITA — Sauvegarde consultation dans Supabase
-// V4.3 — 2026-03-28
 // Remplace Make webhook → Notion
-// Accepte les deux formats de champs (ancien: nom/age/poids, nouveau: patient_nom/patient_age/patient_poids)
-// + medecin_id
+// Appelé depuis Dokita V4.2 après RESUME_CONSULTATION
+// V4.9 — Ajout notification email médecin via Resend
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -21,28 +20,23 @@ export default async function handler(req, res) {
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_KEY = process.env.SUPABASE_KEY;
-  const IS_TEST      = process.env.DOKITA_ENV !== 'prod';
+  const RESEND_KEY   = process.env.RESEND_KEY;
+  const IS_TEST      = process.env.DOKITA_ENV !== 'prod'; // true en dev, false en prod
 
   try {
     const body = req.body;
 
+    // ── Valider les champs minimum requis ──
     if (!body || !body.patient_id) {
       return res.status(400).json({ error: 'patient_id requis' });
     }
 
-    // ── Résolution des champs — accepte ancien format (nom/age/poids) ET nouveau (patient_nom/patient_age/patient_poids) ──
-    const patientNom   = body.patient_nom   || body.nom   || '';
-    const patientAge   = body.patient_age   !== undefined ? body.patient_age   : body.age;
-    const patientPoids = body.patient_poids !== undefined ? body.patient_poids : body.poids;
-    const patientVille = body.patient_ville || body.ville || 'Non renseignée';
-    const patientVoyage= body.patient_voyage|| body.voyage|| 'Aucun';
-
-    // ── ID consultation : utiliser celui du client si fourni, sinon générer ──
+    // ── Générer un ID consultation unique ──
     const now     = new Date();
     const ts      = now.getTime();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
     const hStr    = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
-    const consultationId = body.consultation_id || `DOS-${body.patient_id}-${dateStr}-${hStr}-${String(ts).slice(-4)}`;
+    const consultationId = `DOS-${body.patient_id}-${dateStr}-${hStr}-${String(ts).slice(-4)}`;
 
     // ── Construire le payload Supabase ──
     const payload = {
@@ -50,25 +44,23 @@ export default async function handler(req, res) {
 
       // Patient
       patient_id:           body.patient_id        || '',
-      patient_nom:          patientNom,
-      patient_age:          parseInt(patientAge)   || null,
-      patient_poids:        parseFloat(patientPoids)|| null,
-      patient_ville:        patientVille,
-      patient_voyage:       patientVoyage,
-
-      // Médecin assigné
-      medecin_id:           body.medecin_id        || null,
+      patient_nom:          body.nom                || '',
+      patient_age:          parseInt(body.age)      || null,
+      patient_poids:        parseFloat(body.poids)  || null,
+      patient_ville:        body.ville              || 'Non renseignée',
+      patient_voyage:       body.voyage             || 'Aucun',
 
       // Consultation Dr. AfriBot
       symptomes:            body.symptomes          || '',
-      diagnostic_ia:        body.diagnostic_ia      || body.diagnostic || '',
+      diagnostic_ia:        body.diagnostic         || '',
 
-      // Recommandations OMS
-      examens_recommandes:  body.examens_recommandes|| body.examens     || '',
-      recommandations_oms:  body.recommandations_oms|| body.recommandations || '',
+      // Recommandations OMS depuis Supabase pgvector
+      // ⚠️ Ces champs sont masqués au médecin jusqu'à soumission prescription
+      examens_recommandes:  body.examens            || '',
+      recommandations_oms:  body.recommandations    || '',
       medicaments_oms:      body.medicaments_oms    || '',
       contre_indications:   body.contre_indications || '',
-      sources_oms:          body.sources_oms        || body.sources     || '',
+      sources_oms:          body.sources            || '',
 
       // Statut initial
       statut:               'en_attente',
@@ -99,16 +91,144 @@ export default async function handler(req, res) {
     const inserted = await insertRes.json();
     const consultId = inserted?.[0]?.id || null;
 
-    console.log(`✅ Consultation créée — ID: ${consultationId} | medecin_id: ${payload.medecin_id} | is_test: ${IS_TEST}`);
+    console.log(`✅ Consultation créée — ID: ${consultationId} | is_test: ${IS_TEST} | uuid: ${consultId}`);
 
-    // ── Examens : créés par le médecin lors de la finalisation dans Dokita Pro ──
-    // (pas ici — save.js ne connaît pas les examens prescrits par le médecin)
+    // ── Notification email médecin via Resend ──
+    // Récupérer l'email du médecin assigné depuis Supabase (si medecin_id fourni)
+    // Sinon envoyer à tous les médecins actifs
+    if (RESEND_KEY) {
+      try {
+        // Récupérer les médecins actifs depuis Supabase
+        const medecinRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/medecins?statut=eq.actif&select=nom,prenom,email&limit=10`,
+          {
+            headers: {
+              'apikey':        SUPABASE_KEY,
+              'Authorization': `Bearer ${SUPABASE_KEY}`
+            }
+          }
+        );
+        const medecins = await medecinRes.json();
+        const destinataires = Array.isArray(medecins)
+          ? medecins.filter(m => m.email).map(m => m.email)
+          : [];
 
+        if (destinataires.length > 0) {
+          const nomPatient   = payload.patient_nom || 'Patient';
+          const agePatient   = payload.patient_age ? `${payload.patient_age} ans` : 'Non renseigné';
+          const sexePatient  = body.sexe || '—';
+          const poidsPatient = payload.patient_poids ? `${payload.patient_poids} kg` : 'Non renseigné';
+          const villePatient = payload.patient_ville;
+          const symptomes    = payload.symptomes || '—';
+          const diagnostic   = payload.diagnostic_ia || '—';
+          const dateConsult  = now.toLocaleDateString('fr-FR', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+          });
+
+          const emailBody = `Bonjour Dr.,
+
+Nouveau dossier patient Dokita.
+
+=== PATIENT ===
+Nom: ${nomPatient}
+Âge: ${agePatient}
+Sexe: ${sexePatient}
+Poids: ${poidsPatient}
+Ville: ${villePatient}
+
+=== CONSULTATION ===
+Date: ${dateConsult}
+ID: ${consultationId}
+
+SYMPTÔMES:
+${symptomes}
+
+DIAGNOSTIC IA:
+${diagnostic}
+
+---
+Connectez-vous à Dokita Pro pour traiter ce dossier.
+Dokita — Outil d'aide à la décision médicale`;
+
+          const emailRes = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${RESEND_KEY}`,
+              'Content-Type':  'application/json'
+            },
+            body: JSON.stringify({
+              from:    'Dokita <onboarding@resend.dev>',
+              to:      destinataires,
+              subject: `[Dokita] Dossier — ${nomPatient} — ${dateStr}`,
+              text:    emailBody
+            })
+          });
+
+          if (emailRes.ok) {
+            console.log(`✅ Email médecin envoyé à: ${destinataires.join(', ')}`);
+          } else {
+            const emailErr = await emailRes.text();
+            console.warn('⚠️ Erreur envoi email Resend:', emailErr);
+          }
+        } else {
+          console.warn('⚠️ Aucun médecin actif avec email trouvé');
+        }
+      } catch (emailErr) {
+        // L'erreur email ne doit pas bloquer la réponse patient
+        console.warn('⚠️ Erreur notification email (non bloquante):', emailErr.message);
+      }
+    } else {
+      console.warn('⚠️ RESEND_KEY non configurée — email médecin non envoyé');
+    }
+
+    // ── Créer les examens si obligatoires ──
+    // Extraction simple depuis le texte examens_recommandes
+    if (consultId && payload.examens_recommandes) {
+      const examensTexte = payload.examens_recommandes;
+
+      // Détecter les examens obligatoires (contient "OUI" ou "obligatoire")
+      const lignes = examensTexte.split(/[,|\n]/)
+        .map(l => l.trim())
+        .filter(l => l.length > 3);
+
+      const examensPayload = lignes.map(type_examen => ({
+        consultation_id:      consultId,
+        patient_id:           payload.patient_id,
+        type_examen:          type_examen.replace(/^(✅|⚠️|OUI|NON)\s*/i, '').trim(),
+        obligatoire:          /obligatoire|✅\s*OUI/i.test(type_examen),
+        source_recommandation: payload.sources_oms || '',
+        statut:               'prescrit',
+        is_test:              IS_TEST
+      })).filter(e => e.type_examen.length > 2);
+
+      if (examensPayload.length > 0) {
+        const examRes = await fetch(`${SUPABASE_URL}/rest/v1/examens`, {
+          method: 'POST',
+          headers: {
+            'apikey':        SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type':  'application/json',
+            'Prefer':        'return=minimal'
+          },
+          body: JSON.stringify(examensPayload)
+        });
+
+        if (examRes.ok) {
+          console.log(`✅ ${examensPayload.length} examens créés pour consultation ${consultationId}`);
+        } else {
+          console.warn('⚠️ Erreur création examens:', await examRes.text());
+        }
+      }
+    }
+
+    // ── Retourner succès ──
     return res.status(200).json({
       success:         true,
       consultation_id: consultationId,
       uuid:            consultId,
-      is_test:         IS_TEST
+      is_test:         IS_TEST,
+      examens_crees:   payload.examens_recommandes ? true : false
     });
 
   } catch (e) {
