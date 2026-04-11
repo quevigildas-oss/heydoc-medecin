@@ -156,7 +156,7 @@ DIAGNOSTIC IA (Dr. AfriBot):
 ${diagnostic}
 
 ---
-Merci de vous connecter à Dokita Pro pour consulter le dossier complet et traiter ce patient.
+Veuillez vous connecter à Dokita Pro pour consulter le dossier complet. Merci de votre engagement à nos côtés.
 
 Dokita — Outil d'aide à la décision médicale`;
 
