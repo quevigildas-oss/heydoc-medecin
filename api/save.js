@@ -116,11 +116,17 @@ export default async function handler(req, res) {
           : [];
 
         if (destinataires.length > 0) {
+          // Trouver le médecin destinataire pour personnaliser le message
+          const medecinDestinataire = medecins.find(m => m.email === destinataires[0]);
+          const nomMedecin   = medecinDestinataire
+            ? `Dr. ${medecinDestinataire.prenom || ''} ${medecinDestinataire.nom || ''}`.trim()
+            : 'Dr.';
+
           const nomPatient   = payload.patient_nom || 'Patient';
           const agePatient   = payload.patient_age ? `${payload.patient_age} ans` : 'Non renseigné';
-          const sexePatient  = body.sexe || '—';
+          const sexePatient  = body.patient_sexe || body.sexe || 'Non renseigné';
           const poidsPatient = payload.patient_poids ? `${payload.patient_poids} kg` : 'Non renseigné';
-          const villePatient = payload.patient_ville;
+          const villePatient = payload.patient_ville || 'Non renseignée';
           const symptomes    = payload.symptomes || '—';
           const diagnostic   = payload.diagnostic_ia || '—';
           const dateConsult  = now.toLocaleDateString('fr-FR', {
@@ -128,9 +134,9 @@ export default async function handler(req, res) {
             hour: '2-digit', minute: '2-digit'
           });
 
-          const emailBody = `Bonjour Dr.,
+          const emailBody = `Bonjour ${nomMedecin},
 
-Nouveau dossier patient Dokita.
+Nous vous adressons un nouveau patient via la plateforme Dokita.
 
 === PATIENT ===
 Nom: ${nomPatient}
@@ -146,11 +152,12 @@ ID: ${consultationId}
 SYMPTÔMES:
 ${symptomes}
 
-DIAGNOSTIC IA:
+DIAGNOSTIC IA (Dr. AfriBot):
 ${diagnostic}
 
 ---
-Connectez-vous à Dokita Pro pour traiter ce dossier.
+Merci de vous connecter à Dokita Pro pour consulter le dossier complet et traiter ce patient.
+
 Dokita — Outil d'aide à la décision médicale`;
 
           const emailRes = await fetch('https://api.resend.com/emails', {
