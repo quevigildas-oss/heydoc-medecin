@@ -100,7 +100,7 @@ export default async function handler(req, res) {
       try {
         // Récupérer les médecins actifs depuis Supabase
         const medecinRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/medecins?statut=eq.actif&select=nom,prenom,email&limit=10`,
+          `${SUPABASE_URL}/rest/v1/medecins?statut=ilike.actif&select=nom,prenom,email&limit=10`,
           {
             headers: {
               'apikey':        SUPABASE_KEY,
