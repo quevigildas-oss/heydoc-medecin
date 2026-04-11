@@ -44,15 +44,15 @@ export default async function handler(req, res) {
 
       // Patient
       patient_id:           body.patient_id        || '',
-      patient_nom:          body.nom                || '',
-      patient_age:          parseInt(body.age)      || null,
-      patient_poids:        parseFloat(body.poids)  || null,
-      patient_ville:        body.ville              || 'Non renseignée',
-      patient_voyage:       body.voyage             || 'Aucun',
+      patient_nom:          body.patient_nom || body.nom  || '',
+      patient_age:          parseInt(body.patient_age || body.age) || null,
+      patient_poids:        parseFloat(body.patient_poids || body.poids) || null,
+      patient_ville:        body.patient_ville || body.ville || 'Non renseignée',
+      patient_voyage:       body.patient_voyage || body.voyage || 'Aucun',
 
       // Consultation Dr. AfriBot
       symptomes:            body.symptomes          || '',
-      diagnostic_ia:        body.diagnostic         || '',
+      diagnostic_ia:        body.diagnostic_ia || body.diagnostic || '',
 
       // Recommandations OMS depuis Supabase pgvector
       // ⚠️ Ces champs sont masqués au médecin jusqu'à soumission prescription
