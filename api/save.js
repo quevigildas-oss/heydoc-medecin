@@ -62,6 +62,8 @@ export default async function handler(req, res) {
       contre_indications:   body.contre_indications || '',
       sources_oms:          body.sources            || '',
 
+      medecin_id:           body.medecin_id || null,
+
       // Statut initial
       statut:               'en_attente',
       validation_ia:        'EN_ATTENTE',
