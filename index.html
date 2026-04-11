@@ -6,7 +6,7 @@
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
-       V4.7 — 2026-04-01 : Agenda médecin 📅 dans header dashboard
+       V4.8 — 2026-04-01 : Agenda médecin 📅 dans header dashboard
                            Onglets Disponibilités / Demandes RDV
                            ouvrirAjoutDispo() : slots 30min sur 14 jours
                            Confirmer/Refuser demandes RDV patients
@@ -285,6 +285,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
     <div class="hdr-info"><div class="hdr-title" id="dashNom">Dr. —</div><div class="hdr-sub" id="dashSpec">Médecin</div></div>
     <div class="hdr-refresh" id="refreshBtn" onclick="chargerDossiers()" title="Actualiser">↻</div>
     <button class="hdr-btn" onclick="ouvrirAgenda()" style="background:rgba(217,48,37,.15);color:#ef4444;border-color:rgba(217,48,37,.3);position:relative;">📅<span id="agendaBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:99px;padding:1px 5px;font-family:'Syne',sans-serif;"></span></button>
+    <button class="hdr-btn" onclick="ouvrirParams()" style="background:rgba(100,116,139,.15);color:var(--text2);border-color:var(--border);">⚙️</button>
     <button class="hdr-btn" onclick="doLogout()">Déconnexion</button>
   </div>
   <div class="dash-body">
@@ -682,6 +683,7 @@ async function doLogin(){
     var colors=['#00C896','#0EA5E9','#F59E0B','#A78BFA','#F97316'];
     CUR_MED={
       supabaseId:med.id,
+      signature_base64:med.signature_base64||null,
       ordre:ordre,
       email:med.email||'',
       nom:nomComplet,
@@ -3120,9 +3122,96 @@ function buildOrdoHtml(d,ordo){
     (notes?'<div class="notesbox"><b style="display:block;margin-bottom:6px;">📝 Notes</b>'+escHtml(notes).replace(/\n/g,'<br>')+'</div>':'')+
     '<div class="foot">'+
       '<div class="footmed"><strong>'+escHtml(CUR_MED.nom)+'</strong>'+escHtml(CUR_MED.spec)+'<br><span style="font-size:11px;color:#64748B;">N° Ordre : '+escHtml(CUR_MED.ordre||'')+'</span></div>'+
-      '<div class="sigbox">Signature & Cachet</div>'+
+      (CUR_MED.signature_base64 ? '<img src="'+CUR_MED.signature_base64+'" style="width:140px;height:60px;object-fit:contain;border-radius:8px;" />' : '<div class="sigbox">Signature & Cachet</div>')+
     '</div>'+
   '</div></body></html>';
+}
+
+
+// ══════════════════════════════
+// SIGNATURE ÉLECTRONIQUE
+// ══════════════════════════════
+var SIG_DRAWING = false;
+var SIG_CTX = null;
+
+function ouvrirParams() {
+  showScreen('paramScreen');
+  setTimeout(initCanvas, 100);
+  chargerSignatureExistante();
+}
+
+function initCanvas() {
+  var canvas = document.getElementById('sigCanvas');
+  if (!canvas || SIG_CTX) return;
+  SIG_CTX = canvas.getContext('2d');
+  SIG_CTX.strokeStyle = '#1A1A2E';
+  SIG_CTX.lineWidth = 2.5;
+  SIG_CTX.lineCap = 'round';
+  SIG_CTX.lineJoin = 'round';
+
+  function getPos(e) {
+    var rect = canvas.getBoundingClientRect();
+    var scaleX = canvas.width / rect.width;
+    var scaleY = canvas.height / rect.height;
+    var src = e.touches ? e.touches[0] : e;
+    return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
+  }
+
+  canvas.addEventListener('mousedown',  function(e){ SIG_DRAWING=true; var p=getPos(e); SIG_CTX.beginPath(); SIG_CTX.moveTo(p.x,p.y); });
+  canvas.addEventListener('mousemove',  function(e){ if(!SIG_DRAWING)return; var p=getPos(e); SIG_CTX.lineTo(p.x,p.y); SIG_CTX.stroke(); });
+  canvas.addEventListener('mouseup',    function(){ SIG_DRAWING=false; });
+  canvas.addEventListener('mouseleave', function(){ SIG_DRAWING=false; });
+  canvas.addEventListener('touchstart', function(e){ e.preventDefault(); SIG_DRAWING=true; var p=getPos(e); SIG_CTX.beginPath(); SIG_CTX.moveTo(p.x,p.y); }, {passive:false});
+  canvas.addEventListener('touchmove',  function(e){ e.preventDefault(); if(!SIG_DRAWING)return; var p=getPos(e); SIG_CTX.lineTo(p.x,p.y); SIG_CTX.stroke(); }, {passive:false});
+  canvas.addEventListener('touchend',   function(){ SIG_DRAWING=false; });
+}
+
+function effacerSignature() {
+  var canvas = document.getElementById('sigCanvas');
+  if (SIG_CTX) SIG_CTX.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+async function sauvegarderSignature() {
+  var canvas = document.getElementById('sigCanvas');
+  var base64 = canvas.toDataURL('image/png');
+
+  // Vérifier que le canvas n'est pas vide
+  var blank = document.createElement('canvas');
+  blank.width = canvas.width; blank.height = canvas.height;
+  if (base64 === blank.toDataURL('image/png')) {
+    toast('⚠️ Veuillez signer avant de sauvegarder'); return;
+  }
+
+  toast('⏳ Sauvegarde...');
+  try {
+    var r = await fetch(DB_URL + '?table=medecins&id=' + CUR_MED.supabaseId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-dokita-key': DOKITA_KEY },
+      body: JSON.stringify({ signature_base64: base64 })
+    });
+    if (r.ok) {
+      CUR_MED.signature_base64 = base64;
+      afficherAperçuSignature(base64);
+      toast('✅ Signature sauvegardée');
+    } else {
+      toast('❌ Erreur sauvegarde');
+    }
+  } catch(e) { toast('❌ ' + e.message); }
+}
+
+function chargerSignatureExistante() {
+  if (CUR_MED && CUR_MED.signature_base64) {
+    afficherAperçuSignature(CUR_MED.signature_base64);
+  } else {
+    document.getElementById('sigPreview').style.display = 'none';
+  }
+}
+
+function afficherAperçuSignature(base64) {
+  var preview = document.getElementById('sigPreview');
+  var img = document.getElementById('sigImg');
+  img.src = base64;
+  preview.style.display = 'block';
 }
 
 // ══════════════════════════════
@@ -3153,5 +3242,29 @@ if('serviceWorker' in navigator){
   });
 }
 </script>
+
+<!-- PARAMÈTRES MÉDECIN -->
+<div class="screen" id="paramScreen">
+  <div class="hdr">
+    <div class="hdr-back" onclick="showScreen('dashScreen')">←</div>
+    <div class="hdr-info"><div class="hdr-title">Paramètres</div><div class="hdr-sub">Mon profil médecin</div></div>
+  </div>
+  <div class="dash-body">
+    <div class="sec-title" style="margin-bottom:12px;">✍️ Signature électronique</div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
+      <p style="font-size:12px;color:var(--text3);margin:0 0 12px;">Signez dans le cadre ci-dessous. Cette signature sera apposée sur toutes vos ordonnances.</p>
+      <canvas id="sigCanvas" width="340" height="130"
+        style="border:2px dashed var(--border);border-radius:10px;background:#fff;display:block;width:100%;touch-action:none;cursor:crosshair;"></canvas>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn-sec" onclick="effacerSignature()" style="flex:1;">🗑️ Effacer</button>
+        <button class="btn-pri" onclick="sauvegarderSignature()" style="flex:2;">💾 Sauvegarder</button>
+      </div>
+    </div>
+    <div id="sigPreview" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
+      <div class="sec-title" style="margin-bottom:10px;">Aperçu signature enregistrée</div>
+      <img id="sigImg" style="max-width:200px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:8px;" />
+    </div>
+  </div>
+</div>
 </body>
 </html>
