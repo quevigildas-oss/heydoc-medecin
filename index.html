@@ -6,9 +6,9 @@
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
-     V4.9 — 2026-04-12 : Consultation audio/vidéo Daily.co (boutons 📞📹 · modal iframe · lien WhatsApp patient · terminer appel)
-     V4.9 — 2026-04-11   : Signature électronique (canvas → Supabase → ordonnance) · Écran paramètres ⚙️ · signature_base64 dans INSERT ordonnances · CSS btn-pri/btn-sec
-     V4.8 — 2026-04-01   : Agenda médecin 📅 dans header dashboard
+       V4.9 — 2026-04-12 : Consultation audio/vidéo Daily.co (boutons 📞📹 · modal iframe · lien WhatsApp patient · terminer appel)
+V4.9 — 2026-04-11 : Signature électronique (canvas → Supabase → ordonnance) · Écran paramètres ⚙️ · signature_base64 dans INSERT ordonnances · CSS btn-pri/btn-sec
+V4.8 — 2026-04-01 : Agenda médecin 📅 dans header dashboard
                            Onglets Disponibilités / Demandes RDV
                            ouvrirAjoutDispo() : slots 30min sur 14 jours
                            Confirmer/Refuser demandes RDV patients
@@ -353,18 +353,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 
 <!-- Modal vidéo/audio Daily.co -->
 <div id="videoModal" style="display:none;position:fixed;inset:0;background:#000;z-index:1000;flex-direction:column;">
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#0A1628;">
+  <!-- Header -->
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:#0A1628;flex-shrink:0;">
     <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:#fff;" id="videoModalTitre">Consultation en cours</div>
     <div style="display:flex;gap:8px;">
       <button onclick="basculerModeVideo()" id="btnBasculerVideo" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:6px 12px;color:#fff;font-size:12px;cursor:pointer;">📹 Activer vidéo</button>
       <button onclick="terminerAppel()" style="background:rgba(239,68,68,.2);border:1px solid rgba(239,68,68,.4);border-radius:8px;padding:6px 12px;color:#ef4444;font-size:12px;font-weight:700;cursor:pointer;">⏹ Terminer</button>
     </div>
   </div>
-  <iframe id="videoFrame" allow="camera;microphone;autoplay;display-capture" style="flex:1;border:none;width:100%;"></iframe>
-  <div style="padding:12px 16px;background:#0A1628;display:flex;justify-content:space-between;align-items:center;">
-    <div style="font-size:11px;color:rgba(255,255,255,.6);" id="videoPatientLien">Lien patient : —</div>
-    <button onclick="envoyerLienPatient()" style="background:rgba(0,200,150,.2);border:1px solid rgba(0,200,150,.4);border-radius:8px;padding:6px 14px;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;">📤 Envoyer lien WhatsApp</button>
+  <!-- Barre envoi lien — AVANT l'iframe pour être toujours visible -->
+  <div style="padding:10px 16px;background:#0D1F35;border-bottom:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;gap:8px;">
+    <div style="font-size:10px;color:rgba(255,255,255,.5);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="videoPatientLien">Lien patient : —</div>
+    <button onclick="envoyerLienPatient()" style="background:linear-gradient(135deg,#00C896,#0EA5E9);border:none;border-radius:8px;padding:8px 16px;color:#0A1628;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">📤 Envoyer au patient</button>
   </div>
+  <!-- Iframe Daily.co — prend le reste de l'espace -->
+  <iframe id="videoFrame" allow="camera;microphone;autoplay;display-capture" style="flex:1;border:none;width:100%;min-height:0;"></iframe>
 </div>
 
 </div>
