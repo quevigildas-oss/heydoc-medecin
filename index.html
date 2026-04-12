@@ -3316,9 +3316,27 @@ function basculerModeVideo() {
   }
 }
 
-function envoyerLienPatient() {
+async function envoyerLienPatient() {
   if (!CURRENT_ROOM || !CUR_DOS) return;
+
+  // Essayer d'abord depuis CUR_DOS.patient.tel
   var patTel = (CUR_DOS.patient.tel || '').replace(/[^+\d]/g, '');
+
+  // Si pas de numéro → aller chercher dans Supabase patients via patient_id
+  if (!patTel && CUR_DOS.patient && CUR_DOS.patient.patientId) {
+    try {
+      var r = await fetch(DB_URL + '?table=patients&filter=patient_id=eq.' + encodeURIComponent(CUR_DOS.patient.patientId) + '&select=telephone&limit=1', {
+        headers: {'x-dokita-key': DOKITA_KEY}
+      });
+      var d = await r.json();
+      var row = Array.isArray(d) ? d[0] : null;
+      if (row && row.telephone) {
+        patTel = row.telephone.replace(/[^+\d]/g, '');
+        CUR_DOS.patient.tel = row.telephone; // mettre en cache
+      }
+    } catch(e) { dbgWarn('envoyerLienPatient fetch tel: ' + e.message); }
+  }
+
   if (!patTel) { toast('⚠️ Numéro patient non disponible'); return; }
 
   var mode = CURRENT_ROOM.mode === 'audio' ? 'audio' : 'vidéo';
