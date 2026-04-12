@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.2
+     VERSION : V4.9
      DATE    : 2026-03-25
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
-       V4.8 — 2026-04-01 : Agenda médecin 📅 dans header dashboard
+       V4.9 — 2026-04-12 : Consultation audio/vidéo Daily.co (boutons 📞📹 · modal iframe · lien WhatsApp patient · terminer appel)
+V4.9 — 2026-04-11 : Signature électronique (canvas → Supabase → ordonnance) · Écran paramètres ⚙️ · signature_base64 dans INSERT ordonnances · CSS btn-pri/btn-sec
+V4.8 — 2026-04-01 : Agenda médecin 📅 dans header dashboard
                            Onglets Disponibilités / Demandes RDV
                            ouvrirAjoutDispo() : slots 30min sur 14 jours
                            Confirmer/Refuser demandes RDV patients
@@ -343,8 +345,26 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
   <div class="hdr">
     <div class="hdr-back" onclick="goBack()">←</div>
     <div class="hdr-info"><div class="hdr-title" id="cTitre">Dossier</div><div class="hdr-sub" id="cSub"></div></div>
+    <button class="hdr-btn" id="btnAudio" onclick="lancerAppelDokita('audio')" style="background:rgba(0,200,150,.15);color:var(--accent);border-color:rgba(0,200,150,.3);font-size:16px;" title="Appel audio">📞</button>
+    <button class="hdr-btn" id="btnVideo" onclick="lancerAppelDokita('video')" style="background:rgba(14,165,233,.15);color:#0EA5E9;border-color:rgba(14,165,233,.3);font-size:16px;" title="Appel vidéo">📹</button>
   </div>
   <div class="cbody" id="cBody"></div>
+</div>
+
+<!-- Modal vidéo/audio Daily.co -->
+<div id="videoModal" style="display:none;position:fixed;inset:0;background:#000;z-index:1000;flex-direction:column;">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#0A1628;">
+    <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:#fff;" id="videoModalTitre">Consultation en cours</div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="basculerModeVideo()" id="btnBasculerVideo" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:6px 12px;color:#fff;font-size:12px;cursor:pointer;">📹 Activer vidéo</button>
+      <button onclick="terminerAppel()" style="background:rgba(239,68,68,.2);border:1px solid rgba(239,68,68,.4);border-radius:8px;padding:6px 12px;color:#ef4444;font-size:12px;font-weight:700;cursor:pointer;">⏹ Terminer</button>
+    </div>
+  </div>
+  <iframe id="videoFrame" allow="camera;microphone;autoplay;display-capture" style="flex:1;border:none;width:100%;"></iframe>
+  <div style="padding:12px 16px;background:#0A1628;display:flex;justify-content:space-between;align-items:center;">
+    <div style="font-size:11px;color:rgba(255,255,255,.6);" id="videoPatientLien">Lien patient : —</div>
+    <button onclick="envoyerLienPatient()" style="background:rgba(0,200,150,.2);border:1px solid rgba(0,200,150,.4);border-radius:8px;padding:6px 14px;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;">📤 Envoyer lien WhatsApp</button>
+  </div>
 </div>
 
 </div>
@@ -446,7 +466,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 
 <script>
 // ══════════════════════════════
-// CONFIG — V4.2 Supabase
+// CONFIG — V4.9 Supabase + Daily.co
+var VIDEO_URL = 'https://heydoc-medecin.vercel.app/api/video';
+var DAILY_ROOM = null; // room active
 // ══════════════════════════════
 var DB_URL     = 'https://heydoc-medecin.vercel.app/api/db';
 var SAVE_URL   = 'https://heydoc-medecin.vercel.app/api/save';
@@ -3124,6 +3146,7 @@ function buildOrdoHtml(d,ordo){
           (m.conditionnement?'<div>📦 '+escHtml(m.conditionnement)+'</div>':'')+
         '</div></div>';
     }).join(''):'<div class="empty">Aucun médicament enregistré</div>')+
+    '<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#166534;">💡 Ces médicaments sont prescrits sous leur nom générique — Le générique : c\'est moins cher et tout aussi efficace 😉</div>'+
     (notes?'<div class="notesbox"><b style="display:block;margin-bottom:6px;">📝 Notes</b>'+escHtml(notes).replace(/\n/g,'<br>')+'</div>':'')+
     '<div class="foot">'+
       '<div class="footmed"><strong>'+escHtml(CUR_MED.nom)+'</strong>'+escHtml(CUR_MED.spec)+'<br><span style="font-size:11px;color:#64748B;">N° Ordre : '+escHtml(CUR_MED.ordre||'')+'</span></div>'+
@@ -3217,6 +3240,114 @@ function afficherAperçuSignature(base64) {
   var img = document.getElementById('sigImg');
   img.src = base64;
   preview.style.display = 'block';
+}
+
+
+// ══════════════════════════════
+// CONSULTATION VIDÉO/AUDIO — Daily.co
+// ══════════════════════════════
+var CURRENT_ROOM = null; // { room_name, url_patient, token_medecin, mode }
+
+async function lancerAppelDokita(mode) {
+  if (!CUR_DOS) { toast('Aucun dossier ouvert'); return; }
+
+  var patNom = (CUR_DOS.patient.nom || 'Patient').trim();
+  var medNom = CUR_MED ? CUR_MED.nom : 'Médecin Dokita';
+  var label = mode === 'audio' ? '📞 Appel audio' : '📹 Appel vidéo';
+
+  toast('⏳ Création de la salle de consultation...');
+
+  try {
+    var r = await fetch(VIDEO_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-dokita-key': DOKITA_KEY },
+      body: JSON.stringify({
+        consultation_id: CUR_DOS.supabaseId || CUR_DOS.id,
+        patient_nom: patNom,
+        medecin_nom: medNom,
+        mode: mode
+      })
+    });
+
+    if (!r.ok) { toast('❌ Erreur création salle'); return; }
+    var data = await r.json();
+    CURRENT_ROOM = data;
+
+    // Afficher le modal vidéo avec l'iframe Daily.co (médecin)
+    var modal = document.getElementById('videoModal');
+    var frame = document.getElementById('videoFrame');
+    var titre = document.getElementById('videoModalTitre');
+    var lienEl = document.getElementById('videoPatientLien');
+    var btnBascule = document.getElementById('btnBasculerVideo');
+
+    titre.textContent = label + ' — ' + patNom;
+    // URL médecin avec son token
+    frame.src = data.room_url + '?t=' + data.token_medecin;
+    lienEl.textContent = 'Lien patient : ' + data.url_patient;
+
+    // Bouton bascule vidéo uniquement en mode audio
+    btnBascule.style.display = mode === 'audio' ? 'block' : 'none';
+
+    modal.style.display = 'flex';
+    modal.style.flexDirection = 'column';
+
+    dbg('Room créée: ' + data.room_name + ' | mode: ' + mode);
+
+  } catch(e) {
+    toast('❌ Erreur: ' + e.message);
+    dbgWarn('lancerAppelDokita: ' + e.message);
+  }
+}
+
+function basculerModeVideo() {
+  // Passer de audio à vidéo en rechargeant l'iframe sans caméra désactivée
+  var frame = document.getElementById('videoFrame');
+  if (CURRENT_ROOM) {
+    // Recharger sans start_video_off
+    frame.src = '';
+    setTimeout(function() {
+      frame.src = CURRENT_ROOM.room_url + '?t=' + CURRENT_ROOM.token_medecin;
+    }, 300);
+    document.getElementById('btnBasculerVideo').style.display = 'none';
+    toast('📹 Vidéo activée');
+  }
+}
+
+function envoyerLienPatient() {
+  if (!CURRENT_ROOM || !CUR_DOS) return;
+  var patTel = (CUR_DOS.patient.tel || '').replace(/[^+\d]/g, '');
+  if (!patTel) { toast('⚠️ Numéro patient non disponible'); return; }
+
+  var mode = CURRENT_ROOM.mode === 'audio' ? 'audio' : 'vidéo';
+  var msg = encodeURIComponent(
+    '👋 Bonjour ' + (CUR_DOS.patient.nom || '') + ',\n\n' +
+    'Votre médecin Dokita vous invite à une consultation en ' + mode + '.\n\n' +
+    '📱 Cliquez sur ce lien pour rejoindre :\n' +
+    CURRENT_ROOM.url_patient + '\n\n' +
+    '⚠️ Assurez-vous d\'être dans un endroit calme avec une bonne connexion.\n\n' +
+    'Dokita — Votre santé, notre priorité'
+  );
+
+  window.open('https://wa.me/' + patTel + '?text=' + msg, '_blank');
+  toast('✅ Lien envoyé au patient');
+}
+
+function terminerAppel() {
+  var frame = document.getElementById('videoFrame');
+  frame.src = '';
+  document.getElementById('videoModal').style.display = 'none';
+
+  // Supprimer la room côté serveur
+  if (CURRENT_ROOM && CURRENT_ROOM.room_name) {
+    fetch(VIDEO_URL, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', 'x-dokita-key': DOKITA_KEY },
+      body: JSON.stringify({ room_name: CURRENT_ROOM.room_name })
+    }).catch(function() {});
+    dbg('Room fermée: ' + CURRENT_ROOM.room_name);
+    CURRENT_ROOM = null;
+  }
+  toast('✅ Consultation terminée');
 }
 
 // ══════════════════════════════
