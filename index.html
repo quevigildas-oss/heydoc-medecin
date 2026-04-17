@@ -631,6 +631,7 @@ function parseDossierSupabase(row){
     examensRecommandes: row.examens_recommandes||'',
     medicamentsOMS: row.medicaments_oms||'',
     contreIndications: row.contre_indications||'',
+    noteHistorique: row.note_historique||'',
     sourcesOMS: row.sources_oms||'',
     diagMed: row.diagnostic_medecin||'',
     examensPrescrit: row.examens_prescrit||'',
@@ -1962,6 +1963,7 @@ function renderConsult(){
     // 4. Diagnostic IA patient — masqué, révélé après validation
     '<div class="fsec" id="iaPatientSec" style="display:none">'+
       '<div class="fsec-title"><div class="fsec-ico bl">🤖</div><div class="fsec-label">Analyse IA patient</div></div>'+
+      (d.noteHistorique?'<div style="background:#FFF7ED;border:1.5px solid #F59E0B;border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;gap:10px;align-items:flex-start;"><div style="font-size:18px;flex-shrink:0;">🔄</div><div><div style="font-size:10px;font-weight:700;color:#D97706;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Historique patient</div><div style="font-size:12px;color:#92400E;line-height:1.5;">'+escHtml(d.noteHistorique)+'</div></div></div>':'')+
       '<div class="ia-box"><div class="ia-tag">IA MÉDICALE</div><div class="ia-txt">'+escHtml(d.diagIA||'Non renseigné').replace(/\n/g,'<br>')+'</div></div>'+
       (d.recommandationsOMS?'<div style="margin-top:10px;"><div class="ia-tag" style="background:rgba(0,200,150,.15);border-color:rgba(0,200,150,.3);color:var(--accent);">OMS</div><div class="ia-txt" style="margin-top:6px;">'+escHtml(d.recommandationsOMS).replace(/\n/g,'<br>')+'</div></div>':'')+
     '</div>'+
