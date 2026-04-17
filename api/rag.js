@@ -946,6 +946,7 @@ Réponds UNIQUEMENT avec le JSON valide ci-dessous (sans markdown, sans texte av
   "examens": "TOUS les examens recommandés OMS pour CHAQUE diagnostic, séparés par | — préciser obligatoire ou recommandé",
   "medicaments_oms": "DIAGNOSTIC 1: médicament 1ère intention — dosage exact — durée | médicament 2ème intention — dosage — durée || DIAGNOSTIC 2: médicament 1ère intention — dosage — durée",
   "contre_indications": "contre-indications et précautions pour CHAQUE diagnostic selon profil patient",
+  "note_historique": "Si le contexte [HISTORIQUE CONSULTATIONS] contient des plaintes récurrentes ou consultations passées similaires, résume en 1-2 phrases ce que le médecin doit savoir : ex 'Patient consulte pour la 3e fois pour fièvre en 2 mois — paludisme traité 2x, vérifier compliance et résistance'. Laisser vide si aucun historique pertinent.",
   "sources": "nom du document MSF/OMS trouvé dans les sources"
 }
 
