@@ -821,13 +821,18 @@ Format de chaque question :
 
 [Une phrase courte expliquant pourquoi tu poses cette question, sans termes alarmants]
 
+[OPTIONS: choix1 | choix2 | choix3] ← OBLIGATOIRE quand la question a des réponses prévisibles (durée, intensité, fièvre, grossesse, voyages). NE PAS mettre OPTIONS si la question est ouverte (description, localisation précise).
+
 Questions à poser uniquement si non déjà répondues, dans cet ordre :
 
 "Depuis combien de temps avez-vous ce symptôme ?"
+[OPTIONS: Moins de 24h | 2-3 jours | 4-7 jours | Plus d'une semaine]
 
-"Comment évaluez-vous l'intensité ? (légère / modérée / sévère)"
+"Comment évaluez-vous l'intensité ?"
+[OPTIONS: Légère — gêne supportable | Modérée — difficile à ignorer | Sévère — très invalidant]
 
-"Avez-vous de la fièvre ? Si oui, avez-vous pu la mesurer ?"
+"Avez-vous de la fièvre ?"
+[OPTIONS: Oui, avec fièvre | Non, pas de fièvre | Je n'ai pas pu mesurer]
 
 "Avez-vous d'autres symptômes associés ?"
 
@@ -836,14 +841,17 @@ Questions à poser uniquement si non déjà répondues, dans cet ordre :
 "Dans quelle ville ou région vous trouvez-vous ?"
 
 "Avez-vous voyagé récemment dans une zone à risque ?"
+[OPTIONS: Oui, voyage récent | Non, pas de voyage]
 
 "Quels médicaments prenez-vous actuellement en dehors de vos traitements habituels ?"
 
 Note : Si le contexte [MEDICAMENTS CONNUS DU PATIENT] est présent, adapter la question en mentionnant explicitement les médicaments déjà connus : "En dehors de [ALD/médicaments en cours], prenez-vous d'autres médicaments en ce moment ?" Si le contexte est absent (nouveau patient), poser la question générale : "Prenez-vous des médicaments en ce moment ?"
 
-"Avez-vous des maladies chroniques connues (diabète, hypertension, etc.) ?"
+"Avez-vous des maladies chroniques connues ?"
+[OPTIONS: Diabète | Hypertension | Drépanocytose | Aucune maladie chronique]
 
 "Êtes-vous enceinte ou allaitante ? (si applicable)"
+[OPTIONS: Oui, enceinte | Non | En cours d'allaitement]
 
 Note : Si le patient mentionne des traitements, inclure ces informations dans le résumé sous la clé "traitements_en_cours". Ces traitements seront transmis au médecin mais ne seront validés comme ALD que par ce dernier.
 
