@@ -2183,8 +2183,29 @@ async function lancerValidationIA(){
       var erows=Array.isArray(edata)?edata:(edata.data||[]);
       if(erows.length){
         examens=erows.map(function(ex){
-          return (ex.obligatoire?'[OBL] ':'[REC] ')+ex.type_examen;
-        }).join('\n');
+          var ligne=(ex.obligatoire?'[OBL] ':'[REC] ')+ex.type_examen;
+          // Ajouter statut
+          if(ex.statut==='resultat_recu') ligne+=' — ✅ Résultat reçu';
+          else ligne+=' — ⏳ En attente';
+          // Ajouter résultat texte si disponible
+          if(ex.resultat) ligne+='\n   Résultat: '+ex.resultat;
+          // Ajouter valeurs extraites par IA si disponibles
+          if(ex.extraction_json){
+            try{
+              var ext=typeof ex.extraction_json==='string'?JSON.parse(ex.extraction_json):ex.extraction_json;
+              if(ext&&ext.valeurs&&ext.valeurs.length){
+                var vals=ext.valeurs.map(function(v){
+                  var flag=v.statut==='critique'?'🚨 CRITIQUE':v.statut==='eleve'?'⬆️ ÉLEVÉ':v.statut==='bas'?'⬇️ BAS':'✅ Normal';
+                  return '   • '+v.parametre+': '+v.valeur+' '+v.unite+' ['+flag+']'+(v.norme?' (norme: '+v.norme+')':'');
+                }).join('\n');
+                ligne+='\n   Valeurs IA:\n'+vals;
+                if(ext.interpretation_globale) ligne+='\n   Interprétation: '+ext.interpretation_globale;
+                if(ext.alertes&&ext.alertes.length) ligne+='\n   ⚠️ Alertes: '+ext.alertes.join(' | ');
+              }
+            }catch(e){}
+          }
+          return ligne;
+        }).join('\n\n');
       }
     }catch(e){dbgWarn('Examens pour validation: '+e.message);}
   }
@@ -2232,6 +2253,7 @@ async function lancerValidationIA(){
     'Traitements en cours: '+(p.traitements||'Aucun')+'\n'+
     'Antécédents: '+(p.antecedents||'Aucun')+'\n\n'+
     '=== DIAGNOSTIC IA ===\n'+(d.diagIA||'Non renseigné')+'\n\n'+
+    '=== RÉSULTATS EXAMENS (valeurs réelles du patient) ===\n'+examens+'\n\n'+
     '=== EXAMENS RECOMMANDÉS OMS ===\n'+(d.examensRecommandes||'Non renseignés')+'\n\n'+
     '=== RECOMMANDATIONS OMS ===\n'+(d.recommandationsOMS||'Non renseignées')+'\n\n'+
     '=== MÉDICAMENTS OMS (1ère intention) ===\n'+(d.medicamentsOMS||'Non renseignés')+'\n\n'+
@@ -2276,6 +2298,8 @@ async function lancerValidationIA(){
       'VERDICT: CONFORME ou NON CONFORME\n\n'+
       'EXAMENS:\n'+
       '- [examen OMS]: [prescrit ✅ / manquant ⚠️ / non obligatoire ℹ️]\n\n'+
+      'RÉSULTATS EXAMENS:\n'+
+      '- [paramètre]: [valeur] → [normal/anormal/critique — impact sur diagnostic/traitement]\n\n'+
       'MÉDICAMENTS:\n'+
       '- [médicament] [dose/jour] vs OMS [fourchette] → [OK / NON]\n'+
       '- Interactions/Contre-indications: [résultat]\n\n'+
