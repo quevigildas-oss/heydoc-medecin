@@ -1709,7 +1709,7 @@ function appliquerEtatToggle(){
                   '<button onclick="deleteExam(\''+exId+'\')" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);border-radius:6px;width:26px;height:26px;font-size:12px;cursor:pointer;color:#ef4444;flex-shrink:0;">×</button>'
                 :'')+
               '</div>'+
-              (ex.resultat?'<div style="font-size:12px;color:var(--text2);background:rgba(0,200,150,.05);border-radius:6px;padding:6px 8px;margin-top:6px;">'+escHtml(ex.resultat)+'</div>':'')+
+              (ex.resultat?renderResultatExamen(ex):'')+ 
             '</div>';
         });
         resList.innerHTML=html||'<div style="font-size:11px;color:var(--text3);">Aucun examen</div>';
@@ -3400,6 +3400,71 @@ if('serviceWorker' in navigator){
     });
   });
 }
+
+// ══════════════════════════════
+// AFFICHAGE RÉSULTATS EXAMENS — Dokita Pro
+// Affiche les valeurs extraites par Claude Vision de façon structurée
+// ══════════════════════════════
+function renderResultatExamen(ex){
+  // Tenter de parser extraction_json si disponible
+  var extraction=null;
+  if(ex.extraction_json){
+    try{extraction=typeof ex.extraction_json==='string'?JSON.parse(ex.extraction_json):ex.extraction_json;}catch(e){}
+  }
+
+  var html='<div style="margin-top:8px;">';
+
+  if(extraction&&extraction.valeurs&&extraction.valeurs.length){
+    // ── Vue structurée avec valeurs IA ──
+    // Alertes critiques
+    if(extraction.alertes&&extraction.alertes.length){
+      html+='<div style="background:#FEF2F2;border:1px solid #EF4444;border-radius:8px;padding:8px 10px;margin-bottom:8px;">';
+      html+='<div style="font-size:10px;font-weight:700;color:#EF4444;margin-bottom:4px;">🚨 VALEURS CRITIQUES</div>';
+      extraction.alertes.forEach(function(a){
+        html+='<div style="font-size:11px;color:#7F1D1D;">• '+escHtml(a)+'</div>';
+      });
+      html+='</div>';
+    }
+
+    // Tableau valeurs
+    html+='<div style="background:rgba(0,200,150,.04);border:1px solid rgba(0,200,150,.15);border-radius:8px;overflow:hidden;margin-bottom:6px;">';
+    extraction.valeurs.forEach(function(v,i){
+      var color=v.statut==='critique'?'#EF4444':v.statut==='eleve'?'#F59E0B':v.statut==='bas'?'#3B82F6':'#10B981';
+      var ico=v.statut==='critique'?'🚨':v.statut==='eleve'?'⬆️':v.statut==='bas'?'⬇️':'✅';
+      html+='<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;'+(i>0?'border-top:1px solid rgba(0,0,0,.05)':'')+'">';
+      html+='<span style="font-size:13px;">'+ico+'</span>';
+      html+='<span style="font-size:12px;font-weight:600;color:var(--text);flex:1;">'+escHtml(v.parametre)+'</span>';
+      html+='<span style="font-size:13px;font-weight:700;color:'+color+';">'+escHtml(String(v.valeur))+' <span style="font-size:10px;font-weight:400;color:var(--text3);">'+escHtml(v.unite||'')+'</span></span>';
+      if(v.norme)html+='<span style="font-size:9px;color:var(--text3);white-space:nowrap;">Norme: '+escHtml(v.norme)+'</span>';
+      html+='</div>';
+    });
+    html+='</div>';
+
+    // Interprétation globale
+    if(extraction.interpretation_globale){
+      html+='<div style="background:var(--bg3);border-radius:8px;padding:8px 10px;margin-bottom:6px;">';
+      html+='<div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;">Interprétation IA</div>';
+      html+='<div style="font-size:11px;color:var(--text);line-height:1.5;">'+escHtml(extraction.interpretation_globale)+'</div>';
+      html+='</div>';
+    }
+
+    // Recommandations pour le médecin
+    if(extraction.recommandations){
+      html+='<div style="background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.2);border-radius:8px;padding:8px 10px;">';
+      html+='<div style="font-size:9px;font-weight:700;color:#818cf8;text-transform:uppercase;margin-bottom:3px;">Recommandations</div>';
+      html+='<div style="font-size:11px;color:var(--text);line-height:1.5;">'+escHtml(extraction.recommandations)+'</div>';
+      html+='</div>';
+    }
+
+  } else if(ex.resultat) {
+    // ── Vue texte simple si pas d'extraction IA ──
+    html+='<div style="font-size:12px;color:var(--text2);background:rgba(0,200,150,.05);border-radius:6px;padding:6px 8px;">'+escHtml(ex.resultat)+'</div>';
+  }
+
+  html+='</div>';
+  return html;
+}
+
 </script>
 
 <!-- PARAMÈTRES MÉDECIN -->
