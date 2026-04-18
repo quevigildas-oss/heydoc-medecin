@@ -44,15 +44,15 @@ export default async function handler(req, res) {
 
       // Patient
       patient_id:           body.patient_id        || '',
-      patient_nom:          body.nom                || '',
-      patient_age:          parseInt(body.age)      || null,
-      patient_poids:        parseFloat(body.poids)  || null,
-      patient_ville:        body.ville              || 'Non renseignée',
-      patient_voyage:       body.voyage             || 'Aucun',
+      patient_nom:          body.patient_nom || body.nom  || '',
+      patient_age:          parseInt(body.patient_age || body.age) || null,
+      patient_poids:        parseFloat(body.patient_poids || body.poids) || null,
+      patient_ville:        body.patient_ville || body.ville || 'Non renseignée',
+      patient_voyage:       body.patient_voyage || body.voyage || 'Aucun',
 
       // Consultation Dr. AfriBot
       symptomes:            body.symptomes          || '',
-      diagnostic_ia:        body.diagnostic         || '',
+      diagnostic_ia:        body.diagnostic_ia || body.diagnostic || '',
 
       // Recommandations OMS depuis Supabase pgvector
       // ⚠️ Ces champs sont masqués au médecin jusqu'à soumission prescription
@@ -60,7 +60,10 @@ export default async function handler(req, res) {
       recommandations_oms:  body.recommandations    || '',
       medicaments_oms:      body.medicaments_oms    || '',
       contre_indications:   body.contre_indications || '',
+      note_historique:      body.note_historique     || '',
       sources_oms:          body.sources            || '',
+
+      medecin_id:           body.medecin_id || null,
 
       // Statut initial
       statut:               'en_attente',
@@ -100,7 +103,7 @@ export default async function handler(req, res) {
       try {
         // Récupérer les médecins actifs depuis Supabase
         const medecinRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/medecins?statut=eq.actif&select=nom,prenom,email&limit=10`,
+          `${SUPABASE_URL}/rest/v1/medecins?statut=ilike.actif&select=nom,prenom,email&limit=10`,
           {
             headers: {
               'apikey':        SUPABASE_KEY,
@@ -114,11 +117,17 @@ export default async function handler(req, res) {
           : [];
 
         if (destinataires.length > 0) {
+          // Trouver le médecin destinataire pour personnaliser le message
+          const medecinDestinataire = medecins.find(m => m.email === destinataires[0]);
+          const nomMedecin   = medecinDestinataire
+            ? `Dr. ${medecinDestinataire.prenom || ''} ${medecinDestinataire.nom || ''}`.trim()
+            : 'Dr.';
+
           const nomPatient   = payload.patient_nom || 'Patient';
           const agePatient   = payload.patient_age ? `${payload.patient_age} ans` : 'Non renseigné';
-          const sexePatient  = body.sexe || '—';
+          const sexePatient  = body.patient_sexe || body.sexe || 'Non renseigné';
           const poidsPatient = payload.patient_poids ? `${payload.patient_poids} kg` : 'Non renseigné';
-          const villePatient = payload.patient_ville;
+          const villePatient = payload.patient_ville || 'Non renseignée';
           const symptomes    = payload.symptomes || '—';
           const diagnostic   = payload.diagnostic_ia || '—';
           const dateConsult  = now.toLocaleDateString('fr-FR', {
@@ -126,9 +135,9 @@ export default async function handler(req, res) {
             hour: '2-digit', minute: '2-digit'
           });
 
-          const emailBody = `Bonjour Dr.,
+          const emailBody = `Bonjour ${nomMedecin},
 
-Nouveau dossier patient Dokita.
+Nous vous adressons un nouveau patient via la plateforme Dokita.
 
 === PATIENT ===
 Nom: ${nomPatient}
@@ -144,11 +153,12 @@ ID: ${consultationId}
 SYMPTÔMES:
 ${symptomes}
 
-DIAGNOSTIC IA:
+DIAGNOSTIC IA (Dr. AfriBot):
 ${diagnostic}
 
 ---
-Connectez-vous à Dokita Pro pour traiter ce dossier.
+Veuillez vous connecter à Dokita Pro pour consulter le dossier complet. Merci de votre engagement à nos côtés.
+
 Dokita — Outil d'aide à la décision médicale`;
 
           const emailRes = await fetch('https://api.resend.com/emails', {
