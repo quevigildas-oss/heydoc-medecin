@@ -26,7 +26,17 @@ export default async function handler(req, res) {
   // Ex: POST /api/db?table=consultations (body = payload)
   // Ex: PATCH /api/db?table=consultations&id=uuid (body = updates)
 
-  const { table, filter, filter2, filter3, order, limit, id, select } = req.query;
+  // table : priorité req.query, fallback req.body.table pour les POST
+  const _q = req.query;
+  const _bodyTable = (req.method === 'POST' && req.body && req.body.table) ? req.body.table : null;
+  const table   = _q.table   || _bodyTable;
+  const filter  = _q.filter;
+  const filter2 = _q.filter2;
+  const filter3 = _q.filter3;
+  const order   = _q.order;
+  const limit   = _q.limit;
+  const id      = _q.id;
+  const select  = _q.select;
 
   if (!table) {
     return res.status(400).json({ error: 'Paramètre table requis' });
@@ -94,7 +104,11 @@ export default async function handler(req, res) {
     if (req.method === 'PATCH') headers['Prefer'] = 'return=representation';
 
     // ── Injecter is_test sur les écritures ──
+    // Si POST avec body.table (format {table, data}), extraire body.data
     let body = req.body;
+    if (req.method === 'POST' && body && body.table && body.data) {
+      body = body.data;
+    }
     if ((req.method === 'POST') && TABLES_AVEC_IS_TEST.includes(table)) {
       body = { ...body, is_test: IS_TEST };
     }
