@@ -1709,7 +1709,7 @@ function appliquerEtatToggle(){
                   '<button onclick="deleteExam(\''+exId+'\')" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);border-radius:6px;width:26px;height:26px;font-size:12px;cursor:pointer;color:#ef4444;flex-shrink:0;">×</button>'
                 :'')+
               '</div>'+
-              (ex.resultat?renderResultatExamen(ex):'')+ 
+              (ex.resultat?renderResultatExamen(ex,CUR_DOS&&CUR_DOS.patient&&CUR_DOS.patient.patientId||''):'')+ 
             '</div>';
         });
         resList.innerHTML=html||'<div style="font-size:11px;color:var(--text3);">Aucun examen</div>';
@@ -3429,7 +3429,38 @@ if('serviceWorker' in navigator){
 // AFFICHAGE RÉSULTATS EXAMENS — Dokita Pro
 // Affiche les valeurs extraites par Claude Vision de façon structurée
 // ══════════════════════════════
-function renderResultatExamen(ex){
+async function voirFichierExamenPro(examenId, patId){
+  try{
+    toast('⏳ Chargement du fichier...');
+    var r=await fetch(DB_URL+'?table=dossier_medical&select=contenu_base64,mime_type,nom&filter=note=eq.'+encodeURIComponent(examenId)+'&filter2=patient_id=eq.'+encodeURIComponent(patId)+'&limit=1',{
+      headers:{'x-dokita-key':DOKITA_KEY}
+    });
+    var data=await r.json();
+    var doc=data&&data[0];
+    if(!doc||!doc.contenu_base64){toast('⚠️ Fichier non disponible');return;}
+    var mime=doc.mime_type||'application/octet-stream';
+    var dataUrl='data:'+mime+';base64,'+doc.contenu_base64;
+    if(mime.startsWith('image/')){
+      // Ouvrir modal image
+      var old=document.getElementById('proModal');if(old)old.remove();
+      var m=document.createElement('div');
+      m.id='proModal';
+      m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;';
+      m.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;width:100%;max-width:700px;margin-bottom:10px;">'+
+        '<div style="font-size:12px;font-weight:700;color:#fff;">'+escHtml(doc.nom||'Résultat')+'</div>'+
+        '<button onclick="document.getElementById(\'proModal\').remove()" style="background:rgba(255,255,255,.15);border:none;border-radius:6px;padding:5px 12px;color:#fff;font-size:12px;cursor:pointer;">✕ Fermer</button>'+
+      '</div>'+
+      '<img src="'+dataUrl+'" style="max-width:100%;max-height:80vh;border-radius:10px;object-fit:contain;">';
+      document.body.appendChild(m);
+    }else{
+      // PDF → nouvel onglet
+      var blob=new Blob([Uint8Array.from(atob(doc.contenu_base64),function(c){return c.charCodeAt(0)})],{type:mime});
+      window.open(URL.createObjectURL(blob),'_blank');
+    }
+  }catch(e){toast('❌ '+e.message);}
+}
+
+function renderResultatExamen(ex, patId){
   // Tenter de parser extraction_json si disponible
   var extraction=null;
   if(ex.extraction_json){
@@ -3437,6 +3468,13 @@ function renderResultatExamen(ex){
   }
 
   var html='<div style="margin-top:8px;">';
+
+  // Bouton Voir le fichier
+  if(patId){
+    html+='<div style="display:flex;justify-content:flex-end;margin-bottom:6px;">'+
+      '<button onclick="voirFichierExamenPro(\''+ex.id+'\',\''+patId+'\')" style="font-size:10px;font-weight:700;color:var(--accent);background:rgba(0,200,150,.12);border:1px solid rgba(0,200,150,.3);border-radius:6px;padding:3px 10px;cursor:pointer;">👁️ Voir le fichier</button>'+
+    '</div>';
+  }
 
   if(extraction&&extraction.valeurs&&extraction.valeurs.length){
     // ── Vue structurée avec valeurs IA ──
