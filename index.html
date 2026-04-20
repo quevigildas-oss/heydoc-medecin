@@ -2,7 +2,7 @@
 <!-- ============================================
      DOKITA PRO — App Médecin
      VERSION : V4.9
-     DATE    : 2026-03-25
+     DATE    : 2026-04-20 19:42:16
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
@@ -1375,7 +1375,7 @@ async function chargerDocsPatient(){
   var patId=CUR_DOS.patient.patientId||'';
   if(!patId){sec.style.display='none';return;}
   try{
-    var r=await fetch(DB_URL+'?table=dossier_medical&filter=patient_id=eq.'+encodeURIComponent(patId)+'&filter2=statut=eq.actif&order=created_at.desc&limit=30',{
+    var r=await fetch(DB_URL+'?table=dossier_medical&select=id,patient_id,nom,type_document,mime_type,taille_octets,url,source,statut,valeur,note,created_at,visible_medecin,confirme_par,resultat_ia,extraction_json&filter=patient_id=eq.'+encodeURIComponent(patId)+'&filter2=statut=eq.actif&order=created_at.desc&limit=30',{
       headers:{'x-dokita-key':DOKITA_KEY}
     });
     var data=await r.json();
@@ -1410,7 +1410,7 @@ async function chargerDocsPatient(){
       html+=declaratifs.map(function(doc){
         var t=TYPES[doc.type_document]||TYPES['autre'];
         var dateAff=doc.created_at?new Date(doc.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}):'';
-        var hasFile=!!(doc.contenu_base64||doc.url);
+        var hasFile=!!(doc.mime_type||doc.taille_octets||doc.contenu_base64||doc.url);
         return '<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:12px;margin-bottom:8px;">'+
           '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'+
             '<div style="width:36px;height:36px;border-radius:8px;background:'+t.color+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+t.ico+'</div>'+
