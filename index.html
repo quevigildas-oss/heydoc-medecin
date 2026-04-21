@@ -2,7 +2,7 @@
 <!-- ============================================
      DOKITA PRO — App Médecin
      VERSION : V4.10
-     DATE    : 2026-04-21 08:05:12
+     DATE    : 2026-04-21 08:35:01
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
@@ -196,6 +196,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .theme-toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--text3);transition:all .3s;}
 .theme-toggle.on{background:var(--accent);border-color:var(--accent);}
 .theme-toggle.on::after{left:22px;background:#fff;}
+.jour-btn{padding:7px 10px;border-radius:8px;border:1.5px solid var(--border);font-size:11px;font-weight:600;cursor:pointer;background:var(--bg3);color:var(--text);transition:all .2s;}
+.jour-btn.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.langue-chip{padding:6px 12px;border-radius:20px;border:1.5px solid var(--border);font-size:11px;font-weight:600;cursor:pointer;background:var(--bg3);color:var(--text);transition:all .2s;}
+.langue-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;}
 
 /* Statut mise à jour Notion */
 .notion-sync{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);margin-bottom:4px;}
@@ -577,6 +581,109 @@ function mergeChamp(existant,nouveau){
 
 // Variables globales
 function logoutPro(){doLogout();}
+
+// ── Langues disponibles ──
+var LANGUES_DISPO=['Français','Anglais','Portugais','Arabe','Dioula','Mooré','Wolof','Hausa','Yoruba','Igbo','Fulfuldé','Ewe','Mina','Baoulé','Bété','Twi','Lingala','Soninké','Bambara','Zarma'];
+var JOURS_DISPO=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+var PRO_TOGGLES={distance:false,domicile:false,urgences:false,mobile:false,assurance:false};
+var PRO_SEXE='';
+var PRO_LANGUES=[];
+var PRO_JOURS=[];
+
+function selectSexePro(s){
+  PRO_SEXE=s;
+  var m=document.getElementById('pSexeM'),f=document.getElementById('pSexeF');
+  if(m){m.style.background=s==='M'?'var(--accent)':'var(--bg3)';m.style.color=s==='M'?'#fff':'var(--text)';m.style.borderColor=s==='M'?'var(--accent)':'var(--border)';}
+  if(f){f.style.background=s==='F'?'var(--accent)':'var(--bg3)';f.style.color=s==='F'?'#fff':'var(--text)';f.style.borderColor=s==='F'?'var(--accent)':'var(--border)';}
+}
+function togglePro(key){
+  PRO_TOGGLES[key]=!PRO_TOGGLES[key];
+  var el=document.getElementById('tog'+key.charAt(0).toUpperCase()+key.slice(1));
+  if(el)el.classList.toggle('on',PRO_TOGGLES[key]);
+}
+function toggleJour(j){
+  var idx=PRO_JOURS.indexOf(j);
+  if(idx>=0)PRO_JOURS.splice(idx,1);else PRO_JOURS.push(j);
+  var btn=document.getElementById('jour'+j);
+  if(btn)btn.classList.toggle('on',PRO_JOURS.indexOf(j)>=0);
+}
+function toggleLangue(l){
+  var idx=PRO_LANGUES.indexOf(l);
+  if(idx>=0)PRO_LANGUES.splice(idx,1);else PRO_LANGUES.push(l);
+  document.querySelectorAll('.langue-chip').forEach(function(c){
+    if(c.dataset.langue===l)c.classList.toggle('on',PRO_LANGUES.indexOf(l)>=0);
+  });
+}
+function chargerProfilDansForm(){
+  var m=CUR_MED;if(!m)return;
+  var prParts=(m.nom||'').replace('Dr. ','').split(' ');
+  var set=function(id,v){var el=document.getElementById(id);if(el)el.value=v||'';};
+  set('pPrenom',m.prenom||prParts[0]);
+  set('pNom',m.nomFamille||prParts[1]);
+  set('pSpec',m.spec);
+  set('pSousSpec',m.sous_specialite);
+  set('pExperience',m.annees_experience);
+  set('pEmail',m.email);
+  set('pTel',m.telephone);
+  set('pWhatsapp',m.whatsapp);
+  set('pLocalisation',m.localisation);
+  set('pTarif',m.tarif_consultation);
+  var dev=document.getElementById('pDevise');if(dev)dev.value=m.devise||'FCFA';
+  selectSexePro(m.sexe||'');
+  PRO_TOGGLES={distance:!!m.consultation_distance,domicile:!!m.visite_domicile,urgences:!!m.urgences,mobile:!!m.paiement_mobile,assurance:!!m.accepte_assurance};
+  ['Distance','Domicile','Urgences','Mobile','Assurance'].forEach(function(k){var el=document.getElementById('tog'+k);if(el)el.classList.toggle('on',PRO_TOGGLES[k.toLowerCase()]);});
+  PRO_LANGUES=Array.isArray(m.langues_parlees)?m.langues_parlees.slice():[];
+  var grid=document.getElementById('languesGrid');
+  if(grid)grid.innerHTML=LANGUES_DISPO.map(function(l){return '<button class="langue-chip'+(PRO_LANGUES.indexOf(l)>=0?' on':'')+'" data-langue="'+l+'" onclick="toggleLangue(\''+l+'\')">'+l+'</button>';}).join('');
+  PRO_JOURS=Array.isArray(m.jours_consultation)?m.jours_consultation.slice():[];
+  JOURS_DISPO.forEach(function(j){var btn=document.getElementById('jour'+j);if(btn)btn.classList.toggle('on',PRO_JOURS.indexOf(j)>=0);});
+  var av=document.getElementById('paramAvatar');
+  if(av){var init=(m.nom||'DR').replace('Dr. ','').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase();av.textContent=init;av.style.background=m.color||'var(--accent)';}
+  var pn=document.getElementById('paramNom');if(pn)pn.textContent=m.nom||'—';
+  var po=document.getElementById('paramOrdre');if(po)po.textContent=m.ordre||'—';
+  var pe=document.getElementById('paramEmailLogout');if(pe)pe.textContent=m.email||'—';
+}
+async function sauvegarderProfil(){
+  if(!CUR_MED||!CUR_MED.supabaseId){toast('⚠️ Session expirée');return;}
+  var prenom=(document.getElementById('pPrenom').value||'').trim();
+  var nom=(document.getElementById('pNom').value||'').trim();
+  if(!prenom||!nom){toast('⚠️ Prénom et nom requis');return;}
+  var localisation=(document.getElementById('pLocalisation').value||'').trim();
+  var locParts=localisation.split(',').map(function(s){return s.trim();});
+  var data={
+    prenom:prenom,nom:nom,nom_complet:'Dr. '+prenom+' '+nom,
+    sexe:PRO_SEXE||null,
+    specialite:document.getElementById('pSpec').value||null,
+    sous_specialite:document.getElementById('pSousSpec').value||null,
+    annees_experience:parseInt(document.getElementById('pExperience').value)||null,
+    email:document.getElementById('pEmail').value||null,
+    telephone:document.getElementById('pTel').value||null,
+    whatsapp:document.getElementById('pWhatsapp').value||null,
+    ville:locParts[0]||null,
+    pays:locParts[locParts.length-1]||null,
+    quartier:locParts.length>=3?locParts[1]:null,
+    consultation_distance:PRO_TOGGLES.distance,
+    visite_domicile:PRO_TOGGLES.domicile,
+    urgences:PRO_TOGGLES.urgences,
+    langues_parlees:PRO_LANGUES,
+    jours_consultation:PRO_JOURS,
+    tarif_consultation:parseInt(document.getElementById('pTarif').value)||null,
+    devise:document.getElementById('pDevise').value||'FCFA',
+    paiement_mobile:PRO_TOGGLES.mobile,
+    accepte_assurance:PRO_TOGGLES.assurance,
+    updated_at:new Date().toISOString()
+  };
+  try{
+    toast('⏳ Enregistrement...');
+    var r=await fetch(DB_URL+'?table=medecins&id='+CUR_MED.supabaseId,{method:'PATCH',headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},body:JSON.stringify(data)});
+    var resp=await r.json();
+    if(resp&&resp.error)throw new Error(JSON.stringify(resp.error).slice(0,80));
+    Object.assign(CUR_MED,{nom:'Dr. '+prenom+' '+nom,prenom:prenom,nomFamille:nom,sexe:PRO_SEXE,spec:data.specialite||CUR_MED.spec,sous_specialite:data.sous_specialite,annees_experience:data.annees_experience,email:data.email||CUR_MED.email,telephone:data.telephone,whatsapp:data.whatsapp,localisation:localisation,consultation_distance:data.consultation_distance,visite_domicile:data.visite_domicile,urgences:data.urgences,langues_parlees:PRO_LANGUES,jours_consultation:PRO_JOURS,tarif_consultation:data.tarif_consultation,devise:data.devise,paiement_mobile:data.paiement_mobile,accepte_assurance:data.accepte_assurance});
+    var dn=document.getElementById('dashNom');if(dn)dn.textContent=CUR_MED.nom;
+    var ds=document.getElementById('dashSpec');if(ds)ds.textContent=CUR_MED.spec;
+    toast('✅ Profil enregistré');
+  }catch(e){toast('❌ '+e.message);}
+}
 var CUR_MED=null,CUR_DOS=null,FILTRE='tous',MEDS=[],CID_VAL=null;
 var DOSSIERS=[];
 var EXAMENS_REQUIS=false;
@@ -3222,18 +3329,38 @@ function initProTheme(){proApplyTheme(localStorage.getItem('pro_theme')||'light'
 
 function ouvrirParams() {
   showScreen('paramScreen');
-  // Peupler profil
-  if(CUR_MED){
-    var initiales=(CUR_MED.nom||'DR').replace('Dr. ','').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase();
-    var av=document.getElementById('paramAvatar');if(av){av.textContent=initiales;av.style.background=CUR_MED.color||'var(--accent)';}
-    var el=document.getElementById('paramNom');if(el)el.textContent=CUR_MED.nom||'—';
-    var es=document.getElementById('paramSpec');if(es)es.textContent=CUR_MED.spec||'—';
-    var eo=document.getElementById('paramOrdre');if(eo)eo.textContent=CUR_MED.ordre||'—';
-    var ee=document.getElementById('paramEmailPro');if(ee)ee.textContent=CUR_MED.email||'—';
-    var el2=document.getElementById('paramEmailLogout');if(el2)el2.textContent=CUR_MED.email||'—';
-  }
-  // Sync thème
   proApplyTheme(localStorage.getItem('pro_theme')||'light');
+  // Charger profil complet depuis Supabase puis remplir le form
+  if(CUR_MED&&CUR_MED.supabaseId){
+    fetch(DB_URL+'?table=medecins&filter=id=eq.'+encodeURIComponent(CUR_MED.supabaseId)+'&limit=1',{
+      headers:{'x-dokita-key':DOKITA_KEY}
+    }).then(function(r){return r.json();}).then(function(data){
+      var rows=Array.isArray(data)?data:(data.data||[]);
+      if(rows.length){
+        var m=rows[0];
+        CUR_MED.prenom=m.prenom||'';
+        CUR_MED.nomFamille=m.nom||'';
+        CUR_MED.sexe=m.sexe||'';
+        CUR_MED.sous_specialite=m.sous_specialite||'';
+        CUR_MED.annees_experience=m.annees_experience||'';
+        CUR_MED.telephone=m.telephone||'';
+        CUR_MED.whatsapp=m.whatsapp||'';
+        CUR_MED.localisation=[m.ville,m.quartier,m.pays].filter(Boolean).join(', ');
+        CUR_MED.consultation_distance=!!m.consultation_distance;
+        CUR_MED.visite_domicile=!!m.visite_domicile;
+        CUR_MED.urgences=!!m.urgences;
+        CUR_MED.langues_parlees=m.langues_parlees||[];
+        CUR_MED.jours_consultation=m.jours_consultation||[];
+        CUR_MED.tarif_consultation=m.tarif_consultation||'';
+        CUR_MED.devise=m.devise||'FCFA';
+        CUR_MED.paiement_mobile=!!m.paiement_mobile;
+        CUR_MED.accepte_assurance=!!m.accepte_assurance;
+      }
+      chargerProfilDansForm();
+    }).catch(function(){chargerProfilDansForm();});
+  } else {
+    chargerProfilDansForm();
+  }
   setTimeout(initCanvas, 100);
   chargerSignatureExistante();
 }
@@ -3579,6 +3706,7 @@ document.addEventListener('DOMContentLoaded', function(){ initProTheme(); });
     <div class="hdr-back" onclick="showScreen('dashScreen')">←</div>
     <div class="hdr-ico">⚙️</div>
     <div style="flex:1"><div class="hdr-title">Paramètres</div></div>
+    <button onclick="sauvegarderProfil()" style="background:var(--accent);border:none;border-radius:10px;padding:7px 14px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#fff;cursor:pointer;">Enregistrer</button>
   </div>
   <div class="dash-body">
 
@@ -3594,49 +3722,160 @@ document.addEventListener('DOMContentLoaded', function(){ initProTheme(); });
       </div>
     </div>
 
-    <!-- MON PROFIL -->
-    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Mon profil</div>
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:20px;">
-      <!-- Infos affichées -->
-      <div style="padding:16px;border-bottom:1px solid var(--border);">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-          <div style="width:48px;height:48px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:#fff;" id="paramAvatar">DR</div>
-          <div>
-            <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--text);" id="paramNom">—</div>
-            <div style="font-size:12px;color:var(--text2);" id="paramSpec">—</div>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <div style="background:var(--bg3);border-radius:10px;padding:10px 12px;">
-            <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;">N° Ordre</div>
-            <div style="font-size:12px;font-weight:700;color:var(--text);" id="paramOrdre">—</div>
-          </div>
-          <div style="background:var(--bg3);border-radius:10px;padding:10px 12px;">
-            <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;">Email</div>
-            <div style="font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="paramEmailPro">—</div>
-          </div>
+    <!-- IDENTITÉ -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Identité</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;">
+      <!-- Avatar + N° ordre (non modifiable) -->
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:52px;height:52px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:#fff;flex-shrink:0;" id="paramAvatar">DR</div>
+        <div style="flex:1;">
+          <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--text);" id="paramNom">—</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">N° Ordre : <span id="paramOrdre" style="color:var(--text2);font-weight:600;">—</span></div>
         </div>
       </div>
-      <!-- Signature -->
-      <div style="padding:16px;">
-        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px;">✍️ Signature électronique</div>
-        <div id="sigPreview" style="display:none;margin-bottom:10px;">
-          <img id="sigImg" style="max-height:60px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:6px;" />
-          <div style="font-size:10px;color:var(--accent);margin-top:4px;">✅ Signature enregistrée</div>
+      <!-- Prénom / Nom -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Prénom</div>
+          <input id="pPrenom" class="finput" placeholder="Prénom" style="width:100%;box-sizing:border-box;"/>
         </div>
-        <p style="font-size:11px;color:var(--text3);margin:0 0 10px;">Signez ci-dessous — apposée sur toutes vos ordonnances.</p>
-        <canvas id="sigCanvas" width="340" height="120"
-          style="border:2px dashed var(--border);border-radius:10px;background:#fff;display:block;width:100%;touch-action:none;cursor:crosshair;"></canvas>
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <button class="btn-sec" onclick="effacerSignature()" style="flex:1;">🗑️ Effacer</button>
-          <button class="btn-pri" onclick="sauvegarderSignature()" style="flex:2;">💾 Sauvegarder</button>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Nom</div>
+          <input id="pNom" class="finput" placeholder="Nom" style="width:100%;box-sizing:border-box;"/>
         </div>
+      </div>
+      <!-- Sexe -->
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Sexe</div>
+        <div style="display:flex;gap:8px;">
+          <button id="pSexeM" onclick="selectSexePro('M')" style="flex:1;padding:9px;border-radius:10px;border:1.5px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;background:var(--bg3);color:var(--text);">👨 Masculin</button>
+          <button id="pSexeF" onclick="selectSexePro('F')" style="flex:1;padding:9px;border-radius:10px;border:1.5px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;background:var(--bg3);color:var(--text);">👩 Féminin</button>
+        </div>
+      </div>
+      <!-- Spécialité / Sous-spécialité -->
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Spécialité</div>
+        <input id="pSpec" class="finput" placeholder="ex: Médecine générale, Pédiatrie..." style="width:100%;box-sizing:border-box;"/>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Sous-spécialité <span style="color:var(--text3);font-weight:400;">(optionnel)</span></div>
+        <input id="pSousSpec" class="finput" placeholder="ex: Diabétologie, Néonatologie..." style="width:100%;box-sizing:border-box;"/>
+      </div>
+      <!-- Années d'expérience -->
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Années d'expérience</div>
+        <input id="pExperience" class="finput" type="number" min="0" max="60" placeholder="ex: 10" style="width:100%;box-sizing:border-box;"/>
+      </div>
+    </div>
+
+    <!-- CONTACT -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Contact</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Email</div>
+        <input id="pEmail" class="finput" type="email" placeholder="email@exemple.com" style="width:100%;box-sizing:border-box;" id="paramEmailPro"/>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Téléphone</div>
+        <input id="pTel" class="finput" type="tel" placeholder="+225 07 00 00 00 00" style="width:100%;box-sizing:border-box;"/>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">WhatsApp <span style="color:var(--text3);font-weight:400;">(si différent)</span></div>
+        <input id="pWhatsapp" class="finput" type="tel" placeholder="+225 07 00 00 00 00" style="width:100%;box-sizing:border-box;"/>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Localisation</div>
+        <input id="pLocalisation" class="finput" placeholder="ex: Abidjan, Cocody, Côte d'Ivoire" style="width:100%;box-sizing:border-box;"/>
+      </div>
+    </div>
+
+    <!-- PRATIQUE -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Pratique</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;">
+      <!-- Toggles services -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div style="font-size:13px;font-weight:600;color:var(--text);">🌐 Consultation à distance</div><div style="font-size:11px;color:var(--text3);">Téléconsultation vidéo/audio</div></div>
+          <div id="togDistance" onclick="togglePro('distance')" class="theme-toggle"></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div style="font-size:13px;font-weight:600;color:var(--text);">🏠 Visite à domicile</div><div style="font-size:11px;color:var(--text3);">Déplacement chez le patient</div></div>
+          <div id="togDomicile" onclick="togglePro('domicile')" class="theme-toggle"></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div style="font-size:13px;font-weight:600;color:var(--text);">🚨 Urgences</div><div style="font-size:11px;color:var(--text3);">Disponible pour les urgences</div></div>
+          <div id="togUrgences" onclick="togglePro('urgences')" class="theme-toggle"></div>
+        </div>
+      </div>
+      <!-- Langues parlées -->
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Langues parlées</div>
+        <div id="languesGrid" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      </div>
+      <!-- Jours de consultation -->
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Jours de consultation</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+          <button id="jourLun" onclick="toggleJour('Lun')" class="jour-btn">Lun</button>
+          <button id="jourMar" onclick="toggleJour('Mar')" class="jour-btn">Mar</button>
+          <button id="jourMer" onclick="toggleJour('Mer')" class="jour-btn">Mer</button>
+          <button id="jourJeu" onclick="toggleJour('Jeu')" class="jour-btn">Jeu</button>
+          <button id="jourVen" onclick="toggleJour('Ven')" class="jour-btn">Ven</button>
+          <button id="jourSam" onclick="toggleJour('Sam')" class="jour-btn">Sam</button>
+          <button id="jourDim" onclick="toggleJour('Dim')" class="jour-btn">Dim</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TARIFS -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Tarifs & Paiement</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;">
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Tarif consultation</div>
+          <input id="pTarif" class="finput" type="number" min="0" placeholder="ex: 5000" style="width:100%;box-sizing:border-box;"/>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Devise</div>
+          <select id="pDevise" class="finput" style="width:100%;box-sizing:border-box;">
+            <option value="FCFA">FCFA</option>
+            <option value="EUR">EUR</option>
+            <option value="USD">USD</option>
+            <option value="XOF">XOF</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div style="font-size:13px;font-weight:600;color:var(--text);">📱 Paiement mobile</div><div style="font-size:11px;color:var(--text3);">Orange Money, Wave, MTN</div></div>
+          <div id="togMobile" onclick="togglePro('mobile')" class="theme-toggle"></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div style="font-size:13px;font-weight:600;color:var(--text);">🏥 Assurance acceptée</div><div style="font-size:11px;color:var(--text3);">Prise en charge assurance maladie</div></div>
+          <div id="togAssurance" onclick="togglePro('assurance')" class="theme-toggle"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SIGNATURE -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Signature électronique</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px;">
+      <div id="sigPreview" style="display:none;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
+        <img id="sigImg" style="max-height:50px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:6px;" />
+        <span style="font-size:11px;color:var(--accent);">✅ Enregistrée</span>
+      </div>
+      <p style="font-size:11px;color:var(--text3);margin:0 0 10px;">Signez ci-dessous — apposée sur toutes vos ordonnances.</p>
+      <canvas id="sigCanvas" width="340" height="110"
+        style="border:2px dashed var(--border);border-radius:10px;background:#fff;display:block;width:100%;touch-action:none;cursor:crosshair;"></canvas>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn-sec" onclick="effacerSignature()" style="flex:1;">🗑️ Effacer</button>
+        <button class="btn-pri" onclick="sauvegarderSignature()" style="flex:2;">💾 Sauvegarder</button>
       </div>
     </div>
 
     <!-- COMPTE -->
     <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Compte</div>
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:32px;">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:40px;">
       <div style="padding:16px;cursor:pointer;" onclick="logoutPro()">
         <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--danger);">🔓 Se déconnecter</div>
         <div style="font-size:11px;color:var(--text2);margin-top:2px;" id="paramEmailLogout">—</div>
