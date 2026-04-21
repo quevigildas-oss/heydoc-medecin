@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.9
-     DATE    : 2026-04-20 19:42:16
+     VERSION : V4.10
+     DATE    : 2026-04-21 08:05:12
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
+       V4.10 — 2026-04-21 : Écran paramètres restructuré (style app patient) · Mode clair/sombre · Profil médecin (nom, spécialité, n° ordre, email, signature) · Suppression tuile Transférer
        V4.9 — 2026-04-12 : Consultation audio/vidéo Daily.co (boutons 📞📹 · modal iframe · lien WhatsApp patient · terminer appel)
 V4.9 — 2026-04-11 : Signature électronique (canvas → Supabase → ordonnance) · Écran paramètres ⚙️ · signature_base64 dans INSERT ordonnances · CSS btn-pri/btn-sec
 V4.8 — 2026-04-01 : Agenda médecin 📅 dans header dashboard
@@ -191,6 +192,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .btn-pri:active{opacity:.85;}
 .btn-sec{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;transition:opacity .2s;}
 .btn-sec:active{opacity:.85;}
+.theme-toggle{width:46px;height:26px;border-radius:13px;background:var(--bg3);border:2px solid var(--border);position:relative;cursor:pointer;transition:all .3s;flex-shrink:0;}
+.theme-toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--text3);transition:all .3s;}
+.theme-toggle.on{background:var(--accent);border-color:var(--accent);}
+.theme-toggle.on::after{left:22px;background:#fff;}
 
 /* Statut mise à jour Notion */
 .notion-sync{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);margin-bottom:4px;}
@@ -571,6 +576,7 @@ function mergeChamp(existant,nouveau){
 }
 
 // Variables globales
+function logoutPro(){doLogout();}
 var CUR_MED=null,CUR_DOS=null,FILTRE='tous',MEDS=[],CID_VAL=null;
 var DOSSIERS=[];
 var EXAMENS_REQUIS=false;
@@ -3191,8 +3197,43 @@ function buildOrdoHtml(d,ordo){
 var SIG_DRAWING = false;
 var SIG_CTX = null;
 
+// ── Thème Pro ──
+var PRO_THEMES={
+  dark:{'--bg':'#0A0F1E','--bg2':'#111827','--bg3':'#161D2F','--card':'#111827','--border':'#1E2D45','--accent':'#00C896','--accent2':'#0EA5E9','--warn':'#F59E0B','--danger':'#EF4444','--text':'#F0F4FF','--text2':'#8B9EC7','--text3':'#4A5A7A'},
+  light:{'--bg':'#EEF4F0','--bg2':'#FFFFFF','--bg3':'#F4F8F5','--card':'#FFFFFF','--border':'#D6E8DF','--accent':'#00A878','--accent2':'#2D7DD2','--warn':'#E8920A','--danger':'#D93025','--text':'#0D2318','--text2':'#4A6B5A','--text3':'#9DBDAD'}
+};
+function proApplyTheme(t){
+  var vars=PRO_THEMES[t]||PRO_THEMES.light;
+  var root=document.documentElement;
+  for(var k in vars)root.style.setProperty(k,vars[k]);
+  localStorage.setItem('pro_theme',t);
+  var tog=document.getElementById('proToggleTheme');
+  var ico=document.getElementById('proThemeIco');
+  var lbl=document.getElementById('proThemeLabel');
+  if(tog){tog.classList.toggle('on',t==='dark');}
+  if(ico)ico.textContent=t==='dark'?'🌙':'☀️';
+  if(lbl)lbl.textContent=t==='dark'?'Mode sombre':'Mode clair';
+}
+function proToggleThemeFn(){
+  var cur=localStorage.getItem('pro_theme')||'light';
+  proApplyTheme(cur==='light'?'dark':'light');
+}
+function initProTheme(){proApplyTheme(localStorage.getItem('pro_theme')||'light');}
+
 function ouvrirParams() {
   showScreen('paramScreen');
+  // Peupler profil
+  if(CUR_MED){
+    var initiales=(CUR_MED.nom||'DR').replace('Dr. ','').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase();
+    var av=document.getElementById('paramAvatar');if(av){av.textContent=initiales;av.style.background=CUR_MED.color||'var(--accent)';}
+    var el=document.getElementById('paramNom');if(el)el.textContent=CUR_MED.nom||'—';
+    var es=document.getElementById('paramSpec');if(es)es.textContent=CUR_MED.spec||'—';
+    var eo=document.getElementById('paramOrdre');if(eo)eo.textContent=CUR_MED.ordre||'—';
+    var ee=document.getElementById('paramEmailPro');if(ee)ee.textContent=CUR_MED.email||'—';
+    var el2=document.getElementById('paramEmailLogout');if(el2)el2.textContent=CUR_MED.email||'—';
+  }
+  // Sync thème
+  proApplyTheme(localStorage.getItem('pro_theme')||'light');
   setTimeout(initCanvas, 100);
   chargerSignatureExistante();
 }
@@ -3527,29 +3568,81 @@ function renderResultatExamen(ex, patId){
   return html;
 }
 
+// Init thème au chargement
+document.addEventListener('DOMContentLoaded', function(){ initProTheme(); });
+
 </script>
 
 <!-- PARAMÈTRES MÉDECIN -->
 <div class="screen" id="paramScreen">
   <div class="hdr">
     <div class="hdr-back" onclick="showScreen('dashScreen')">←</div>
-    <div class="hdr-info"><div class="hdr-title">Paramètres</div><div class="hdr-sub">Mon profil médecin</div></div>
+    <div class="hdr-ico">⚙️</div>
+    <div style="flex:1"><div class="hdr-title">Paramètres</div></div>
   </div>
   <div class="dash-body">
-    <div class="sec-title" style="margin-bottom:12px;">✍️ Signature électronique</div>
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
-      <p style="font-size:12px;color:var(--text3);margin:0 0 12px;">Signez dans le cadre ci-dessous. Cette signature sera apposée sur toutes vos ordonnances.</p>
-      <canvas id="sigCanvas" width="340" height="130"
-        style="border:2px dashed var(--border);border-radius:10px;background:#fff;display:block;width:100%;touch-action:none;cursor:crosshair;"></canvas>
-      <div style="display:flex;gap:8px;margin-top:12px;">
-        <button class="btn-sec" onclick="effacerSignature()" style="flex:1;">🗑️ Effacer</button>
-        <button class="btn-pri" onclick="sauvegarderSignature()" style="flex:2;">💾 Sauvegarder</button>
+
+    <!-- APPARENCE -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Apparence</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:20px;">
+      <div style="padding:16px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span id="proThemeIco" style="font-size:20px;">☀️</span>
+          <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--text);" id="proThemeLabel">Mode clair</div>
+        </div>
+        <div class="theme-toggle" id="proToggleTheme" onclick="proToggleThemeFn()"></div>
       </div>
     </div>
-    <div id="sigPreview" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
-      <div class="sec-title" style="margin-bottom:10px;">Aperçu signature enregistrée</div>
-      <img id="sigImg" style="max-width:200px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:8px;" />
+
+    <!-- MON PROFIL -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Mon profil</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:20px;">
+      <!-- Infos affichées -->
+      <div style="padding:16px;border-bottom:1px solid var(--border);">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div style="width:48px;height:48px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:#fff;" id="paramAvatar">DR</div>
+          <div>
+            <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--text);" id="paramNom">—</div>
+            <div style="font-size:12px;color:var(--text2);" id="paramSpec">—</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div style="background:var(--bg3);border-radius:10px;padding:10px 12px;">
+            <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;">N° Ordre</div>
+            <div style="font-size:12px;font-weight:700;color:var(--text);" id="paramOrdre">—</div>
+          </div>
+          <div style="background:var(--bg3);border-radius:10px;padding:10px 12px;">
+            <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;">Email</div>
+            <div style="font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="paramEmailPro">—</div>
+          </div>
+        </div>
+      </div>
+      <!-- Signature -->
+      <div style="padding:16px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px;">✍️ Signature électronique</div>
+        <div id="sigPreview" style="display:none;margin-bottom:10px;">
+          <img id="sigImg" style="max-height:60px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:6px;" />
+          <div style="font-size:10px;color:var(--accent);margin-top:4px;">✅ Signature enregistrée</div>
+        </div>
+        <p style="font-size:11px;color:var(--text3);margin:0 0 10px;">Signez ci-dessous — apposée sur toutes vos ordonnances.</p>
+        <canvas id="sigCanvas" width="340" height="120"
+          style="border:2px dashed var(--border);border-radius:10px;background:#fff;display:block;width:100%;touch-action:none;cursor:crosshair;"></canvas>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn-sec" onclick="effacerSignature()" style="flex:1;">🗑️ Effacer</button>
+          <button class="btn-pri" onclick="sauvegarderSignature()" style="flex:2;">💾 Sauvegarder</button>
+        </div>
+      </div>
     </div>
+
+    <!-- COMPTE -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Compte</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:32px;">
+      <div style="padding:16px;cursor:pointer;" onclick="logoutPro()">
+        <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--danger);">🔓 Se déconnecter</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px;" id="paramEmailLogout">—</div>
+      </div>
+    </div>
+
   </div>
 </div>
 </body>
