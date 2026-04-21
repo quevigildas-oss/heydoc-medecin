@@ -2,7 +2,7 @@
 <!-- ============================================
      DOKITA PRO — App Médecin
      VERSION : V4.10
-     DATE    : 2026-04-21 08:35:01
+     DATE    : 2026-04-21 08:43:43
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
@@ -651,7 +651,7 @@ async function sauvegarderProfil(){
   var localisation=(document.getElementById('pLocalisation').value||'').trim();
   var locParts=localisation.split(',').map(function(s){return s.trim();});
   var data={
-    prenom:prenom,nom:nom,nom_complet:'Dr. '+prenom+' '+nom,
+    prenom:prenom,nom:nom,
     sexe:PRO_SEXE||null,
     specialite:document.getElementById('pSpec').value||null,
     sous_specialite:document.getElementById('pSousSpec').value||null,
@@ -3428,15 +3428,27 @@ function chargerSignatureExistante() {
   if (CUR_MED && CUR_MED.signature_base64) {
     afficherAperçuSignature(CUR_MED.signature_base64);
   } else {
-    document.getElementById('sigPreview').style.display = 'none';
+    var prev=document.getElementById('sigPreview');if(prev)prev.style.display='none';
+    var zone=document.getElementById('sigZoneDessin');if(zone)zone.style.display='block';
   }
 }
 
 function afficherAperçuSignature(base64) {
   var preview = document.getElementById('sigPreview');
   var img = document.getElementById('sigImg');
-  img.src = base64;
-  preview.style.display = 'block';
+  var zone = document.getElementById('sigZoneDessin');
+  if(img) img.src = base64;
+  if(preview){preview.style.display='flex';}
+  if(zone){zone.style.display='none';}   // masquer la zone de dessin
+}
+
+function ouvrirEditionSignature(){
+  var zone=document.getElementById('sigZoneDessin');
+  var prev=document.getElementById('sigPreview');
+  if(zone)zone.style.display='block';
+  if(prev)prev.style.display='none';
+  SIG_CTX=null;                          // reset canvas context
+  setTimeout(initCanvas,50);
 }
 
 
@@ -3860,16 +3872,21 @@ document.addEventListener('DOMContentLoaded', function(){ initProTheme(); });
     <!-- SIGNATURE -->
     <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Signature électronique</div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px;">
-      <div id="sigPreview" style="display:none;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
-        <img id="sigImg" style="max-height:50px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:6px;" />
+      <!-- Vue compacte : signature + crayon -->
+      <div id="sigPreview" style="display:none;align-items:center;gap:10px;margin-bottom:4px;">
+        <img id="sigImg" style="max-height:48px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:6px;flex:1;" />
         <span style="font-size:11px;color:var(--accent);">✅ Enregistrée</span>
+        <button onclick="ouvrirEditionSignature()" style="background:none;border:none;font-size:20px;cursor:pointer;padding:4px;" title="Modifier la signature">🖊️</button>
       </div>
-      <p style="font-size:11px;color:var(--text3);margin:0 0 10px;">Signez ci-dessous — apposée sur toutes vos ordonnances.</p>
-      <canvas id="sigCanvas" width="340" height="110"
-        style="border:2px dashed var(--border);border-radius:10px;background:#fff;display:block;width:100%;touch-action:none;cursor:crosshair;"></canvas>
-      <div style="display:flex;gap:8px;margin-top:10px;">
-        <button class="btn-sec" onclick="effacerSignature()" style="flex:1;">🗑️ Effacer</button>
-        <button class="btn-pri" onclick="sauvegarderSignature()" style="flex:2;">💾 Sauvegarder</button>
+      <!-- Zone dessin — masquée si signature existante -->
+      <div id="sigZoneDessin">
+        <p style="font-size:11px;color:var(--text3);margin:0 0 10px;">Signez ci-dessous — apposée sur toutes vos ordonnances.</p>
+        <canvas id="sigCanvas" width="340" height="110"
+          style="border:2px dashed var(--border);border-radius:10px;background:#fff;display:block;width:100%;touch-action:none;cursor:crosshair;"></canvas>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn-sec" onclick="effacerSignature()" style="flex:1;">🗑️ Effacer</button>
+          <button class="btn-pri" onclick="sauvegarderSignature()" style="flex:2;">💾 Sauvegarder</button>
+        </div>
       </div>
     </div>
 
