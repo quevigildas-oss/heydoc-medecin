@@ -2,7 +2,7 @@
 <!-- ============================================
      DOKITA PRO — App Médecin
      VERSION : V4.10
-     DATE    : 2026-04-21 08:43:43
+     DATE    : 2026-04-21 08:52:58
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
@@ -3306,8 +3306,8 @@ var SIG_CTX = null;
 
 // ── Thème Pro ──
 var PRO_THEMES={
-  dark:{'--bg':'#0A0F1E','--bg2':'#111827','--bg3':'#161D2F','--card':'#111827','--border':'#1E2D45','--accent':'#00C896','--accent2':'#0EA5E9','--warn':'#F59E0B','--danger':'#EF4444','--text':'#F0F4FF','--text2':'#8B9EC7','--text3':'#4A5A7A'},
-  light:{'--bg':'#EEF4F0','--bg2':'#FFFFFF','--bg3':'#F4F8F5','--card':'#FFFFFF','--border':'#D6E8DF','--accent':'#00A878','--accent2':'#2D7DD2','--warn':'#E8920A','--danger':'#D93025','--text':'#0D2318','--text2':'#4A6B5A','--text3':'#9DBDAD'}
+  dark:{'--bg':'#0A0F1E','--bg2':'#111827','--bg3':'#161D2F','--card':'#111827','--card2':'#161D2F','--border':'#1E2D45','--accent':'#00C896','--accent2':'#0EA5E9','--warn':'#F59E0B','--danger':'#EF4444','--text':'#F0F4FF','--text2':'#8B9EC7','--text3':'#4A5A7A','--white':'#F0F4FF'},
+  light:{'--bg':'#EEF4F0','--bg2':'#FFFFFF','--bg3':'#F4F8F5','--card':'#FFFFFF','--card2':'#E8F0EB','--border':'#D6E8DF','--accent':'#00A878','--accent2':'#2D7DD2','--warn':'#E8920A','--danger':'#D93025','--text':'#0D2318','--text2':'#4A6B5A','--text3':'#9DBDAD','--white':'#0D2318'}
 };
 function proApplyTheme(t){
   var vars=PRO_THEMES[t]||PRO_THEMES.light;
