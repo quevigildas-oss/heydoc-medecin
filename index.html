@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.10
-     DATE    : 2026-04-21 08:52:58
+     VERSION : V4.11
+     DATE    : 2026-04-21 21:54:54
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
@@ -1511,73 +1511,26 @@ async function chargerDocsPatient(){
       return;
     }
 
-    // Séparer déclaratifs (à confirmer) et confirmés
-    var declaratifs=rows.filter(function(d){return d.source==='declaratif_patient';});
-    var confirmes=rows.filter(function(d){return d.source!=='declaratif_patient';});
 
     var html=addBtn;
-
-    // Section déclaratifs — à confirmer ou infirmer
-    if(declaratifs.length){
-      html+='<div style="font-size:10px;font-weight:700;color:var(--warn);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📝 Déclaré par le patient — à vérifier</div>';
-      html+=declaratifs.map(function(doc){
-        var t=TYPES[doc.type_document]||TYPES['autre'];
-        var dateAff=doc.created_at?new Date(doc.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}):'';
-        var hasFile=!!(doc.mime_type||doc.taille_octets||doc.contenu_base64||doc.url);
-        return '<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:12px;margin-bottom:8px;">'+
-          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'+
-            '<div style="width:36px;height:36px;border-radius:8px;background:'+t.color+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+t.ico+'</div>'+
-            '<div style="flex:1;min-width:0;">'+
-              '<div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escHtml(doc.nom||'Document')+'</div>'+
-              '<div style="font-size:10px;color:var(--text3);">'+dateAff+(doc.valeur?' · '+escHtml(doc.valeur):'')+' · Déclaratif patient</div>'+
-            '</div>'+
-            (hasFile?'<div onclick="voirDocPro(\''+doc.id+'\',\''+escHtml(doc.mime_type||'image/jpeg')+'\')" style="font-size:11px;font-weight:700;color:var(--accent2);background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.3);border-radius:6px;padding:2px 8px;cursor:pointer;flex-shrink:0;">Voir</div>':'')+ 
-          '</div>'+
-          '<div style="display:flex;gap:8px;">'+
-            '<button onclick="confirmerDoc(\''+doc.id+'\')" style="flex:1;padding:8px;background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.3);border-radius:8px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;">✅ Confirmer</button>'+
-            '<button onclick="infirmerDoc(\''+doc.id+'\')" style="flex:1;padding:8px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;font-size:11px;font-weight:700;color:#ef4444;cursor:pointer;">❌ Infirmer</button>'+
-          '</div>'+
-        '</div>';
-      }).join('');
-    }
-
-    // Section confirmés / Dokita
-    if(confirmes.length){
-      if(declaratifs.length)html+='<div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin:12px 0 6px;">✅ Documents confirmés</div>';
-      html+=confirmes.map(function(doc){
-        var t=TYPES[doc.type_document]||TYPES['autre'];
-        var dateAff=doc.created_at?new Date(doc.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}):'';
-        var sourceBadge=doc.source==='confirme_medecin'?
-          '<span style="font-size:9px;font-weight:700;color:var(--accent);background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.3);border-radius:4px;padding:1px 5px;">✅ Confirmé</span>':
-          '<span style="font-size:9px;font-weight:700;color:#4a9eff;background:rgba(74,158,255,.1);border:1px solid rgba(74,158,255,.3);border-radius:4px;padding:1px 5px;">📋 Dokita</span>';
-        var hasFile=!!(doc.contenu_base64||doc.url);
-        return '<div style="background:var(--bg);border:1px solid '+t.border+';border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">'+
-          '<div style="width:36px;height:36px;border-radius:8px;background:'+t.color+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+t.ico+'</div>'+
-          '<div style="flex:1;min-width:0;">'+
-            '<div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escHtml(doc.nom||'Document')+'</div>'+
-            '<div style="font-size:10px;color:var(--text3);margin-top:2px;">'+dateAff+(doc.valeur?' · '+escHtml(doc.valeur):'')+'</div>'+
-            '<div style="margin-top:3px;">'+sourceBadge+'</div>'+
-          '</div>'+
-          (hasFile?'<div onclick="voirDocPro(\''+doc.id+'\',\''+escHtml(doc.mime_type||'image/jpeg')+'\')" style="font-size:11px;font-weight:700;color:var(--accent);background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.25);border-radius:6px;padding:2px 8px;cursor:pointer;flex-shrink:0;">Voir</div>':'')+
-        '</div>';
-      }).join('');
-    }
-
+    html+=rows.map(function(doc){
+      var t=TYPES[doc.type_document]||TYPES['autre'];
+      var dateAff=doc.created_at?new Date(doc.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}):'';
+      var hasFile=!!(doc.mime_type||doc.taille_octets||doc.contenu_base64||doc.url);
+      return '<div style="background:var(--bg);border:1px solid '+t.border+';border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">'+
+        '<div style="width:36px;height:36px;border-radius:8px;background:'+t.color+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+t.ico+'</div>'+
+        '<div style="flex:1;min-width:0;">'+
+          '<div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escHtml(doc.nom||'Document')+'</div>'+
+          '<div style="font-size:10px;color:var(--text3);margin-top:2px;">'+dateAff+(doc.valeur?' · '+escHtml(doc.valeur):'')+'</div>'+
+        '</div>'+
+        (hasFile?'<div onclick="voirDocPro(\''+doc.id+'\',\''+escHtml(doc.mime_type||'image/jpeg')+'\')" style="font-size:11px;font-weight:700;color:var(--accent);background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.25);border-radius:6px;padding:2px 8px;cursor:pointer;flex-shrink:0;">Voir</div>':'')+
+      '</div>';
+    }).join('');
     list.innerHTML=html;
   }catch(e){sec.style.display='none';dbgWarn('Dossier médical: '+e.message);}
 }
 
-async function confirmerDoc(docId){
-  try{
-    await fetch(DB_URL+'?table=dossier_medical&id='+docId,{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-      body:JSON.stringify({source:'confirme_medecin',confirme_par:CUR_MED&&CUR_MED.supabaseId||null,confirme_at:new Date().toISOString()})
-    });
-    toast('✅ Document confirmé');
-    chargerDocsPatient();
-  }catch(e){toast('❌ '+e.message);}
-}
+async function confirmerDoc(docId){} // conservé compatibilité
 
 async function infirmerDoc(docId){
   try{
