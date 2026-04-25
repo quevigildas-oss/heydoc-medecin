@@ -2,7 +2,7 @@
 <!-- ============================================
      DOKITA PRO — App Médecin
      VERSION : V4.11
-     DATE    : 2026-04-25 08:52:42
+     DATE    : 2026-04-25 09:24:17
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
@@ -2925,6 +2925,8 @@ function openExamModal(){
   document.body.appendChild(modal);
   EXAM_OBL=true;
   setTimeout(function(){var el=document.getElementById('examNomInput');if(el)el.focus();},100);
+  // Précharger catalogue en arrière-plan
+  chargerCatalogueExamens();
 }
 
 var EXAM_OBL=true;
@@ -2936,13 +2938,38 @@ function setExamObl(obl){
   if(recBtn){recBtn.style.background=obl?'#f9fafb':'#eff6ff';recBtn.style.borderColor=obl?'#e5e7eb':'#93c5fd';recBtn.style.color=obl?'#9ca3af':'#3b82f6';}
 }
 
-var EXAMENS_CATALOGUE=['Glycémie à jeun','HbA1c','NFS (Numération Formule Sanguine)','CRP (Protéine C réactive)','VS (Vitesse de sédimentation)','Créatininémie','Urée sanguine','Transaminases (ALAT/ASAT)','Bilan lipidique (cholestérol total, HDL, LDL, TG)','TDR Paludisme','Frottis sanguin','Goutte épaisse','ECBU (Examen cytobactériologique des urines)','Hémoculture','TP/INR','Groupe sanguin + Rhésus','Test de grossesse (bHCG)','TSH (Thyroïde)','Radiographie thoracique','Échographie abdominale','Électrocardiogramme (ECG)','Widal (à éviter — Guide MSF 2024)'];
+// Catalogue examens — chargé depuis Supabase, cache en mémoire
+var EXAMENS_CATALOGUE=[];
+var EXAMENS_CATALOGUE_LOADED=false;
+
+async function chargerCatalogueExamens(){
+  if(EXAMENS_CATALOGUE_LOADED)return;
+  try{
+    var r=await fetch(DB_URL+'?table=catalogue_examens&select=nom,categorie&order=nom.asc&limit=300',{
+      headers:{'x-dokita-key':DOKITA_KEY}
+    });
+    var data=await r.json();
+    var rows=Array.isArray(data)?data:(data.data||[]);
+    EXAMENS_CATALOGUE=rows.map(function(r){return r.nom;});
+    EXAMENS_CATALOGUE_LOADED=true;
+    dbg('Catalogue examens chargé: '+EXAMENS_CATALOGUE.length+' examens');
+  }catch(e){
+    dbgWarn('Catalogue examens erreur: '+e.message);
+    // Fallback minimal si Supabase indisponible
+    EXAMENS_CATALOGUE=['Glycémie à jeun','NFS','TDR Paludisme','ECBU','Radiographie thoracique'];
+  }
+}
 
 function filtrerSuggestionsExam(val){
   var sug=document.getElementById('examSuggestions');
   if(!sug)return;
   if(!val||val.length<2){sug.style.display='none';return;}
-  var matches=EXAMENS_CATALOGUE.filter(function(e){return e.toLowerCase().includes(val.toLowerCase());}).slice(0,6);
+  // Charger catalogue si pas encore fait
+  if(!EXAMENS_CATALOGUE_LOADED){
+    chargerCatalogueExamens().then(function(){filtrerSuggestionsExam(val);});
+    return;
+  }
+  var matches=EXAMENS_CATALOGUE.filter(function(e){return e.toLowerCase().includes(val.toLowerCase());}).slice(0,8);
   if(!matches.length){sug.style.display='none';return;}
   sug.style.display='block';
   sug.innerHTML=matches.map(function(e){
