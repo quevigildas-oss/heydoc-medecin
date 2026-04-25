@@ -2,7 +2,7 @@
 <!-- ============================================
      DOKITA PRO — App Médecin
      VERSION : V4.11
-     DATE    : 2026-04-25 09:24:17
+     DATE    : 2026-04-25 09:34:07
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
@@ -2408,8 +2408,13 @@ async function lancerValidationIA(){
       'RÉSULTATS EXAMENS:\n'+
       '- [paramètre]: [valeur] → [normal/anormal/critique — impact sur diagnostic/traitement]\n\n'+
       'MÉDICAMENTS:\n'+
-      '- [médicament] [dose/jour] vs OMS [fourchette] → [OK / NON]\n'+
-      '- Interactions/Contre-indications: [résultat]\n\n'+
+      'C) INTERACTIONS MÉDICAMENTEUSES\n'+
+      'Analyse toutes les combinaisons de médicaments prescrits + traitements en cours. Signale UNIQUEMENT les interactions significatives (contre-indiquées ou déconseillées). Si aucune → Aucune interaction significative détectée.\n'+
+      'FORMAT OBLIGATOIRE: INTERACTION: [méd A] + [méd B] → [risque en une phrase]\n\n'+
+      'MÉDICAMENTS:\n'+
+      '- [médicament] [dose/jour] vs OMS [fourchette] → [OK / NON]\n\n'+
+      'INTERACTIONS:\n'+
+      '[INTERACTION: ... ou Aucune interaction significative détectée.]\n\n'+
       'Si NON CONFORME seulement:\n'+
       'CORRECTION: [correction précise et minimale]'
     );
@@ -2474,9 +2479,35 @@ function afficherValidation(rep,diag,examens,notes){
   }
   CUR_DOS.valIA={statut:conf?'CONFORME':'NON CONFORME',texte:rep};
 
+  // ── Parser les interactions médicamenteuses ──
+  var interactions=[];
+  if(rep){
+    var lines=rep.split('\n');
+    lines.forEach(function(line){
+      var trimmed=line.trim();
+      if(trimmed.toUpperCase().startsWith('INTERACTION:') && !trimmed.toLowerCase().includes('aucune')){
+        interactions.push(trimmed.replace(/^INTERACTION:\s*/i,''));
+      }
+    });
+  }
+
   var vb=document.getElementById('valBox');
   if(!vb)return;
+
+  // Bannière interactions (non bloquante — médecin décide)
+  var interactionBanner='';
+  if(interactions.length>0){
+    interactionBanner=
+      '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:12px 14px;margin-bottom:10px;">'+
+        '<div style="font-family:\'Syne\',sans-serif;font-size:12px;font-weight:700;color:#d97706;margin-bottom:6px;">⚠️ Interaction médicamenteuse potentielle à vérifier</div>'+
+        interactions.map(function(i){
+          return '<div style="font-size:11px;color:var(--text2);padding:3px 0;border-bottom:1px solid rgba(245,158,11,.15);">• '+escHtml(i)+'</div>';
+        }).join('')+
+        '<div style="font-size:10px;color:var(--text3);margin-top:6px;font-style:italic;">Information non bloquante — le médecin reste décisionnaire.</div>'+
+      '</div>';
+  }
   vb.innerHTML=
+    interactionBanner+
     '<div class="val-box '+(conf?'conf':'nconf')+'">'+
       '<div class="val-title">'+(conf?'✅ Prescription CONFORME':'⚠️ Prescription NON CONFORME')+'</div>'+
       '<div class="val-txt">'+(rep||'').replace(/\n/g,'<br>')+'</div>'+
