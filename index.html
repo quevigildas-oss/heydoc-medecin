@@ -2,7 +2,7 @@
 <!-- ============================================
      DOKITA PRO — App Médecin
      VERSION : V4.11
-     DATE    : 2026-04-21 21:54:54
+     DATE    : 2026-04-25 08:52:42
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
@@ -580,6 +580,42 @@ function mergeChamp(existant,nouveau){
 }
 
 // Variables globales
+function geolocMedecin(){
+  var btn=document.getElementById('btnGeoMed');
+  var status=document.getElementById('geoMedStatus');
+  if(!navigator.geolocation){status.textContent='⚠️ Géolocalisation non disponible sur cet appareil';return;}
+  if(btn)btn.textContent='⏳';
+  if(status)status.textContent='Détection en cours...';
+  navigator.geolocation.getCurrentPosition(
+    function(pos){
+      var lat=pos.coords.latitude;
+      var lng=pos.coords.longitude;
+      // Stocker en mémoire pour sauvegarderProfil()
+      window._medLat=lat;
+      window._medLng=lng;
+      if(btn)btn.textContent='✅';
+      if(status)status.textContent='Position détectée ('+lat.toFixed(4)+', '+lng.toFixed(4)+') — sera sauvegardée avec le profil';
+      // Reverse geocode simple via nominatim pour remplir le champ texte
+      fetch('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lng+'&format=json')
+        .then(function(r){return r.json();})
+        .then(function(d){
+          if(d&&d.address){
+            var loc=[d.address.suburb||d.address.quarter||d.address.neighbourhood,
+                     d.address.city||d.address.town||d.address.village,
+                     d.address.country].filter(Boolean).join(', ');
+            var inp=document.getElementById('pLocalisation');
+            if(inp&&loc)inp.value=loc;
+          }
+        }).catch(function(){});
+    },
+    function(err){
+      if(btn)btn.textContent='📍';
+      if(status)status.textContent='⚠️ Position refusée — saisissez votre adresse manuellement';
+    },
+    {timeout:10000,maximumAge:0}
+  );
+}
+
 function logoutPro(){doLogout();}
 
 // ── Langues disponibles ──
@@ -673,6 +709,11 @@ async function sauvegarderProfil(){
     accepte_assurance:PRO_TOGGLES.assurance,
     updated_at:new Date().toISOString()
   };
+  // Ajouter coordonnées GPS si détectées via bouton géoloc
+  if(window._medLat&&window._medLng){
+    data.latitude=window._medLat;
+    data.longitude=window._medLng;
+  }
   try{
     toast('⏳ Enregistrement...');
     var r=await fetch(DB_URL+'?table=medecins&id='+CUR_MED.supabaseId,{method:'PATCH',headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},body:JSON.stringify(data)});
@@ -3750,7 +3791,11 @@ document.addEventListener('DOMContentLoaded', function(){ initProTheme(); });
       </div>
       <div>
         <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Localisation</div>
-        <input id="pLocalisation" class="finput" placeholder="ex: Abidjan, Cocody, Côte d'Ivoire" style="width:100%;box-sizing:border-box;"/>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="pLocalisation" class="finput" placeholder="ex: Brazzaville, Poto-Poto" style="flex:1;box-sizing:border-box;"/>
+          <button onclick="geolocMedecin()" id="btnGeoMed" style="background:var(--accent);border:none;border-radius:10px;padding:10px 12px;font-size:16px;cursor:pointer;flex-shrink:0;" title="Détecter ma position">📍</button>
+        </div>
+        <div id="geoMedStatus" style="font-size:10px;color:var(--text3);margin-top:4px;"></div>
       </div>
     </div>
 
