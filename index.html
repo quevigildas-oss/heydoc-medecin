@@ -2,7 +2,7 @@
 <!-- ============================================
      DOKITA PRO — App Médecin
      VERSION : V4.11
-     DATE    : 2026-04-25 09:34:07
+     DATE    : 2026-04-26 09:08:18
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
@@ -665,6 +665,10 @@ function chargerProfilDansForm(){
   set('pLocalisation',m.localisation);
   set('pTarif',m.tarif_consultation);
   var dev=document.getElementById('pDevise');if(dev)dev.value=m.devise||'FCFA';
+  // Coordonnées reversement
+  set('pMobileOp', m.mobile_money_operateur||'');
+  set('pMobileNum', m.mobile_money_numero||'');
+  set('pRib',       m.rib_bancaire||'');
   selectSexePro(m.sexe||'');
   PRO_TOGGLES={distance:!!m.consultation_distance,domicile:!!m.visite_domicile,urgences:!!m.urgences,mobile:!!m.paiement_mobile,assurance:!!m.accepte_assurance};
   ['Distance','Domicile','Urgences','Mobile','Assurance'].forEach(function(k){var el=document.getElementById('tog'+k);if(el)el.classList.toggle('on',PRO_TOGGLES[k.toLowerCase()]);});
@@ -705,6 +709,9 @@ async function sauvegarderProfil(){
     jours_consultation:PRO_JOURS,
     tarif_consultation:parseInt(document.getElementById('pTarif').value)||null,
     devise:document.getElementById('pDevise').value||'FCFA',
+    mobile_money_operateur:document.getElementById('pMobileOp').value||null,
+    mobile_money_numero:document.getElementById('pMobileNum').value||null,
+    rib_bancaire:document.getElementById('pRib').value||null,
     paiement_mobile:PRO_TOGGLES.mobile,
     accepte_assurance:PRO_TOGGLES.assurance,
     updated_at:new Date().toISOString()
@@ -2274,6 +2281,9 @@ function calculDoseJournaliere(dose,poso){
 }
 
 async function lancerValidationIA(){
+  // Incrémenter compteur validations IA
+  if(!CUR_DOS._nbValidations) CUR_DOS._nbValidations=0;
+  CUR_DOS._nbValidations++;
   var d=CUR_DOS;
   var p=d.patient;
   var diag=(document.getElementById('diagMedInput')||{}).value||'';
@@ -2596,6 +2606,22 @@ async function finaliser(nouveauStatut){
   var statutFinal=nouveauStatut==='valide_override'?'valide_override':nouveauStatut;
   var conf=(nouveauStatut==='valide'||nouveauStatut==='valide_override');
   var valTexte=CUR_DOS.valIA?CUR_DOS.valIA.texte:'';
+  var nbVal=CUR_DOS._nbValidations||0;
+
+  // Calcul score conformité OMS
+  // NULL = pas de validation IA → exclu des KPI
+  // 5 = CONFORME du 1er coup
+  // 3 = CONFORME après correction (2ème validation)
+  // 2 = CONFORME après 3+ validations
+  // 1 = Finalisé NON CONFORME (maintient)
+  var scoreConformite=null;
+  if(nbVal>0){
+    if(nouveauStatut==='valide_override') scoreConformite=1; // maintient NON CONFORME
+    else if(conf && nbVal===1)            scoreConformite=5; // CONFORME 1er coup
+    else if(conf && nbVal===2)            scoreConformite=3; // CONFORME après correction
+    else if(conf && nbVal>=3)             scoreConformite=2; // CONFORME après 3+
+    else                                   scoreConformite=1; // autre cas dégradé
+  }
 
   // 1. PATCH consultations
   var ok=await updateDossier(CUR_DOS.supabaseId,{
@@ -2606,6 +2632,7 @@ async function finaliser(nouveauStatut){
     validationIATexte:valTexte,
     validationIA:conf?'CONFORME':'NON CONFORME',
     decisionMedecin:nouveauStatut==='valide_override'?'maintient':'adopte_oms',
+    scoreConformite:scoreConformite,
     brouillonJson:null
   });
 
@@ -3922,6 +3949,33 @@ document.addEventListener('DOMContentLoaded', function(){ initProTheme(); });
           <div><div style="font-size:13px;font-weight:600;color:var(--text);">🏥 Assurance acceptée</div><div style="font-size:11px;color:var(--text3);">Prise en charge assurance maladie</div></div>
           <div id="togAssurance" onclick="togglePro('assurance')" class="theme-toggle"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- REVERSEMENT -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Coordonnées de reversement</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Renseignez votre numéro Mobile Money OU votre RIB bancaire pour recevoir vos reversements Dokita.</div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Opérateur Mobile Money</div>
+        <select id="pMobileOp" class="finput" style="width:100%;box-sizing:border-box;">
+          <option value="">-- Sélectionner --</option>
+          <option value="Orange Money">Orange Money</option>
+          <option value="MTN Mobile Money">MTN Mobile Money</option>
+          <option value="Wave">Wave</option>
+          <option value="Airtel Money">Airtel Money</option>
+          <option value="M-Pesa">M-Pesa</option>
+          <option value="Moov Money">Moov Money</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Numéro Mobile Money</div>
+        <input id="pMobileNum" class="finput" type="tel" placeholder="ex: +242 06 123 4567" style="width:100%;box-sizing:border-box;"/>
+      </div>
+      <div style="text-align:center;font-size:11px;color:var(--text3);padding:4px 0;">— OU —</div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">RIB / IBAN bancaire</div>
+        <input id="pRib" class="finput" type="text" placeholder="ex: CG123 4567 8901 2345 6789 012" style="width:100%;box-sizing:border-box;"/>
       </div>
     </div>
 
