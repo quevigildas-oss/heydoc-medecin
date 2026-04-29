@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.11
-     DATE    : 2026-04-26 09:08:18
+     VERSION : V4.16
+     DATE    : 2026-04-29 10:18:27
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
@@ -879,11 +879,23 @@ async function doLogin(){
       email:med.email||'',
       nom:nomComplet,
       spec:spec,
-      color:colors[Math.floor(Math.random()*colors.length)]
+      color:colors[Math.floor(Math.random()*colors.length)],
+      essai_gratuit_jusqu_au:med.essai_gratuit_jusqu_au||null
     };
     errEl.classList.remove('on');
     document.getElementById('dashNom').textContent=nomComplet;
     document.getElementById('dashSpec').textContent=spec;
+
+    // ── Badge essai gratuit J+30 ──
+    if(med.essai_gratuit_jusqu_au){
+      var dateFin=new Date(med.essai_gratuit_jusqu_au);
+      if(dateFin>new Date()){
+        var joursRestants=Math.ceil((dateFin-new Date())/(1000*60*60*24));
+        var specEl=document.getElementById('dashSpec');
+        if(specEl)specEl.innerHTML=spec+' <span style="background:rgba(0,200,150,.15);border:1px solid rgba(0,200,150,.3);border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700;color:var(--accent);">🎁 Essai — '+joursRestants+'j</span>';
+      }
+    }
+
     showScreen('dashScreen');
     chargerDossiers();
     // Polling badge agenda toutes les 60s
