@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.9
-     DATE    : 2026-04-20 19:42:16
+     VERSION : V4.11
+     DATE    : 2026-04-26 09:08:18
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
+       V4.10 — 2026-04-21 : Écran paramètres restructuré (style app patient) · Mode clair/sombre · Profil médecin (nom, spécialité, n° ordre, email, signature) · Suppression tuile Transférer
        V4.9 — 2026-04-12 : Consultation audio/vidéo Daily.co (boutons 📞📹 · modal iframe · lien WhatsApp patient · terminer appel)
 V4.9 — 2026-04-11 : Signature électronique (canvas → Supabase → ordonnance) · Écran paramètres ⚙️ · signature_base64 dans INSERT ordonnances · CSS btn-pri/btn-sec
 V4.8 — 2026-04-01 : Agenda médecin 📅 dans header dashboard
@@ -191,6 +192,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .btn-pri:active{opacity:.85;}
 .btn-sec{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;transition:opacity .2s;}
 .btn-sec:active{opacity:.85;}
+.theme-toggle{width:46px;height:26px;border-radius:13px;background:var(--bg3);border:2px solid var(--border);position:relative;cursor:pointer;transition:all .3s;flex-shrink:0;}
+.theme-toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--text3);transition:all .3s;}
+.theme-toggle.on{background:var(--accent);border-color:var(--accent);}
+.theme-toggle.on::after{left:22px;background:#fff;}
+.jour-btn{padding:7px 10px;border-radius:8px;border:1.5px solid var(--border);font-size:11px;font-weight:600;cursor:pointer;background:var(--bg3);color:var(--text);transition:all .2s;}
+.jour-btn.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.langue-chip{padding:6px 12px;border-radius:20px;border:1.5px solid var(--border);font-size:11px;font-weight:600;cursor:pointer;background:var(--bg3);color:var(--text);transition:all .2s;}
+.langue-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;}
 
 /* Statut mise à jour Notion */
 .notion-sync{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);margin-bottom:4px;}
@@ -571,6 +580,158 @@ function mergeChamp(existant,nouveau){
 }
 
 // Variables globales
+function geolocMedecin(){
+  var btn=document.getElementById('btnGeoMed');
+  var status=document.getElementById('geoMedStatus');
+  if(!navigator.geolocation){status.textContent='⚠️ Géolocalisation non disponible sur cet appareil';return;}
+  if(btn)btn.textContent='⏳';
+  if(status)status.textContent='Détection en cours...';
+  navigator.geolocation.getCurrentPosition(
+    function(pos){
+      var lat=pos.coords.latitude;
+      var lng=pos.coords.longitude;
+      // Stocker en mémoire pour sauvegarderProfil()
+      window._medLat=lat;
+      window._medLng=lng;
+      if(btn)btn.textContent='✅';
+      if(status)status.textContent='Position détectée ('+lat.toFixed(4)+', '+lng.toFixed(4)+') — sera sauvegardée avec le profil';
+      // Reverse geocode simple via nominatim pour remplir le champ texte
+      fetch('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lng+'&format=json')
+        .then(function(r){return r.json();})
+        .then(function(d){
+          if(d&&d.address){
+            var loc=[d.address.suburb||d.address.quarter||d.address.neighbourhood,
+                     d.address.city||d.address.town||d.address.village,
+                     d.address.country].filter(Boolean).join(', ');
+            var inp=document.getElementById('pLocalisation');
+            if(inp&&loc)inp.value=loc;
+          }
+        }).catch(function(){});
+    },
+    function(err){
+      if(btn)btn.textContent='📍';
+      if(status)status.textContent='⚠️ Position refusée — saisissez votre adresse manuellement';
+    },
+    {timeout:10000,maximumAge:0}
+  );
+}
+
+function logoutPro(){doLogout();}
+
+// ── Langues disponibles ──
+var LANGUES_DISPO=['Français','Anglais','Portugais','Arabe','Dioula','Mooré','Wolof','Hausa','Yoruba','Igbo','Fulfuldé','Ewe','Mina','Baoulé','Bété','Twi','Lingala','Soninké','Bambara','Zarma'];
+var JOURS_DISPO=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+var PRO_TOGGLES={distance:false,domicile:false,urgences:false,mobile:false,assurance:false};
+var PRO_SEXE='';
+var PRO_LANGUES=[];
+var PRO_JOURS=[];
+
+function selectSexePro(s){
+  PRO_SEXE=s;
+  var m=document.getElementById('pSexeM'),f=document.getElementById('pSexeF');
+  if(m){m.style.background=s==='M'?'var(--accent)':'var(--bg3)';m.style.color=s==='M'?'#fff':'var(--text)';m.style.borderColor=s==='M'?'var(--accent)':'var(--border)';}
+  if(f){f.style.background=s==='F'?'var(--accent)':'var(--bg3)';f.style.color=s==='F'?'#fff':'var(--text)';f.style.borderColor=s==='F'?'var(--accent)':'var(--border)';}
+}
+function togglePro(key){
+  PRO_TOGGLES[key]=!PRO_TOGGLES[key];
+  var el=document.getElementById('tog'+key.charAt(0).toUpperCase()+key.slice(1));
+  if(el)el.classList.toggle('on',PRO_TOGGLES[key]);
+}
+function toggleJour(j){
+  var idx=PRO_JOURS.indexOf(j);
+  if(idx>=0)PRO_JOURS.splice(idx,1);else PRO_JOURS.push(j);
+  var btn=document.getElementById('jour'+j);
+  if(btn)btn.classList.toggle('on',PRO_JOURS.indexOf(j)>=0);
+}
+function toggleLangue(l){
+  var idx=PRO_LANGUES.indexOf(l);
+  if(idx>=0)PRO_LANGUES.splice(idx,1);else PRO_LANGUES.push(l);
+  document.querySelectorAll('.langue-chip').forEach(function(c){
+    if(c.dataset.langue===l)c.classList.toggle('on',PRO_LANGUES.indexOf(l)>=0);
+  });
+}
+function chargerProfilDansForm(){
+  var m=CUR_MED;if(!m)return;
+  var prParts=(m.nom||'').replace('Dr. ','').split(' ');
+  var set=function(id,v){var el=document.getElementById(id);if(el)el.value=v||'';};
+  set('pPrenom',m.prenom||prParts[0]);
+  set('pNom',m.nomFamille||prParts[1]);
+  set('pSpec',m.spec);
+  set('pSousSpec',m.sous_specialite);
+  set('pExperience',m.annees_experience);
+  set('pEmail',m.email);
+  set('pTel',m.telephone);
+  set('pWhatsapp',m.whatsapp);
+  set('pLocalisation',m.localisation);
+  set('pTarif',m.tarif_consultation);
+  var dev=document.getElementById('pDevise');if(dev)dev.value=m.devise||'FCFA';
+  // Coordonnées reversement
+  set('pMobileOp', m.mobile_money_operateur||'');
+  set('pMobileNum', m.mobile_money_numero||'');
+  set('pRib',       m.rib_bancaire||'');
+  selectSexePro(m.sexe||'');
+  PRO_TOGGLES={distance:!!m.consultation_distance,domicile:!!m.visite_domicile,urgences:!!m.urgences,mobile:!!m.paiement_mobile,assurance:!!m.accepte_assurance};
+  ['Distance','Domicile','Urgences','Mobile','Assurance'].forEach(function(k){var el=document.getElementById('tog'+k);if(el)el.classList.toggle('on',PRO_TOGGLES[k.toLowerCase()]);});
+  PRO_LANGUES=Array.isArray(m.langues_parlees)?m.langues_parlees.slice():[];
+  var grid=document.getElementById('languesGrid');
+  if(grid)grid.innerHTML=LANGUES_DISPO.map(function(l){return '<button class="langue-chip'+(PRO_LANGUES.indexOf(l)>=0?' on':'')+'" data-langue="'+l+'" onclick="toggleLangue(\''+l+'\')">'+l+'</button>';}).join('');
+  PRO_JOURS=Array.isArray(m.jours_consultation)?m.jours_consultation.slice():[];
+  JOURS_DISPO.forEach(function(j){var btn=document.getElementById('jour'+j);if(btn)btn.classList.toggle('on',PRO_JOURS.indexOf(j)>=0);});
+  var av=document.getElementById('paramAvatar');
+  if(av){var init=(m.nom||'DR').replace('Dr. ','').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase();av.textContent=init;av.style.background=m.color||'var(--accent)';}
+  var pn=document.getElementById('paramNom');if(pn)pn.textContent=m.nom||'—';
+  var po=document.getElementById('paramOrdre');if(po)po.textContent=m.ordre||'—';
+  var pe=document.getElementById('paramEmailLogout');if(pe)pe.textContent=m.email||'—';
+}
+async function sauvegarderProfil(){
+  if(!CUR_MED||!CUR_MED.supabaseId){toast('⚠️ Session expirée');return;}
+  var prenom=(document.getElementById('pPrenom').value||'').trim();
+  var nom=(document.getElementById('pNom').value||'').trim();
+  if(!prenom||!nom){toast('⚠️ Prénom et nom requis');return;}
+  var localisation=(document.getElementById('pLocalisation').value||'').trim();
+  var locParts=localisation.split(',').map(function(s){return s.trim();});
+  var data={
+    prenom:prenom,nom:nom,
+    sexe:PRO_SEXE||null,
+    specialite:document.getElementById('pSpec').value||null,
+    sous_specialite:document.getElementById('pSousSpec').value||null,
+    annees_experience:parseInt(document.getElementById('pExperience').value)||null,
+    email:document.getElementById('pEmail').value||null,
+    telephone:document.getElementById('pTel').value||null,
+    whatsapp:document.getElementById('pWhatsapp').value||null,
+    ville:locParts[0]||null,
+    pays:locParts[locParts.length-1]||null,
+    quartier:locParts.length>=3?locParts[1]:null,
+    consultation_distance:PRO_TOGGLES.distance,
+    visite_domicile:PRO_TOGGLES.domicile,
+    urgences:PRO_TOGGLES.urgences,
+    langues_parlees:PRO_LANGUES,
+    jours_consultation:PRO_JOURS,
+    tarif_consultation:parseInt(document.getElementById('pTarif').value)||null,
+    devise:document.getElementById('pDevise').value||'FCFA',
+    mobile_money_operateur:document.getElementById('pMobileOp').value||null,
+    mobile_money_numero:document.getElementById('pMobileNum').value||null,
+    rib_bancaire:document.getElementById('pRib').value||null,
+    paiement_mobile:PRO_TOGGLES.mobile,
+    accepte_assurance:PRO_TOGGLES.assurance,
+    updated_at:new Date().toISOString()
+  };
+  // Ajouter coordonnées GPS si détectées via bouton géoloc
+  if(window._medLat&&window._medLng){
+    data.latitude=window._medLat;
+    data.longitude=window._medLng;
+  }
+  try{
+    toast('⏳ Enregistrement...');
+    var r=await fetch(DB_URL+'?table=medecins&id='+CUR_MED.supabaseId,{method:'PATCH',headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},body:JSON.stringify(data)});
+    var resp=await r.json();
+    if(resp&&resp.error)throw new Error(JSON.stringify(resp.error).slice(0,80));
+    Object.assign(CUR_MED,{nom:'Dr. '+prenom+' '+nom,prenom:prenom,nomFamille:nom,sexe:PRO_SEXE,spec:data.specialite||CUR_MED.spec,sous_specialite:data.sous_specialite,annees_experience:data.annees_experience,email:data.email||CUR_MED.email,telephone:data.telephone,whatsapp:data.whatsapp,localisation:localisation,consultation_distance:data.consultation_distance,visite_domicile:data.visite_domicile,urgences:data.urgences,langues_parlees:PRO_LANGUES,jours_consultation:PRO_JOURS,tarif_consultation:data.tarif_consultation,devise:data.devise,paiement_mobile:data.paiement_mobile,accepte_assurance:data.accepte_assurance});
+    var dn=document.getElementById('dashNom');if(dn)dn.textContent=CUR_MED.nom;
+    var ds=document.getElementById('dashSpec');if(ds)ds.textContent=CUR_MED.spec;
+    toast('✅ Profil enregistré');
+  }catch(e){toast('❌ '+e.message);}
+}
 var CUR_MED=null,CUR_DOS=null,FILTRE='tous',MEDS=[],CID_VAL=null;
 var DOSSIERS=[];
 var EXAMENS_REQUIS=false;
@@ -718,24 +879,11 @@ async function doLogin(){
       email:med.email||'',
       nom:nomComplet,
       spec:spec,
-      color:colors[Math.floor(Math.random()*colors.length)],
-      essai_gratuit_jusqu_au:med.essai_gratuit_jusqu_au||null
+      color:colors[Math.floor(Math.random()*colors.length)]
     };
     errEl.classList.remove('on');
     document.getElementById('dashNom').textContent=nomComplet;
     document.getElementById('dashSpec').textContent=spec;
-
-    // ── Badge essai gratuit ──
-    if(med.essai_gratuit_jusqu_au){
-      var dateFin=new Date(med.essai_gratuit_jusqu_au);
-      var now=new Date();
-      if(dateFin>now){
-        var joursRestants=Math.ceil((dateFin-now)/(1000*60*60*24));
-        var specEl=document.getElementById('dashSpec');
-        if(specEl)specEl.innerHTML=spec+' <span style="background:rgba(0,200,150,.15);border:1px solid rgba(0,200,150,.3);border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700;color:var(--accent);">🎁 Essai gratuit — '+joursRestants+' j</span>';
-      }
-    }
-
     showScreen('dashScreen');
     chargerDossiers();
     // Polling badge agenda toutes les 60s
@@ -1411,73 +1559,26 @@ async function chargerDocsPatient(){
       return;
     }
 
-    // Séparer déclaratifs (à confirmer) et confirmés
-    var declaratifs=rows.filter(function(d){return d.source==='declaratif_patient';});
-    var confirmes=rows.filter(function(d){return d.source!=='declaratif_patient';});
 
     var html=addBtn;
-
-    // Section déclaratifs — à confirmer ou infirmer
-    if(declaratifs.length){
-      html+='<div style="font-size:10px;font-weight:700;color:var(--warn);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📝 Déclaré par le patient — à vérifier</div>';
-      html+=declaratifs.map(function(doc){
-        var t=TYPES[doc.type_document]||TYPES['autre'];
-        var dateAff=doc.created_at?new Date(doc.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}):'';
-        var hasFile=!!(doc.mime_type||doc.taille_octets||doc.contenu_base64||doc.url);
-        return '<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:12px;margin-bottom:8px;">'+
-          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'+
-            '<div style="width:36px;height:36px;border-radius:8px;background:'+t.color+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+t.ico+'</div>'+
-            '<div style="flex:1;min-width:0;">'+
-              '<div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escHtml(doc.nom||'Document')+'</div>'+
-              '<div style="font-size:10px;color:var(--text3);">'+dateAff+(doc.valeur?' · '+escHtml(doc.valeur):'')+' · Déclaratif patient</div>'+
-            '</div>'+
-            (hasFile?'<div onclick="voirDocPro(\''+doc.id+'\',\''+escHtml(doc.mime_type||'image/jpeg')+'\')" style="font-size:11px;font-weight:700;color:var(--accent2);background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.3);border-radius:6px;padding:2px 8px;cursor:pointer;flex-shrink:0;">Voir</div>':'')+ 
-          '</div>'+
-          '<div style="display:flex;gap:8px;">'+
-            '<button onclick="confirmerDoc(\''+doc.id+'\')" style="flex:1;padding:8px;background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.3);border-radius:8px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;">✅ Confirmer</button>'+
-            '<button onclick="infirmerDoc(\''+doc.id+'\')" style="flex:1;padding:8px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;font-size:11px;font-weight:700;color:#ef4444;cursor:pointer;">❌ Infirmer</button>'+
-          '</div>'+
-        '</div>';
-      }).join('');
-    }
-
-    // Section confirmés / Dokita
-    if(confirmes.length){
-      if(declaratifs.length)html+='<div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin:12px 0 6px;">✅ Documents confirmés</div>';
-      html+=confirmes.map(function(doc){
-        var t=TYPES[doc.type_document]||TYPES['autre'];
-        var dateAff=doc.created_at?new Date(doc.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}):'';
-        var sourceBadge=doc.source==='confirme_medecin'?
-          '<span style="font-size:9px;font-weight:700;color:var(--accent);background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.3);border-radius:4px;padding:1px 5px;">✅ Confirmé</span>':
-          '<span style="font-size:9px;font-weight:700;color:#4a9eff;background:rgba(74,158,255,.1);border:1px solid rgba(74,158,255,.3);border-radius:4px;padding:1px 5px;">📋 Dokita</span>';
-        var hasFile=!!(doc.contenu_base64||doc.url);
-        return '<div style="background:var(--bg);border:1px solid '+t.border+';border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">'+
-          '<div style="width:36px;height:36px;border-radius:8px;background:'+t.color+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+t.ico+'</div>'+
-          '<div style="flex:1;min-width:0;">'+
-            '<div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escHtml(doc.nom||'Document')+'</div>'+
-            '<div style="font-size:10px;color:var(--text3);margin-top:2px;">'+dateAff+(doc.valeur?' · '+escHtml(doc.valeur):'')+'</div>'+
-            '<div style="margin-top:3px;">'+sourceBadge+'</div>'+
-          '</div>'+
-          (hasFile?'<div onclick="voirDocPro(\''+doc.id+'\',\''+escHtml(doc.mime_type||'image/jpeg')+'\')" style="font-size:11px;font-weight:700;color:var(--accent);background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.25);border-radius:6px;padding:2px 8px;cursor:pointer;flex-shrink:0;">Voir</div>':'')+
-        '</div>';
-      }).join('');
-    }
-
+    html+=rows.map(function(doc){
+      var t=TYPES[doc.type_document]||TYPES['autre'];
+      var dateAff=doc.created_at?new Date(doc.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}):'';
+      var hasFile=!!(doc.mime_type||doc.taille_octets||doc.contenu_base64||doc.url);
+      return '<div style="background:var(--bg);border:1px solid '+t.border+';border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">'+
+        '<div style="width:36px;height:36px;border-radius:8px;background:'+t.color+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+t.ico+'</div>'+
+        '<div style="flex:1;min-width:0;">'+
+          '<div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escHtml(doc.nom||'Document')+'</div>'+
+          '<div style="font-size:10px;color:var(--text3);margin-top:2px;">'+dateAff+(doc.valeur?' · '+escHtml(doc.valeur):'')+'</div>'+
+        '</div>'+
+        (hasFile?'<div onclick="voirDocPro(\''+doc.id+'\',\''+escHtml(doc.mime_type||'image/jpeg')+'\')" style="font-size:11px;font-weight:700;color:var(--accent);background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.25);border-radius:6px;padding:2px 8px;cursor:pointer;flex-shrink:0;">Voir</div>':'')+
+      '</div>';
+    }).join('');
     list.innerHTML=html;
   }catch(e){sec.style.display='none';dbgWarn('Dossier médical: '+e.message);}
 }
 
-async function confirmerDoc(docId){
-  try{
-    await fetch(DB_URL+'?table=dossier_medical&id='+docId,{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-      body:JSON.stringify({source:'confirme_medecin',confirme_par:CUR_MED&&CUR_MED.supabaseId||null,confirme_at:new Date().toISOString()})
-    });
-    toast('✅ Document confirmé');
-    chargerDocsPatient();
-  }catch(e){toast('❌ '+e.message);}
-}
+async function confirmerDoc(docId){} // conservé compatibilité
 
 async function infirmerDoc(docId){
   try{
@@ -1722,7 +1823,7 @@ function appliquerEtatToggle(){
                   '<button onclick="deleteExam(\''+exId+'\')" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);border-radius:6px;width:26px;height:26px;font-size:12px;cursor:pointer;color:#ef4444;flex-shrink:0;">×</button>'
                 :'')+
               '</div>'+
-              (ex.resultat?renderResultatExamen(ex):'')+ 
+              (ex.resultat?renderResultatExamen(ex,CUR_DOS&&CUR_DOS.patient&&CUR_DOS.patient.patientId||''):'')+ 
             '</div>';
         });
         resList.innerHTML=html||'<div style="font-size:11px;color:var(--text3);">Aucun examen</div>';
@@ -2180,6 +2281,9 @@ function calculDoseJournaliere(dose,poso){
 }
 
 async function lancerValidationIA(){
+  // Incrémenter compteur validations IA
+  if(!CUR_DOS._nbValidations) CUR_DOS._nbValidations=0;
+  CUR_DOS._nbValidations++;
   var d=CUR_DOS;
   var p=d.patient;
   var diag=(document.getElementById('diagMedInput')||{}).value||'';
@@ -2314,8 +2418,13 @@ async function lancerValidationIA(){
       'RÉSULTATS EXAMENS:\n'+
       '- [paramètre]: [valeur] → [normal/anormal/critique — impact sur diagnostic/traitement]\n\n'+
       'MÉDICAMENTS:\n'+
-      '- [médicament] [dose/jour] vs OMS [fourchette] → [OK / NON]\n'+
-      '- Interactions/Contre-indications: [résultat]\n\n'+
+      'C) INTERACTIONS MÉDICAMENTEUSES\n'+
+      'Analyse toutes les combinaisons de médicaments prescrits + traitements en cours. Signale UNIQUEMENT les interactions significatives (contre-indiquées ou déconseillées). Si aucune → Aucune interaction significative détectée.\n'+
+      'FORMAT OBLIGATOIRE: INTERACTION: [méd A] + [méd B] → [risque en une phrase]\n\n'+
+      'MÉDICAMENTS:\n'+
+      '- [médicament] [dose/jour] vs OMS [fourchette] → [OK / NON]\n\n'+
+      'INTERACTIONS:\n'+
+      '[INTERACTION: ... ou Aucune interaction significative détectée.]\n\n'+
       'Si NON CONFORME seulement:\n'+
       'CORRECTION: [correction précise et minimale]'
     );
@@ -2380,9 +2489,35 @@ function afficherValidation(rep,diag,examens,notes){
   }
   CUR_DOS.valIA={statut:conf?'CONFORME':'NON CONFORME',texte:rep};
 
+  // ── Parser les interactions médicamenteuses ──
+  var interactions=[];
+  if(rep){
+    var lines=rep.split('\n');
+    lines.forEach(function(line){
+      var trimmed=line.trim();
+      if(trimmed.toUpperCase().startsWith('INTERACTION:') && !trimmed.toLowerCase().includes('aucune')){
+        interactions.push(trimmed.replace(/^INTERACTION:\s*/i,''));
+      }
+    });
+  }
+
   var vb=document.getElementById('valBox');
   if(!vb)return;
+
+  // Bannière interactions (non bloquante — médecin décide)
+  var interactionBanner='';
+  if(interactions.length>0){
+    interactionBanner=
+      '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:12px 14px;margin-bottom:10px;">'+
+        '<div style="font-family:\'Syne\',sans-serif;font-size:12px;font-weight:700;color:#d97706;margin-bottom:6px;">⚠️ Interaction médicamenteuse potentielle à vérifier</div>'+
+        interactions.map(function(i){
+          return '<div style="font-size:11px;color:var(--text2);padding:3px 0;border-bottom:1px solid rgba(245,158,11,.15);">• '+escHtml(i)+'</div>';
+        }).join('')+
+        '<div style="font-size:10px;color:var(--text3);margin-top:6px;font-style:italic;">Information non bloquante — le médecin reste décisionnaire.</div>'+
+      '</div>';
+  }
   vb.innerHTML=
+    interactionBanner+
     '<div class="val-box '+(conf?'conf':'nconf')+'">'+
       '<div class="val-title">'+(conf?'✅ Prescription CONFORME':'⚠️ Prescription NON CONFORME')+'</div>'+
       '<div class="val-txt">'+(rep||'').replace(/\n/g,'<br>')+'</div>'+
@@ -2471,6 +2606,22 @@ async function finaliser(nouveauStatut){
   var statutFinal=nouveauStatut==='valide_override'?'valide_override':nouveauStatut;
   var conf=(nouveauStatut==='valide'||nouveauStatut==='valide_override');
   var valTexte=CUR_DOS.valIA?CUR_DOS.valIA.texte:'';
+  var nbVal=CUR_DOS._nbValidations||0;
+
+  // Calcul score conformité OMS
+  // NULL = pas de validation IA → exclu des KPI
+  // 5 = CONFORME du 1er coup
+  // 3 = CONFORME après correction (2ème validation)
+  // 2 = CONFORME après 3+ validations
+  // 1 = Finalisé NON CONFORME (maintient)
+  var scoreConformite=null;
+  if(nbVal>0){
+    if(nouveauStatut==='valide_override') scoreConformite=1; // maintient NON CONFORME
+    else if(conf && nbVal===1)            scoreConformite=5; // CONFORME 1er coup
+    else if(conf && nbVal===2)            scoreConformite=3; // CONFORME après correction
+    else if(conf && nbVal>=3)             scoreConformite=2; // CONFORME après 3+
+    else                                   scoreConformite=1; // autre cas dégradé
+  }
 
   // 1. PATCH consultations
   var ok=await updateDossier(CUR_DOS.supabaseId,{
@@ -2481,6 +2632,7 @@ async function finaliser(nouveauStatut){
     validationIATexte:valTexte,
     validationIA:conf?'CONFORME':'NON CONFORME',
     decisionMedecin:nouveauStatut==='valide_override'?'maintient':'adopte_oms',
+    scoreConformite:scoreConformite,
     brouillonJson:null
   });
 
@@ -2831,6 +2983,8 @@ function openExamModal(){
   document.body.appendChild(modal);
   EXAM_OBL=true;
   setTimeout(function(){var el=document.getElementById('examNomInput');if(el)el.focus();},100);
+  // Précharger catalogue en arrière-plan
+  chargerCatalogueExamens();
 }
 
 var EXAM_OBL=true;
@@ -2842,13 +2996,38 @@ function setExamObl(obl){
   if(recBtn){recBtn.style.background=obl?'#f9fafb':'#eff6ff';recBtn.style.borderColor=obl?'#e5e7eb':'#93c5fd';recBtn.style.color=obl?'#9ca3af':'#3b82f6';}
 }
 
-var EXAMENS_CATALOGUE=['Glycémie à jeun','HbA1c','NFS (Numération Formule Sanguine)','CRP (Protéine C réactive)','VS (Vitesse de sédimentation)','Créatininémie','Urée sanguine','Transaminases (ALAT/ASAT)','Bilan lipidique (cholestérol total, HDL, LDL, TG)','TDR Paludisme','Frottis sanguin','Goutte épaisse','ECBU (Examen cytobactériologique des urines)','Hémoculture','TP/INR','Groupe sanguin + Rhésus','Test de grossesse (bHCG)','TSH (Thyroïde)','Radiographie thoracique','Échographie abdominale','Électrocardiogramme (ECG)','Widal (à éviter — Guide MSF 2024)'];
+// Catalogue examens — chargé depuis Supabase, cache en mémoire
+var EXAMENS_CATALOGUE=[];
+var EXAMENS_CATALOGUE_LOADED=false;
+
+async function chargerCatalogueExamens(){
+  if(EXAMENS_CATALOGUE_LOADED)return;
+  try{
+    var r=await fetch(DB_URL+'?table=catalogue_examens&select=nom,categorie&order=nom.asc&limit=300',{
+      headers:{'x-dokita-key':DOKITA_KEY}
+    });
+    var data=await r.json();
+    var rows=Array.isArray(data)?data:(data.data||[]);
+    EXAMENS_CATALOGUE=rows.map(function(r){return r.nom;});
+    EXAMENS_CATALOGUE_LOADED=true;
+    dbg('Catalogue examens chargé: '+EXAMENS_CATALOGUE.length+' examens');
+  }catch(e){
+    dbgWarn('Catalogue examens erreur: '+e.message);
+    // Fallback minimal si Supabase indisponible
+    EXAMENS_CATALOGUE=['Glycémie à jeun','NFS','TDR Paludisme','ECBU','Radiographie thoracique'];
+  }
+}
 
 function filtrerSuggestionsExam(val){
   var sug=document.getElementById('examSuggestions');
   if(!sug)return;
   if(!val||val.length<2){sug.style.display='none';return;}
-  var matches=EXAMENS_CATALOGUE.filter(function(e){return e.toLowerCase().includes(val.toLowerCase());}).slice(0,6);
+  // Charger catalogue si pas encore fait
+  if(!EXAMENS_CATALOGUE_LOADED){
+    chargerCatalogueExamens().then(function(){filtrerSuggestionsExam(val);});
+    return;
+  }
+  var matches=EXAMENS_CATALOGUE.filter(function(e){return e.toLowerCase().includes(val.toLowerCase());}).slice(0,8);
   if(!matches.length){sug.style.display='none';return;}
   sug.style.display='block';
   sug.innerHTML=matches.map(function(e){
@@ -3204,8 +3383,63 @@ function buildOrdoHtml(d,ordo){
 var SIG_DRAWING = false;
 var SIG_CTX = null;
 
+// ── Thème Pro ──
+var PRO_THEMES={
+  dark:{'--bg':'#0A0F1E','--bg2':'#111827','--bg3':'#161D2F','--card':'#111827','--card2':'#161D2F','--border':'#1E2D45','--accent':'#00C896','--accent2':'#0EA5E9','--warn':'#F59E0B','--danger':'#EF4444','--text':'#F0F4FF','--text2':'#8B9EC7','--text3':'#4A5A7A','--white':'#F0F4FF'},
+  light:{'--bg':'#EEF4F0','--bg2':'#FFFFFF','--bg3':'#F4F8F5','--card':'#FFFFFF','--card2':'#E8F0EB','--border':'#D6E8DF','--accent':'#00A878','--accent2':'#2D7DD2','--warn':'#E8920A','--danger':'#D93025','--text':'#0D2318','--text2':'#4A6B5A','--text3':'#9DBDAD','--white':'#0D2318'}
+};
+function proApplyTheme(t){
+  var vars=PRO_THEMES[t]||PRO_THEMES.light;
+  var root=document.documentElement;
+  for(var k in vars)root.style.setProperty(k,vars[k]);
+  localStorage.setItem('pro_theme',t);
+  var tog=document.getElementById('proToggleTheme');
+  var ico=document.getElementById('proThemeIco');
+  var lbl=document.getElementById('proThemeLabel');
+  if(tog){tog.classList.toggle('on',t==='dark');}
+  if(ico)ico.textContent=t==='dark'?'🌙':'☀️';
+  if(lbl)lbl.textContent=t==='dark'?'Mode sombre':'Mode clair';
+}
+function proToggleThemeFn(){
+  var cur=localStorage.getItem('pro_theme')||'light';
+  proApplyTheme(cur==='light'?'dark':'light');
+}
+function initProTheme(){proApplyTheme(localStorage.getItem('pro_theme')||'light');}
+
 function ouvrirParams() {
   showScreen('paramScreen');
+  proApplyTheme(localStorage.getItem('pro_theme')||'light');
+  // Charger profil complet depuis Supabase puis remplir le form
+  if(CUR_MED&&CUR_MED.supabaseId){
+    fetch(DB_URL+'?table=medecins&filter=id=eq.'+encodeURIComponent(CUR_MED.supabaseId)+'&limit=1',{
+      headers:{'x-dokita-key':DOKITA_KEY}
+    }).then(function(r){return r.json();}).then(function(data){
+      var rows=Array.isArray(data)?data:(data.data||[]);
+      if(rows.length){
+        var m=rows[0];
+        CUR_MED.prenom=m.prenom||'';
+        CUR_MED.nomFamille=m.nom||'';
+        CUR_MED.sexe=m.sexe||'';
+        CUR_MED.sous_specialite=m.sous_specialite||'';
+        CUR_MED.annees_experience=m.annees_experience||'';
+        CUR_MED.telephone=m.telephone||'';
+        CUR_MED.whatsapp=m.whatsapp||'';
+        CUR_MED.localisation=[m.ville,m.quartier,m.pays].filter(Boolean).join(', ');
+        CUR_MED.consultation_distance=!!m.consultation_distance;
+        CUR_MED.visite_domicile=!!m.visite_domicile;
+        CUR_MED.urgences=!!m.urgences;
+        CUR_MED.langues_parlees=m.langues_parlees||[];
+        CUR_MED.jours_consultation=m.jours_consultation||[];
+        CUR_MED.tarif_consultation=m.tarif_consultation||'';
+        CUR_MED.devise=m.devise||'FCFA';
+        CUR_MED.paiement_mobile=!!m.paiement_mobile;
+        CUR_MED.accepte_assurance=!!m.accepte_assurance;
+      }
+      chargerProfilDansForm();
+    }).catch(function(){chargerProfilDansForm();});
+  } else {
+    chargerProfilDansForm();
+  }
   setTimeout(initCanvas, 100);
   chargerSignatureExistante();
 }
@@ -3273,15 +3507,27 @@ function chargerSignatureExistante() {
   if (CUR_MED && CUR_MED.signature_base64) {
     afficherAperçuSignature(CUR_MED.signature_base64);
   } else {
-    document.getElementById('sigPreview').style.display = 'none';
+    var prev=document.getElementById('sigPreview');if(prev)prev.style.display='none';
+    var zone=document.getElementById('sigZoneDessin');if(zone)zone.style.display='block';
   }
 }
 
 function afficherAperçuSignature(base64) {
   var preview = document.getElementById('sigPreview');
   var img = document.getElementById('sigImg');
-  img.src = base64;
-  preview.style.display = 'block';
+  var zone = document.getElementById('sigZoneDessin');
+  if(img) img.src = base64;
+  if(preview){preview.style.display='flex';}
+  if(zone){zone.style.display='none';}   // masquer la zone de dessin
+}
+
+function ouvrirEditionSignature(){
+  var zone=document.getElementById('sigZoneDessin');
+  var prev=document.getElementById('sigPreview');
+  if(zone)zone.style.display='block';
+  if(prev)prev.style.display='none';
+  SIG_CTX=null;                          // reset canvas context
+  setTimeout(initCanvas,50);
 }
 
 
@@ -3442,7 +3688,38 @@ if('serviceWorker' in navigator){
 // AFFICHAGE RÉSULTATS EXAMENS — Dokita Pro
 // Affiche les valeurs extraites par Claude Vision de façon structurée
 // ══════════════════════════════
-function renderResultatExamen(ex){
+async function voirFichierExamenPro(examenId, patId){
+  try{
+    toast('⏳ Chargement du fichier...');
+    var r=await fetch(DB_URL+'?table=dossier_medical&select=contenu_base64,mime_type,nom&filter=note=eq.'+encodeURIComponent(examenId)+'&filter2=patient_id=eq.'+encodeURIComponent(patId)+'&limit=1',{
+      headers:{'x-dokita-key':DOKITA_KEY}
+    });
+    var data=await r.json();
+    var doc=data&&data[0];
+    if(!doc||!doc.contenu_base64){toast('⚠️ Fichier non disponible');return;}
+    var mime=doc.mime_type||'application/octet-stream';
+    var dataUrl='data:'+mime+';base64,'+doc.contenu_base64;
+    if(mime.startsWith('image/')){
+      // Ouvrir modal image
+      var old=document.getElementById('proModal');if(old)old.remove();
+      var m=document.createElement('div');
+      m.id='proModal';
+      m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;';
+      m.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;width:100%;max-width:700px;margin-bottom:10px;">'+
+        '<div style="font-size:12px;font-weight:700;color:#fff;">'+escHtml(doc.nom||'Résultat')+'</div>'+
+        '<button onclick="document.getElementById(\'proModal\').remove()" style="background:rgba(255,255,255,.15);border:none;border-radius:6px;padding:5px 12px;color:#fff;font-size:12px;cursor:pointer;">✕ Fermer</button>'+
+      '</div>'+
+      '<img src="'+dataUrl+'" style="max-width:100%;max-height:80vh;border-radius:10px;object-fit:contain;">';
+      document.body.appendChild(m);
+    }else{
+      // PDF → nouvel onglet
+      var blob=new Blob([Uint8Array.from(atob(doc.contenu_base64),function(c){return c.charCodeAt(0)})],{type:mime});
+      window.open(URL.createObjectURL(blob),'_blank');
+    }
+  }catch(e){toast('❌ '+e.message);}
+}
+
+function renderResultatExamen(ex, patId){
   // Tenter de parser extraction_json si disponible
   var extraction=null;
   if(ex.extraction_json){
@@ -3450,6 +3727,13 @@ function renderResultatExamen(ex){
   }
 
   var html='<div style="margin-top:8px;">';
+
+  // Bouton Voir le fichier
+  if(patId){
+    html+='<div style="display:flex;justify-content:flex-end;margin-bottom:6px;">'+
+      '<button onclick="voirFichierExamenPro(\''+ex.id+'\',\''+patId+'\')" style="font-size:10px;font-weight:700;color:var(--accent);background:rgba(0,200,150,.12);border:1px solid rgba(0,200,150,.3);border-radius:6px;padding:3px 10px;cursor:pointer;">👁️ Voir le fichier</button>'+
+    '</div>';
+  }
 
   if(extraction&&extraction.valeurs&&extraction.valeurs.length){
     // ── Vue structurée avec valeurs IA ──
@@ -3502,29 +3786,229 @@ function renderResultatExamen(ex){
   return html;
 }
 
+// Init thème au chargement
+document.addEventListener('DOMContentLoaded', function(){ initProTheme(); });
+
 </script>
 
 <!-- PARAMÈTRES MÉDECIN -->
 <div class="screen" id="paramScreen">
   <div class="hdr">
     <div class="hdr-back" onclick="showScreen('dashScreen')">←</div>
-    <div class="hdr-info"><div class="hdr-title">Paramètres</div><div class="hdr-sub">Mon profil médecin</div></div>
+    <div class="hdr-ico">⚙️</div>
+    <div style="flex:1"><div class="hdr-title">Paramètres</div></div>
+    <button onclick="sauvegarderProfil()" style="background:var(--accent);border:none;border-radius:10px;padding:7px 14px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#fff;cursor:pointer;">Enregistrer</button>
   </div>
   <div class="dash-body">
-    <div class="sec-title" style="margin-bottom:12px;">✍️ Signature électronique</div>
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
-      <p style="font-size:12px;color:var(--text3);margin:0 0 12px;">Signez dans le cadre ci-dessous. Cette signature sera apposée sur toutes vos ordonnances.</p>
-      <canvas id="sigCanvas" width="340" height="130"
-        style="border:2px dashed var(--border);border-radius:10px;background:#fff;display:block;width:100%;touch-action:none;cursor:crosshair;"></canvas>
-      <div style="display:flex;gap:8px;margin-top:12px;">
-        <button class="btn-sec" onclick="effacerSignature()" style="flex:1;">🗑️ Effacer</button>
-        <button class="btn-pri" onclick="sauvegarderSignature()" style="flex:2;">💾 Sauvegarder</button>
+
+    <!-- APPARENCE -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Apparence</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:20px;">
+      <div style="padding:16px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span id="proThemeIco" style="font-size:20px;">☀️</span>
+          <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--text);" id="proThemeLabel">Mode clair</div>
+        </div>
+        <div class="theme-toggle" id="proToggleTheme" onclick="proToggleThemeFn()"></div>
       </div>
     </div>
-    <div id="sigPreview" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
-      <div class="sec-title" style="margin-bottom:10px;">Aperçu signature enregistrée</div>
-      <img id="sigImg" style="max-width:200px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:8px;" />
+
+    <!-- IDENTITÉ -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Identité</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;">
+      <!-- Avatar + N° ordre (non modifiable) -->
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:52px;height:52px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:#fff;flex-shrink:0;" id="paramAvatar">DR</div>
+        <div style="flex:1;">
+          <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--text);" id="paramNom">—</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">N° Ordre : <span id="paramOrdre" style="color:var(--text2);font-weight:600;">—</span></div>
+        </div>
+      </div>
+      <!-- Prénom / Nom -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Prénom</div>
+          <input id="pPrenom" class="finput" placeholder="Prénom" style="width:100%;box-sizing:border-box;"/>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Nom</div>
+          <input id="pNom" class="finput" placeholder="Nom" style="width:100%;box-sizing:border-box;"/>
+        </div>
+      </div>
+      <!-- Sexe -->
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Sexe</div>
+        <div style="display:flex;gap:8px;">
+          <button id="pSexeM" onclick="selectSexePro('M')" style="flex:1;padding:9px;border-radius:10px;border:1.5px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;background:var(--bg3);color:var(--text);">👨 Masculin</button>
+          <button id="pSexeF" onclick="selectSexePro('F')" style="flex:1;padding:9px;border-radius:10px;border:1.5px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;background:var(--bg3);color:var(--text);">👩 Féminin</button>
+        </div>
+      </div>
+      <!-- Spécialité / Sous-spécialité -->
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Spécialité</div>
+        <input id="pSpec" class="finput" placeholder="ex: Médecine générale, Pédiatrie..." style="width:100%;box-sizing:border-box;"/>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Sous-spécialité <span style="color:var(--text3);font-weight:400;">(optionnel)</span></div>
+        <input id="pSousSpec" class="finput" placeholder="ex: Diabétologie, Néonatologie..." style="width:100%;box-sizing:border-box;"/>
+      </div>
+      <!-- Années d'expérience -->
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Années d'expérience</div>
+        <input id="pExperience" class="finput" type="number" min="0" max="60" placeholder="ex: 10" style="width:100%;box-sizing:border-box;"/>
+      </div>
     </div>
+
+    <!-- CONTACT -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Contact</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Email</div>
+        <input id="pEmail" class="finput" type="email" placeholder="email@exemple.com" style="width:100%;box-sizing:border-box;" id="paramEmailPro"/>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Téléphone</div>
+        <input id="pTel" class="finput" type="tel" placeholder="+225 07 00 00 00 00" style="width:100%;box-sizing:border-box;"/>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">WhatsApp <span style="color:var(--text3);font-weight:400;">(si différent)</span></div>
+        <input id="pWhatsapp" class="finput" type="tel" placeholder="+225 07 00 00 00 00" style="width:100%;box-sizing:border-box;"/>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Localisation</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="pLocalisation" class="finput" placeholder="ex: Brazzaville, Poto-Poto" style="flex:1;box-sizing:border-box;"/>
+          <button onclick="geolocMedecin()" id="btnGeoMed" style="background:var(--accent);border:none;border-radius:10px;padding:10px 12px;font-size:16px;cursor:pointer;flex-shrink:0;" title="Détecter ma position">📍</button>
+        </div>
+        <div id="geoMedStatus" style="font-size:10px;color:var(--text3);margin-top:4px;"></div>
+      </div>
+    </div>
+
+    <!-- PRATIQUE -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Pratique</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;">
+      <!-- Toggles services -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div style="font-size:13px;font-weight:600;color:var(--text);">🌐 Consultation à distance</div><div style="font-size:11px;color:var(--text3);">Téléconsultation vidéo/audio</div></div>
+          <div id="togDistance" onclick="togglePro('distance')" class="theme-toggle"></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div style="font-size:13px;font-weight:600;color:var(--text);">🏠 Visite à domicile</div><div style="font-size:11px;color:var(--text3);">Déplacement chez le patient</div></div>
+          <div id="togDomicile" onclick="togglePro('domicile')" class="theme-toggle"></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div style="font-size:13px;font-weight:600;color:var(--text);">🚨 Urgences</div><div style="font-size:11px;color:var(--text3);">Disponible pour les urgences</div></div>
+          <div id="togUrgences" onclick="togglePro('urgences')" class="theme-toggle"></div>
+        </div>
+      </div>
+      <!-- Langues parlées -->
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Langues parlées</div>
+        <div id="languesGrid" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      </div>
+      <!-- Jours de consultation -->
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Jours de consultation</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+          <button id="jourLun" onclick="toggleJour('Lun')" class="jour-btn">Lun</button>
+          <button id="jourMar" onclick="toggleJour('Mar')" class="jour-btn">Mar</button>
+          <button id="jourMer" onclick="toggleJour('Mer')" class="jour-btn">Mer</button>
+          <button id="jourJeu" onclick="toggleJour('Jeu')" class="jour-btn">Jeu</button>
+          <button id="jourVen" onclick="toggleJour('Ven')" class="jour-btn">Ven</button>
+          <button id="jourSam" onclick="toggleJour('Sam')" class="jour-btn">Sam</button>
+          <button id="jourDim" onclick="toggleJour('Dim')" class="jour-btn">Dim</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TARIFS -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Tarifs & Paiement</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;">
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Tarif consultation</div>
+          <input id="pTarif" class="finput" type="number" min="0" placeholder="ex: 5000" style="width:100%;box-sizing:border-box;"/>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Devise</div>
+          <select id="pDevise" class="finput" style="width:100%;box-sizing:border-box;">
+            <option value="FCFA">FCFA</option>
+            <option value="EUR">EUR</option>
+            <option value="USD">USD</option>
+            <option value="XOF">XOF</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div style="font-size:13px;font-weight:600;color:var(--text);">📱 Paiement mobile</div><div style="font-size:11px;color:var(--text3);">Orange Money, Wave, MTN</div></div>
+          <div id="togMobile" onclick="togglePro('mobile')" class="theme-toggle"></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div style="font-size:13px;font-weight:600;color:var(--text);">🏥 Assurance acceptée</div><div style="font-size:11px;color:var(--text3);">Prise en charge assurance maladie</div></div>
+          <div id="togAssurance" onclick="togglePro('assurance')" class="theme-toggle"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REVERSEMENT -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Coordonnées de reversement</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Renseignez votre numéro Mobile Money OU votre RIB bancaire pour recevoir vos reversements Dokita.</div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Opérateur Mobile Money</div>
+        <select id="pMobileOp" class="finput" style="width:100%;box-sizing:border-box;">
+          <option value="">-- Sélectionner --</option>
+          <option value="Orange Money">Orange Money</option>
+          <option value="MTN Mobile Money">MTN Mobile Money</option>
+          <option value="Wave">Wave</option>
+          <option value="Airtel Money">Airtel Money</option>
+          <option value="M-Pesa">M-Pesa</option>
+          <option value="Moov Money">Moov Money</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">Numéro Mobile Money</div>
+        <input id="pMobileNum" class="finput" type="tel" placeholder="ex: +242 06 123 4567" style="width:100%;box-sizing:border-box;"/>
+      </div>
+      <div style="text-align:center;font-size:11px;color:var(--text3);padding:4px 0;">— OU —</div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;">RIB / IBAN bancaire</div>
+        <input id="pRib" class="finput" type="text" placeholder="ex: CG123 4567 8901 2345 6789 012" style="width:100%;box-sizing:border-box;"/>
+      </div>
+    </div>
+
+    <!-- SIGNATURE -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Signature électronique</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px;">
+      <!-- Vue compacte : signature + crayon -->
+      <div id="sigPreview" style="display:none;align-items:center;gap:10px;margin-bottom:4px;">
+        <img id="sigImg" style="max-height:48px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:6px;flex:1;" />
+        <span style="font-size:11px;color:var(--accent);">✅ Enregistrée</span>
+        <button onclick="ouvrirEditionSignature()" style="background:none;border:none;font-size:20px;cursor:pointer;padding:4px;" title="Modifier la signature">🖊️</button>
+      </div>
+      <!-- Zone dessin — masquée si signature existante -->
+      <div id="sigZoneDessin">
+        <p style="font-size:11px;color:var(--text3);margin:0 0 10px;">Signez ci-dessous — apposée sur toutes vos ordonnances.</p>
+        <canvas id="sigCanvas" width="340" height="110"
+          style="border:2px dashed var(--border);border-radius:10px;background:#fff;display:block;width:100%;touch-action:none;cursor:crosshair;"></canvas>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn-sec" onclick="effacerSignature()" style="flex:1;">🗑️ Effacer</button>
+          <button class="btn-pri" onclick="sauvegarderSignature()" style="flex:2;">💾 Sauvegarder</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPTE -->
+    <div class="sec-title" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Compte</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:40px;">
+      <div style="padding:16px;cursor:pointer;" onclick="logoutPro()">
+        <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--danger);">🔓 Se déconnecter</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px;" id="paramEmailLogout">—</div>
+      </div>
+    </div>
+
   </div>
 </div>
 </body>
