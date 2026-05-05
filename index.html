@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.16
-     DATE    : 2026-04-29 10:18:27
+     VERSION : V4.20
+     DATE    : 2026-05-02 22:04:00
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
@@ -483,9 +483,31 @@ var VIDEO_URL = 'https://heydoc-medecin.vercel.app/api/video';
 var DAILY_ROOM = null; // room active
 // ══════════════════════════════
 var DB_URL     = 'https://heydoc-medecin.vercel.app/api/db';
+var API_URL    = 'https://heydoc-mu.vercel.app/api';
 var SAVE_URL   = 'https://heydoc-medecin.vercel.app/api/save';
 var SEARCH_MED = 'https://heydoc-medecin.vercel.app/api/search-med';
 var DOKITA_KEY = 'dk-2026-prod-x9f7m';
+
+// ── HELPERS JWT ──
+var JWT_TOKEN=null;
+function sauvegarderJWT(token){JWT_TOKEN=token;try{localStorage.setItem('dk_jwt_pro',token);}catch(e){}}
+function chargerJWT(){if(JWT_TOKEN)return JWT_TOKEN;try{JWT_TOKEN=localStorage.getItem('dk_jwt_pro');}catch(e){}return JWT_TOKEN;}
+function supprimerJWT(){JWT_TOKEN=null;try{localStorage.removeItem('dk_jwt_pro');}catch(e){}}
+async function fetchAPI(url,options){
+  options=options||{};
+  options.headers=options.headers||{};
+  var token=chargerJWT();
+  if(token)options.headers['Authorization']='Bearer '+token;
+  if(!options.headers['Content-Type'])options.headers['Content-Type']='application/json';
+  var r=await fetch(url,options);
+  if(r.status===401){
+    supprimerJWT();
+    showScreen('loginScreen');
+    toast('Session expirée — reconnectez-vous');
+    throw new Error('Session expirée');
+  }
+  return r;
+}
 
 // Helper générique GET Supabase via /api/db
 async function dbGet(table, params) {
@@ -529,33 +551,45 @@ async function dbInsert(table, body) {
 // ══════════════════════════════
 async function chargerDossierPatient(nomPatient, patientId) {
   PATIENT_DOSSIER = null;
+  if(!patientId){dbgWarn('chargerDossierPatient: patientId requis');return null;}
   try {
-    var params = patientId
-      ? { filter: 'patient_id=eq.' + patientId }
-      : { filter: 'nom_complet=ilike.*' + nomPatient + '*' };
-    var data = await dbGet('patients', params);
-    var rows = Array.isArray(data) ? data : (data.data || []);
-    if (rows.length > 0) {
-      var p = rows[0];
-      PATIENT_DOSSIER = {
-        supabaseId: p.id,
-        nom: p.nom_complet || (p.prenom ? p.prenom + ' ' + p.nom : p.nom) || '',
-        prenom: p.prenom || '',
-        email: p.email || '',
-        telephone: p.telephone || '',
-        ville: p.ville || '',
-        sexe: p.sexe || '',
-        poids: p.poids || '',
-        dateNaissance: p.date_naissance || '',
-        allergies: p.allergies || '',
-        antecedents: p.antecedents || '',
-        traitements: p.traitements_reguliers || '',
-        ordonnances: p.ordonnances || '',
-        idPatient: p.patient_id || ''
+    // ── Appel JWT /api/medecin?action=dossier ──
+    var r=await fetchAPI(API_URL+'/medecin?action=dossier&patient_id='+encodeURIComponent(patientId));
+    if(!r.ok){
+      // 403 = patient non associé à ce médecin (normal pour nouveaux patients)
+      if(r.status===403){dbgWarn('Patient non encore associé à ce médecin');return null;}
+      throw new Error('HTTP '+r.status);
+    }
+    var data=await r.json();
+    var rows=Array.isArray(data)?data:(data.data||[]);
+    // Le endpoint retourne les documents — on a besoin du profil patient depuis la consultation
+    // Charger le profil patient via DB_URL (données non sensibles)
+    var rP=await fetch(DB_URL+'?table=patients&filter=id=eq.'+encodeURIComponent(patientId)+'&limit=1',{
+      headers:{'x-dokita-key':DOKITA_KEY}
+    });
+    var dP=await rP.json();
+    var pRows=Array.isArray(dP)?dP:(dP.data||[]);
+    if(pRows.length){
+      var p=pRows[0];
+      PATIENT_DOSSIER={
+        supabaseId:p.id,
+        nom:p.nom_complet||(p.prenom?p.prenom+' '+p.nom:p.nom)||'',
+        prenom:p.prenom||'',
+        email:p.email||'',
+        telephone:p.telephone||'',
+        ville:p.ville||'',
+        sexe:p.sexe||'',
+        poids:p.poids||'',
+        dateNaissance:p.date_naissance||'',
+        allergies:p.allergies||'',
+        antecedents:p.antecedents||'',
+        traitements:p.traitements_reguliers||'',
+        ordonnances:p.ordonnances||'',
+        idPatient:p.patient_id||''
       };
       return PATIENT_DOSSIER;
     }
-  } catch (e) { console.log('Erreur BDD Patients:', e.message); }
+  } catch(e){console.log('Erreur dossierPatient:',e.message);}
   return null;
 }
 
@@ -716,16 +750,19 @@ async function sauvegarderProfil(){
     accepte_assurance:PRO_TOGGLES.assurance,
     updated_at:new Date().toISOString()
   };
-  // Ajouter coordonnées GPS si détectées via bouton géoloc
   if(window._medLat&&window._medLng){
     data.latitude=window._medLat;
     data.longitude=window._medLng;
   }
   try{
     toast('⏳ Enregistrement...');
-    var r=await fetch(DB_URL+'?table=medecins&id='+CUR_MED.supabaseId,{method:'PATCH',headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},body:JSON.stringify(data)});
+    // ── Appel JWT /api/medecin?action=profil ──
+    var r=await fetchAPI(API_URL+'/medecin?action=profil',{
+      method:'PATCH',
+      body:JSON.stringify(data)
+    });
     var resp=await r.json();
-    if(resp&&resp.error)throw new Error(JSON.stringify(resp.error).slice(0,80));
+    if(!r.ok)throw new Error(resp.error||'Erreur sauvegarde');
     Object.assign(CUR_MED,{nom:'Dr. '+prenom+' '+nom,prenom:prenom,nomFamille:nom,sexe:PRO_SEXE,spec:data.specialite||CUR_MED.spec,sous_specialite:data.sous_specialite,annees_experience:data.annees_experience,email:data.email||CUR_MED.email,telephone:data.telephone,whatsapp:data.whatsapp,localisation:localisation,consultation_distance:data.consultation_distance,visite_domicile:data.visite_domicile,urgences:data.urgences,langues_parlees:PRO_LANGUES,jours_consultation:PRO_JOURS,tarif_consultation:data.tarif_consultation,devise:data.devise,paiement_mobile:data.paiement_mobile,accepte_assurance:data.accepte_assurance});
     var dn=document.getElementById('dashNom');if(dn)dn.textContent=CUR_MED.nom;
     var ds=document.getElementById('dashSpec');if(ds)ds.textContent=CUR_MED.spec;
@@ -746,8 +783,9 @@ async function chargerDossiers(){
   setSyncStatus('sync','Chargement...');
   document.getElementById('dList').innerHTML='<div class="loading-state"><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span><br><br>Chargement depuis Supabase...</div>';
   try{
-    var params={filter:'medecin_id=eq.'+CUR_MED.supabaseId,order:'created_at.desc',limit:'50'};
-    var data=await dbGet('consultations',params);
+    // ── Appel JWT /api/medecin ──
+    var r=await fetchAPI(API_URL+'/medecin?action=consultations');
+    var data=await r.json();
     var rows=Array.isArray(data)?data:(data.data||[]);
     DOSSIERS=rows.map(parseDossierSupabase);
     renderDash();
@@ -849,42 +887,34 @@ async function doLogin(){
   if(!ordre||!code){errEl.textContent='Numéro d\'ordre et code requis';errEl.classList.add('on');return;}
   errEl.textContent='⏳ Connexion...';errEl.classList.add('on');
   try{
-    errEl.textContent='⏳ Appel /api/db...';
-    var data=await dbGet('medecins',{filter:'numero_ordre=eq.'+ordre});
-    errEl.textContent='⏳ Réponse reçue — parsing...';
-    var rows=Array.isArray(data)?data:(data.data||[]);
-    dbg('LOGIN — rows reçus: '+rows.length+' | data type: '+typeof data+' | isArray: '+Array.isArray(data));
-    if(!rows.length){
-      // Afficher la réponse brute pour debug
-      errEl.textContent='❌ Introuvable — Réponse: '+JSON.stringify(data).slice(0,120);
-      errEl.classList.add('on');return;
-    }
-    var med=rows[0];
-    dbg('LOGIN — med: code_acces='+med.code_acces+' statut='+med.statut+' partenaire='+med.partenaire_dokita);
-    if(med.code_acces!==code){
-      errEl.textContent='❌ Code incorrect (attendu: '+med.code_acces.length+' car., saisi: '+code.length+' car.)';
-      errEl.classList.add('on');return;
-    }
-    if(med.statut&&med.statut.toLowerCase()!=='actif'){
-      errEl.textContent='❌ Statut: "'+med.statut+'" — compte inactif';errEl.classList.add('on');return;
-    }
-    if(!med.partenaire_dokita){errEl.textContent='❌ partenaire_dokita=false';errEl.classList.add('on');return;}
-    var nomComplet='Dr. '+(med.prenom?med.prenom+' ':'')+med.nom;
-    var spec=med.specialite||med.type_medecin||'Médecin';
+    // ── Appel JWT /api/auth ──
+    var r=await fetch(API_URL+'/auth',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({type:'medecin',ordre:ordre,code:code})
+    });
+    var data=await r.json();
+    if(!r.ok){errEl.textContent=data.error||'Erreur connexion';errEl.classList.add('on');return;}
+
+    // Sauvegarder JWT
+    sauvegarderJWT(data.token);
+    var med=data.medecin;
+
     var colors=['#00C896','#0EA5E9','#F59E0B','#A78BFA','#F97316'];
     CUR_MED={
-      supabaseId:med.id,
+      supabaseId:med.supabaseId,
       signature_base64:med.signature_base64||null,
-      ordre:ordre,
+      ordre:med.ordre,
       email:med.email||'',
-      nom:nomComplet,
-      spec:spec,
+      nom:med.nom,
+      spec:med.spec,
       color:colors[Math.floor(Math.random()*colors.length)],
       essai_gratuit_jusqu_au:med.essai_gratuit_jusqu_au||null
     };
+
     errEl.classList.remove('on');
-    document.getElementById('dashNom').textContent=nomComplet;
-    document.getElementById('dashSpec').textContent=spec;
+    document.getElementById('dashNom').textContent=med.nom;
+    document.getElementById('dashSpec').textContent=med.spec;
 
     // ── Badge essai gratuit J+30 ──
     if(med.essai_gratuit_jusqu_au){
@@ -892,17 +922,18 @@ async function doLogin(){
       if(dateFin>new Date()){
         var joursRestants=Math.ceil((dateFin-new Date())/(1000*60*60*24));
         var specEl=document.getElementById('dashSpec');
-        if(specEl)specEl.innerHTML=spec+' <span style="background:rgba(0,200,150,.15);border:1px solid rgba(0,200,150,.3);border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700;color:var(--accent);">🎁 Essai — '+joursRestants+'j</span>';
+        if(specEl)specEl.innerHTML=med.spec+' <span style="background:rgba(0,200,150,.15);border:1px solid rgba(0,200,150,.3);border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700;color:var(--accent);">🎁 Essai — '+joursRestants+'j</span>';
       }
     }
 
     showScreen('dashScreen');
     chargerDossiers();
+    dbg('Login JWT OK — médecin: '+med.nom);
+
     // Polling badge agenda toutes les 60s
     setTimeout(function pollAgenda(){
       if(AGENDA_ETAB_ID)mettreAJourBadgeAgenda();
       else{
-        // Charger ETAB_ID si pas encore fait
         if(CUR_MED&&CUR_MED.supabaseId){
           fetch(DB_URL+'?table=etablissements&filter=medecin_id=eq.'+encodeURIComponent(CUR_MED.supabaseId)+'&limit=1',{
             headers:{'x-dokita-key':DOKITA_KEY}
@@ -1378,7 +1409,7 @@ async function refuserRDV(rdvId, dispoId){
   }catch(e){toast('❌ '+e.message);}
 }
 
-function doLogout(){CUR_MED=null;AGENDA_ETAB_ID=null;document.getElementById('liOrdre').value='';document.getElementById('liCode').value='';showScreen('loginScreen');}
+function doLogout(){CUR_MED=null;AGENDA_ETAB_ID=null;supprimerJWT();document.getElementById('liOrdre').value='';document.getElementById('liCode').value='';showScreen('loginScreen');}
 document.getElementById('liCode').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
 
 // ══════════════════════════════
