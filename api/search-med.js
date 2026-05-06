@@ -1,8 +1,8 @@
 // /api/search-med.js
-// DOKITA Pro — Autocomplétion médicaments depuis Supabase
-// V4.9 — Normalisation accents côté serveur
+// DOKITA Pro — Autocompletion medicaments depuis Supabase
+// V4.10 — Fix module.exports
 
-export default async function handler(req, res) {
+const handler = async function(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-dokita-key');
@@ -21,20 +21,17 @@ export default async function handler(req, res) {
   const q = (req.query.q || '').trim();
   if (q.length < 2) return res.status(200).json([]);
 
-  // Normaliser : supprimer accents pour la recherche
   const qNorm = q.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
   try {
     const sbHeaders = {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json'
+      'apikey':        SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type':  'application/json'
     };
 
-    // Requête 1 : query originale (avec accents)
-    const url1 = `${SUPABASE_URL}/rest/v1/medicaments?nom=ilike.*${encodeURIComponent(q)}*&actif=eq.true&select=nom,classe,dosages&limit=8&order=nom.asc`;
-    // Requête 2 : query normalisée (sans accents) — "cetiri" trouve "Cétirizine"
-    const url2 = `${SUPABASE_URL}/rest/v1/medicaments?nom=ilike.*${encodeURIComponent(qNorm)}*&actif=eq.true&select=nom,classe,dosages&limit=8&order=nom.asc`;
+    const url1 = SUPABASE_URL + '/rest/v1/medicaments?nom=ilike.*' + encodeURIComponent(q) + '*&actif=eq.true&select=nom,classe,dosages&limit=8&order=nom.asc';
+    const url2 = SUPABASE_URL + '/rest/v1/medicaments?nom=ilike.*' + encodeURIComponent(qNorm) + '*&actif=eq.true&select=nom,classe,dosages&limit=8&order=nom.asc';
 
     const [sbRes1, sbRes2] = await Promise.all([
       fetch(url1, { headers: sbHeaders }),
@@ -47,8 +44,7 @@ export default async function handler(req, res) {
     const arr1 = Array.isArray(data1) ? data1 : [];
     const arr2 = Array.isArray(data2) ? data2 : [];
 
-    // Fusionner sans doublons par nom
-    const seen = new Set();
+    const seen   = new Set();
     const merged = [];
     for (const item of [...arr1, ...arr2]) {
       if (!item || !item.nom) continue;
@@ -59,8 +55,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Trier : résultats qui commencent par la query en premier
-    merged.sort((a, b) => {
+    merged.sort(function(a, b) {
       const an = (a.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
       const bn = (b.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
       const aStarts = an.startsWith(qNorm) ? 0 : 1;
@@ -75,4 +70,6 @@ export default async function handler(req, res) {
     console.error('search-med error:', e);
     return res.status(500).json({ error: e.message });
   }
-}
+};
+
+module.exports = handler;
