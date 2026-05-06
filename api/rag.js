@@ -3,7 +3,7 @@
 // Remplace /api/relevance (Relevance AI)
 // V4.8 — Règle langue renforcée : détection native + fallback langue préférée
 
-export default async function handler(req, res) {
+  const handler = async function(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-dokita-key');
@@ -1022,3 +1022,4 @@ Ne jamais improviser un dosage ou un protocole`;
     return res.status(500).json({ error: e.message });
   }
 }
+module.exports = handler;
