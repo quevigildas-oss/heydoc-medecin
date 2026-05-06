@@ -1022,4 +1022,5 @@ Ne jamais improviser un dosage ou un protocole`;
     return res.status(500).json({ error: e.message });
   }
 }
+
 module.exports = handler;
