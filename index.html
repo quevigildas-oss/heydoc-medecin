@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.20
+     VERSION : V4.21
      DATE    : 2026-05-02 22:04:00
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
@@ -1421,14 +1421,14 @@ function renderDash(){
   document.getElementById('stA').textContent=DOSSIERS.filter(function(d){return d.statut==='en_attente';}).length;
   document.getElementById('stE').textContent=DOSSIERS.filter(function(d){return d.statut==='en_attente_examen';}).length;
   document.getElementById('stEC').textContent=DOSSIERS.filter(function(d){return d.statut==='en_cours';}).length;
-  document.getElementById('stT').textContent=DOSSIERS.filter(function(d){return d.statut==='valide';}).length;
+  document.getElementById('stT').textContent=DOSSIERS.filter(function(d){return d.statut==='valide'||d.statut==='valide_override';}).length;
   document.getElementById('stR').textContent=DOSSIERS.filter(function(d){return d.statut==='cloture';}).length;
   renderDossiers();
 }
 
 function renderDossiers(){
   var ds=DOSSIERS;
-  if(FILTRE!=='tous')ds=ds.filter(function(d){return d.statut===FILTRE;});
+  if(FILTRE!=='tous')ds=ds.filter(function(d){return d.statut===FILTRE||(FILTRE==='valide'&&d.statut==='valide_override');});
   var list=document.getElementById('dList');
   if(!ds.length){
     list.innerHTML='<div class="empty"><div class="empty-ico">📂</div><div class="empty-txt">Aucun dossier</div></div>';
@@ -1439,7 +1439,7 @@ function renderDossiers(){
     en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
     en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
     en_cours:'<span class="badge b">📋 EN COURS</span>',
-    valide:'<span class="badge t">✅ VALIDÉ</span>',
+    valide:'<span class="badge t">✅ VALIDÉ</span>',valide_override:'<span class="badge t">📋 RÉFÉRÉ</span>',
     cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
   };
   list.innerHTML='';
@@ -1556,7 +1556,7 @@ function openDos(supabaseId){
     en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
     en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
     en_cours:'<span class="badge b">📋 EN COURS</span>',
-    valide:'<span class="badge t">✅ VALIDÉ</span>',
+    valide:'<span class="badge t">✅ VALIDÉ</span>',valide_override:'<span class="badge t">📋 RÉFÉRÉ</span>',
     cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
   };
   document.getElementById('cTitre').textContent=(CUR_DOS.patient.nom||'Patient')+' • '+(CUR_DOS.patient.age||'?')+' ans';
@@ -2068,7 +2068,7 @@ function renderConsult(){
     en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
     en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
     en_cours:'<span class="badge b">📋 EN COURS</span>',
-    valide:'<span class="badge t">✅ VALIDÉ</span>',
+    valide:'<span class="badge t">✅ VALIDÉ</span>',valide_override:'<span class="badge t">📋 RÉFÉRÉ</span>',
     cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
   };
 
