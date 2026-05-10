@@ -2,7 +2,7 @@
 <!-- ============================================
      DOKITA PRO — App Médecin
      VERSION : V4.21
-     DATE    : 2026-05-02 22:04:00
+     DATE    : 2026-05-11 22:04:00
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
@@ -2062,7 +2062,7 @@ function editMed(i,mode){
 
 function renderConsult(){
   var d=CUR_DOS;
-  var ro=d.statut==='valide'||d.statut==='cloture';
+  var ro=d.statut==='valide'||d.statut==='cloture'||d.statut==='valide_override';
   var p=d.patient;
   var bmap={
     en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
