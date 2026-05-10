@@ -851,14 +851,28 @@ async function updateDossier(supabaseId, fields){
   if(fields.validationIATexte!==undefined)body.validation_ia_texte=fields.validationIATexte;
   if(fields.validationIA!==undefined)     body.validation_ia=fields.validationIA;
   if(fields.decisionMedecin!==undefined)  body.decision_medecin=fields.decisionMedecin;
-  if(fields.scoreConformite!==undefined)  body.score_conformite=fields.scoreConformite;
+  // score_conformite désactivé — colonne à créer dans Supabase avant d'activer
+  // if(fields.scoreConformite!==undefined)  body.score_conformite=fields.scoreConformite;
   if(fields.brouillonJson!==undefined)    body.brouillon_json=fields.brouillonJson;
   if(fields.notifPatientEnvoyee!==undefined) body.notif_patient_envoyee=fields.notifPatientEnvoyee;
   body.updated_at=new Date().toISOString();
+  if(!supabaseId){
+    console.error('❌ updateDossier — supabaseId manquant !');
+    toast('⚠️ Erreur : ID consultation manquant');
+    return false;
+  }
   try{
-    await dbPatch('consultations',supabaseId,body);
+    var result=await dbPatch('consultations',supabaseId,body);
+    var updated=Array.isArray(result)?result.length:0;
+    if(updated===0){
+      console.warn('⚠️ PATCH consultations — 0 ligne mise à jour (supabaseId='+supabaseId+')');
+      toast('⚠️ Supabase : consultation introuvable pour mise à jour');
+      return false;
+    }
+    console.log('✅ PATCH consultations OK — statut:',fields.statut,'id:',supabaseId);
     return true;
   }catch(e){
+    console.error('❌ PATCH consultations FAILED:',e.message,'id:',supabaseId);
     toast('⚠️ Supabase: '+e.message.slice(0,60));
     return false;
   }
@@ -2678,6 +2692,13 @@ async function finaliser(nouveauStatut){
     scoreConformite:scoreConformite,
     brouillonJson:null
   });
+
+  // Bloquer si le PATCH consultation a échoué
+  if(!ok){
+    var btn2=document.getElementById('btnSend');
+    if(btn2){btn2.disabled=false;btn2.innerHTML='🤖 Valider avec l'IA →';}
+    return;
+  }
 
   // 2. INSERT examens prescrits par le médecin (seulement si pas déjà dans Supabase)
   if(EXAMENS_REQUIS && examens && examens.trim()){
