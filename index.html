@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.21
-     DATE    : 2026-05-11 22:04:00
+     VERSION : V4.19
+     DATE    : 2026-05-02 22:02:05
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
@@ -750,19 +750,16 @@ async function sauvegarderProfil(){
     accepte_assurance:PRO_TOGGLES.assurance,
     updated_at:new Date().toISOString()
   };
+  // Ajouter coordonnées GPS si détectées via bouton géoloc
   if(window._medLat&&window._medLng){
     data.latitude=window._medLat;
     data.longitude=window._medLng;
   }
   try{
     toast('⏳ Enregistrement...');
-    // ── Appel JWT /api/medecin?action=profil ──
-    var r=await fetchAPI(API_URL+'/medecin?action=profil',{
-      method:'PATCH',
-      body:JSON.stringify(data)
-    });
+    var r=await fetch(DB_URL+'?table=medecins&id='+CUR_MED.supabaseId,{method:'PATCH',headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},body:JSON.stringify(data)});
     var resp=await r.json();
-    if(!r.ok)throw new Error(resp.error||'Erreur sauvegarde');
+    if(resp&&resp.error)throw new Error(JSON.stringify(resp.error).slice(0,80));
     Object.assign(CUR_MED,{nom:'Dr. '+prenom+' '+nom,prenom:prenom,nomFamille:nom,sexe:PRO_SEXE,spec:data.specialite||CUR_MED.spec,sous_specialite:data.sous_specialite,annees_experience:data.annees_experience,email:data.email||CUR_MED.email,telephone:data.telephone,whatsapp:data.whatsapp,localisation:localisation,consultation_distance:data.consultation_distance,visite_domicile:data.visite_domicile,urgences:data.urgences,langues_parlees:PRO_LANGUES,jours_consultation:PRO_JOURS,tarif_consultation:data.tarif_consultation,devise:data.devise,paiement_mobile:data.paiement_mobile,accepte_assurance:data.accepte_assurance});
     var dn=document.getElementById('dashNom');if(dn)dn.textContent=CUR_MED.nom;
     var ds=document.getElementById('dashSpec');if(ds)ds.textContent=CUR_MED.spec;
@@ -851,28 +848,14 @@ async function updateDossier(supabaseId, fields){
   if(fields.validationIATexte!==undefined)body.validation_ia_texte=fields.validationIATexte;
   if(fields.validationIA!==undefined)     body.validation_ia=fields.validationIA;
   if(fields.decisionMedecin!==undefined)  body.decision_medecin=fields.decisionMedecin;
-  // score_conformite désactivé — colonne à créer dans Supabase avant d'activer
-  // if(fields.scoreConformite!==undefined)  body.score_conformite=fields.scoreConformite;
+  if(fields.scoreConformite!==undefined)  body.score_conformite=fields.scoreConformite;
   if(fields.brouillonJson!==undefined)    body.brouillon_json=fields.brouillonJson;
   if(fields.notifPatientEnvoyee!==undefined) body.notif_patient_envoyee=fields.notifPatientEnvoyee;
   body.updated_at=new Date().toISOString();
-  if(!supabaseId){
-    console.error('❌ updateDossier — supabaseId manquant !');
-    toast('⚠️ Erreur : ID consultation manquant');
-    return false;
-  }
   try{
-    var result=await dbPatch('consultations',supabaseId,body);
-    var updated=Array.isArray(result)?result.length:0;
-    if(updated===0){
-      console.warn('⚠️ PATCH consultations — 0 ligne mise à jour (supabaseId='+supabaseId+')');
-      toast('⚠️ Supabase : consultation introuvable pour mise à jour');
-      return false;
-    }
-    console.log('✅ PATCH consultations OK — statut:',fields.statut,'id:',supabaseId);
+    await dbPatch('consultations',supabaseId,body);
     return true;
   }catch(e){
-    console.error('❌ PATCH consultations FAILED:',e.message,'id:',supabaseId);
     toast('⚠️ Supabase: '+e.message.slice(0,60));
     return false;
   }
@@ -1435,14 +1418,14 @@ function renderDash(){
   document.getElementById('stA').textContent=DOSSIERS.filter(function(d){return d.statut==='en_attente';}).length;
   document.getElementById('stE').textContent=DOSSIERS.filter(function(d){return d.statut==='en_attente_examen';}).length;
   document.getElementById('stEC').textContent=DOSSIERS.filter(function(d){return d.statut==='en_cours';}).length;
-  document.getElementById('stT').textContent=DOSSIERS.filter(function(d){return d.statut==='valide'||d.statut==='valide_override';}).length;
+  document.getElementById('stT').textContent=DOSSIERS.filter(function(d){return d.statut==='valide';}).length;
   document.getElementById('stR').textContent=DOSSIERS.filter(function(d){return d.statut==='cloture';}).length;
   renderDossiers();
 }
 
 function renderDossiers(){
   var ds=DOSSIERS;
-  if(FILTRE!=='tous')ds=ds.filter(function(d){return d.statut===FILTRE||(FILTRE==='valide'&&d.statut==='valide_override');});
+  if(FILTRE!=='tous')ds=ds.filter(function(d){return d.statut===FILTRE;});
   var list=document.getElementById('dList');
   if(!ds.length){
     list.innerHTML='<div class="empty"><div class="empty-ico">📂</div><div class="empty-txt">Aucun dossier</div></div>';
@@ -1453,7 +1436,7 @@ function renderDossiers(){
     en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
     en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
     en_cours:'<span class="badge b">📋 EN COURS</span>',
-    valide:'<span class="badge t">✅ VALIDÉ</span>',valide_override:'<span class="badge t">📋 RÉFÉRÉ</span>',
+    valide:'<span class="badge t">✅ VALIDÉ</span>',
     cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
   };
   list.innerHTML='';
@@ -1570,7 +1553,7 @@ function openDos(supabaseId){
     en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
     en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
     en_cours:'<span class="badge b">📋 EN COURS</span>',
-    valide:'<span class="badge t">✅ VALIDÉ</span>',valide_override:'<span class="badge t">📋 RÉFÉRÉ</span>',
+    valide:'<span class="badge t">✅ VALIDÉ</span>',
     cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
   };
   document.getElementById('cTitre').textContent=(CUR_DOS.patient.nom||'Patient')+' • '+(CUR_DOS.patient.age||'?')+' ans';
@@ -2076,13 +2059,13 @@ function editMed(i,mode){
 
 function renderConsult(){
   var d=CUR_DOS;
-  var ro=d.statut==='valide'||d.statut==='cloture'||d.statut==='valide_override';
+  var ro=d.statut==='valide'||d.statut==='cloture';
   var p=d.patient;
   var bmap={
     en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
     en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
     en_cours:'<span class="badge b">📋 EN COURS</span>',
-    valide:'<span class="badge t">✅ VALIDÉ</span>',valide_override:'<span class="badge t">📋 RÉFÉRÉ</span>',
+    valide:'<span class="badge t">✅ VALIDÉ</span>',
     cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
   };
 
@@ -2692,13 +2675,6 @@ async function finaliser(nouveauStatut){
     scoreConformite:scoreConformite,
     brouillonJson:null
   });
-
-  // Bloquer si le PATCH consultation a échoué
-  if(!ok){
-    var btn2=document.getElementById('btnSend');
-    if(btn2){btn2.disabled=false;btn2.innerHTML='🤖 Valider avec l\'IA →';}
-    return;
-  }
 
   // 2. INSERT examens prescrits par le médecin (seulement si pas déjà dans Supabase)
   if(EXAMENS_REQUIS && examens && examens.trim()){
