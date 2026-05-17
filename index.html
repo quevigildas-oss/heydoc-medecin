@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.19
-     DATE    : 2026-05-02 22:02:05
+     VERSION : V4.20
+     DATE    : 2026-05-02 22:04:00
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
@@ -750,16 +750,19 @@ async function sauvegarderProfil(){
     accepte_assurance:PRO_TOGGLES.assurance,
     updated_at:new Date().toISOString()
   };
-  // Ajouter coordonnées GPS si détectées via bouton géoloc
   if(window._medLat&&window._medLng){
     data.latitude=window._medLat;
     data.longitude=window._medLng;
   }
   try{
     toast('⏳ Enregistrement...');
-    var r=await fetch(DB_URL+'?table=medecins&id='+CUR_MED.supabaseId,{method:'PATCH',headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},body:JSON.stringify(data)});
+    // ── Appel JWT /api/medecin?action=profil ──
+    var r=await fetchAPI(API_URL+'/medecin?action=profil',{
+      method:'PATCH',
+      body:JSON.stringify(data)
+    });
     var resp=await r.json();
-    if(resp&&resp.error)throw new Error(JSON.stringify(resp.error).slice(0,80));
+    if(!r.ok)throw new Error(resp.error||'Erreur sauvegarde');
     Object.assign(CUR_MED,{nom:'Dr. '+prenom+' '+nom,prenom:prenom,nomFamille:nom,sexe:PRO_SEXE,spec:data.specialite||CUR_MED.spec,sous_specialite:data.sous_specialite,annees_experience:data.annees_experience,email:data.email||CUR_MED.email,telephone:data.telephone,whatsapp:data.whatsapp,localisation:localisation,consultation_distance:data.consultation_distance,visite_domicile:data.visite_domicile,urgences:data.urgences,langues_parlees:PRO_LANGUES,jours_consultation:PRO_JOURS,tarif_consultation:data.tarif_consultation,devise:data.devise,paiement_mobile:data.paiement_mobile,accepte_assurance:data.accepte_assurance});
     var dn=document.getElementById('dashNom');if(dn)dn.textContent=CUR_MED.nom;
     var ds=document.getElementById('dashSpec');if(ds)ds.textContent=CUR_MED.spec;
