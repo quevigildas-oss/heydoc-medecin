@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.20
+     VERSION : V4.21
      DATE    : 2026-05-02 22:04:00
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
@@ -564,9 +564,7 @@ async function chargerDossierPatient(nomPatient, patientId) {
     var rows=Array.isArray(data)?data:(data.data||[]);
     // Le endpoint retourne les documents — on a besoin du profil patient depuis la consultation
     // Charger le profil patient via DB_URL (données non sensibles)
-    var rP=await fetch(DB_URL+'?table=patients&filter=id=eq.'+encodeURIComponent(patientId)+'&limit=1',{
-      headers:{'x-dokita-key':DOKITA_KEY}
-    });
+    var rP=await fetchAPI(API_URL+'/medecin?action=patient_by_pid&patient_id='+encodeURIComponent(CUR_DOS&&CUR_DOS.patient&&CUR_DOS.patient.patientId||patientId));
     var dP=await rP.json();
     var pRows=Array.isArray(dP)?dP:(dP.data||[]);
     if(pRows.length){
@@ -935,9 +933,7 @@ async function doLogin(){
       if(AGENDA_ETAB_ID)mettreAJourBadgeAgenda();
       else{
         if(CUR_MED&&CUR_MED.supabaseId){
-          fetch(DB_URL+'?table=etablissements&filter=medecin_id=eq.'+encodeURIComponent(CUR_MED.supabaseId)+'&limit=1',{
-            headers:{'x-dokita-key':DOKITA_KEY}
-          }).then(function(r){return r.json();}).then(function(data){
+          fetchAPI(API_URL+'/medecin?action=etablissement').then(function(r){return r&&r.json?r.json():Promise.resolve({});}).then(function(data){
             var rows=Array.isArray(data)?data:(data.data||[]);
             if(rows.length){AGENDA_ETAB_ID=rows[0].id;mettreAJourBadgeAgenda();}
           }).catch(function(){});
@@ -957,9 +953,7 @@ async function ouvrirAgenda(){
   showScreen('agendaScreen');
   if(CUR_MED&&CUR_MED.supabaseId&&!AGENDA_ETAB_ID){
     try{
-      var r=await fetch(DB_URL+'?table=etablissements&filter=medecin_id=eq.'+encodeURIComponent(CUR_MED.supabaseId)+'&limit=1',{
-        headers:{'x-dokita-key':DOKITA_KEY}
-      });
+      var r=await fetchAPI(API_URL+'/medecin?action=etablissement');
       var data=await r.json();
       var rows=Array.isArray(data)?data:(data.data||[]);
       if(rows.length)AGENDA_ETAB_ID=rows[0].id;
@@ -978,9 +972,7 @@ function actualiserAgenda(){
 
 function mettreAJourBadgeAgenda(){
   if(!AGENDA_ETAB_ID)return;
-  fetch(DB_URL+'?table=rendez_vous&filter=etablissement_id=eq.'+encodeURIComponent(AGENDA_ETAB_ID)+'&filter2=statut=eq.demande&limit=50',{
-    headers:{'x-dokita-key':DOKITA_KEY}
-  }).then(function(r){return r.json();}).then(function(data){
+  fetchAPI(API_URL+'/medecin?action=rdv&etablissement_id='+encodeURIComponent(AGENDA_ETAB_ID)+'&statut=demande').then(function(r){return r&&r.json?r.json():Promise.resolve({});}).then(function(data){
     var rows=Array.isArray(data)?data:(data.data||[]);
     var badge=document.getElementById('agendaBadge');
     if(!badge)return;
@@ -1013,8 +1005,8 @@ async function chargerDispos(){
 
     // Charger dispos ET RDV confirmés en parallèle
     var [rDispos, rRDV]=await Promise.all([
-      fetch(DB_URL+'?table=disponibilites&filter=etablissement_id=eq.'+encodeURIComponent(AGENDA_ETAB_ID)+'&filter2=date_specifique=gte.'+aujourd+'&order=date_specifique.asc,heure_debut.asc&limit=100',{headers:{'x-dokita-key':DOKITA_KEY}}),
-      fetch(DB_URL+'?table=rendez_vous&filter=etablissement_id=eq.'+encodeURIComponent(AGENDA_ETAB_ID)+'&filter2=statut=eq.confirme&order=date_confirmee.asc&limit=100',{headers:{'x-dokita-key':DOKITA_KEY}})
+      fetchAPI(API_URL+'/medecin?action=disponibilites&etablissement_id='+encodeURIComponent(AGENDA_ETAB_ID)),
+      fetchAPI(API_URL+'/medecin?action=rdv&etablissement_id='+encodeURIComponent(AGENDA_ETAB_ID)+'&statut=confirme')
     ]);
     var dispos=Array.isArray(await rDispos.clone().json())?await rDispos.json():(await rDispos.json()).data||[];
     var rdvData=await rRDV.json();
@@ -1099,9 +1091,7 @@ async function chargerDemandesRDV(){
   if(!AGENDA_ETAB_ID){el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">Aucun établissement lié.</div>';return;}
 
   try{
-    var r=await fetch(DB_URL+'?table=rendez_vous&filter=etablissement_id=eq.'+encodeURIComponent(AGENDA_ETAB_ID)+'&order=created_at.desc&limit=50',{
-      headers:{'x-dokita-key':DOKITA_KEY}
-    });
+    var r=await fetchAPI(API_URL+'/medecin?action=rdv&etablissement_id='+encodeURIComponent(AGENDA_ETAB_ID));
     var data=await r.json();
     var rows=Array.isArray(data)?data:(data.data||[]);
 
@@ -1184,21 +1174,7 @@ async function saveDispo(btn){
   if(!AGENDA_ETAB_ID){toast('Aucun établissement lié');return;}
   btn.disabled=true;btn.textContent='⏳ Ajout...';
   try{
-    await fetch(DB_URL,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-      body:JSON.stringify({
-        table:'disponibilites',
-        data:{
-          etablissement_id:AGENDA_ETAB_ID,
-          medecin_id:CUR_MED.supabaseId,
-          date_specifique:date,
-          heure_debut:heure,
-          duree_minutes:30,
-          statut:'disponible'
-        }
-      })
-    });
+    await fetchAPI(API_URL+'/medecin?action=disponibilite',{method:'POST',body:JSON.stringify({etablissement_id:AGENDA_ETAB_ID,medecin_id:CUR_MED.supabaseId,date_specifique:date,heure_debut:heure,duree_minutes:30,statut:'disponible'})});
     btn.closest('div[style*=fixed]').remove();
     toast('✅ Créneau ajouté');
     chargerDispos();
@@ -1212,11 +1188,7 @@ async function supprimerDispo(slotId, date, heure, statut){
   if(statut==='reserve'){toast('⚠️ Créneau réservé — annulez d\'abord le RDV');return;}
   if(!confirm('Supprimer le créneau '+heure+' ?'))return;
   try{
-    await fetch(DB_URL+'?table=disponibilites&id='+slotId,{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-      body:JSON.stringify({statut:'supprime'})
-    });
+    await fetchAPI(API_URL+'/medecin?action=disponibilite&id='+slotId,{method:'PATCH',body:JSON.stringify({statut:'supprime'})});
     toast('Créneau supprimé');
     chargerDispos();
   }catch(e){toast('❌ '+e.message);}
@@ -1358,11 +1330,7 @@ async function envoyerCreneaux(){
   if(!creneaux.length){toast('⚠️ Sélectionnez au moins un créneau');return;}
 
   try{
-    await fetch(DB_URL+'?table=rendez_vous&filter=id=eq.'+encodeURIComponent(rdvId),{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-      body:JSON.stringify({statut:'propose',creneaux_proposes:creneaux})
-    });
+    await fetchAPI(API_URL+'/medecin?action=rdv&id='+encodeURIComponent(rdvId),{method:'PATCH',body:JSON.stringify({statut:'propose',creneaux_proposes:creneaux})});
     var m=document.getElementById('proposerModal');if(m)m.remove();
     toast('✅ '+creneaux.length+' créneau(x) envoyé(s) au patient');
     chargerDemandesRDV();
@@ -1373,11 +1341,7 @@ async function annulerRDVMedecin(rdvId){
   if(!rdvId){toast('Erreur — RDV introuvable');return;}
   if(!confirm('Annuler ce rendez-vous ? Le patient sera notifié.'))return;
   try{
-    await fetch(DB_URL+'?table=rendez_vous&filter=id=eq.'+encodeURIComponent(rdvId),{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-      body:JSON.stringify({statut:'annule_praticien',creneaux_proposes:[]})
-    });
+    await fetchAPI(API_URL+'/medecin?action=rdv&id='+encodeURIComponent(rdvId),{method:'PATCH',body:JSON.stringify({statut:'annule_praticien',creneaux_proposes:[]})});
     toast('✅ RDV annulé');
     chargerDispos();
   }catch(e){toast('❌ '+e.message);}
@@ -1393,17 +1357,9 @@ async function refuserRDV(rdvId, dispoId){
   try{
     // Libérer le slot
     if(dispoId){
-      await fetch(DB_URL+'?table=disponibilites&id='+dispoId,{
-        method:'PATCH',
-        headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-        body:JSON.stringify({statut:'disponible'})
-      });
+      await fetchAPI(API_URL+'/medecin?action=disponibilite&id='+dispoId,{method:'PATCH',body:JSON.stringify({statut:'disponible'})});
     }
-    await fetch(DB_URL+'?table=rendez_vous&id='+rdvId,{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-      body:JSON.stringify({statut:'annule_praticien'})
-    });
+    await fetchAPI(API_URL+'/medecin?action=rdv&id='+rdvId,{method:'PATCH',body:JSON.stringify({statut:'annule_praticien'})});
     toast('RDV refusé');
     chargerDemandesRDV();
   }catch(e){toast('❌ '+e.message);}
@@ -1579,9 +1535,7 @@ async function chargerDocsPatient(){
   var patId=CUR_DOS.patient.patientId||'';
   if(!patId){sec.style.display='none';return;}
   try{
-    var r=await fetch(DB_URL+'?table=dossier_medical&select=id,patient_id,nom,type_document,mime_type,taille_octets,url,source,statut,valeur,note,created_at,visible_medecin,confirme_par,resultat_ia,extraction_json&filter=patient_id=eq.'+encodeURIComponent(patId)+'&filter2=statut=eq.actif&order=created_at.desc&limit=30',{
-      headers:{'x-dokita-key':DOKITA_KEY}
-    });
+    var r=await fetchAPI(API_URL+'/medecin?action=dossier&patient_id='+encodeURIComponent(patId));
     var data=await r.json();
     var rows=Array.isArray(data)?data:(data.data||[]);
     sec.style.display='block';
@@ -1625,11 +1579,7 @@ async function confirmerDoc(docId){} // conservé compatibilité
 
 async function infirmerDoc(docId){
   try{
-    await fetch(DB_URL+'?table=dossier_medical&id='+docId,{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-      body:JSON.stringify({statut:'infirme'})
-    });
+    await fetchAPI(API_URL+'/medecin?action=dossier&id='+docId,{method:'PATCH',body:JSON.stringify({statut:'infirme'})});
     toast('Document infirmé');
     chargerDocsPatient();
   }catch(e){toast('❌ '+e.message);}
@@ -1712,28 +1662,7 @@ async function soumettreDossierPro(){
   if(btn){btn.disabled=true;btn.textContent='⏳ Ajout...';}
 
   try{
-    await fetch(DB_URL,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-      body:JSON.stringify({
-        table:'dossier_medical',
-        data:{
-          patient_id:patId,
-          nom:nom+(dose?' — '+dose:'')+(poso?' — '+poso:''),
-          type_document:'autre',
-          type:type,
-          valeur:nom,
-          dose:dose,
-          posologie:poso,
-          note:note,
-          source:'confirme_medecin',
-          confirme_par:CUR_MED&&CUR_MED.supabaseId||null,
-          confirme_at:new Date().toISOString(),
-          visible_medecin:true,
-          statut:'actif'
-        }
-      })
-    });
+    await fetchAPI(API_URL+'/medecin?action=document',{method:'POST',body:JSON.stringify({patient_id:patId,nom:nom+(dose?' — '+dose:'')+(poso?' — '+poso:''),type_document:'autre',type:type,valeur:nom,dose:dose,posologie:poso,note:note,source:'confirme_medecin',confirme_par:CUR_MED&&CUR_MED.supabaseId||null,confirme_at:new Date().toISOString(),visible_medecin:true,statut:'actif'})});
 
     // Aussi mettre à jour patients.traitements_reguliers ou allergies selon le type
     if(CUR_DOS.patient.supabaseId){
@@ -1753,11 +1682,7 @@ async function soumettreDossierPro(){
         CUR_DOS.patient.antecedents=updates.antecedents;
       }
       if(Object.keys(updates).length){
-        await fetch(DB_URL+'?table=patients&id='+CUR_DOS.patient.supabaseId,{
-          method:'PATCH',
-          headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-          body:JSON.stringify(updates)
-        });
+        await fetchAPI(API_URL+'/medecin?action=patient&id='+CUR_DOS.patient.supabaseId,{method:'PATCH',body:JSON.stringify(updates)});
         dbg('Patient mis à jour: '+JSON.stringify(updates).slice(0,80));
       }
     }
@@ -1774,9 +1699,7 @@ async function soumettreDossierPro(){
 async function voirDocPro(docId,mime){
   toast('⏳ Chargement...');
   try{
-    var r=await fetch(DB_URL+'?table=dossier_medical&filter=id=eq.'+encodeURIComponent(docId)+'&limit=1',{
-      headers:{'x-dokita-key':DOKITA_KEY}
-    });
+    var r=await fetchAPI(API_URL+'/documents?action=get&id='+encodeURIComponent(docId));
     var data=await r.json();
     var rows=Array.isArray(data)?data:(data.data||[]);
     if(!rows.length){toast('Document introuvable');return;}
@@ -1829,9 +1752,7 @@ function appliquerEtatToggle(){
     var resList=document.getElementById('examensResultatsList');
     if(resList&&CUR_DOS&&CUR_DOS.supabaseId&&!resList.dataset.loaded){
       resList.dataset.loaded='1';
-      fetch(DB_URL+'?table=examens&filter=consultation_id=eq.'+encodeURIComponent(CUR_DOS.supabaseId)+'&order=created_at.asc',{
-        headers:{'x-dokita-key':DOKITA_KEY}
-      }).then(function(r){return r.json();}).then(function(data){
+      fetchAPI(API_URL+'/medecin?action=examens&consultation_id='+encodeURIComponent(CUR_DOS.supabaseId)).then(function(r){return r&&r.json?r.json():Promise.resolve({});}).then(function(data){
         var rows=Array.isArray(data)?data:(data.data||[]);
         if(!rows.length){
           var examsTxt=CUR_DOS.examensPrescrit||'';
@@ -2062,7 +1983,7 @@ function editMed(i,mode){
 
 function renderConsult(){
   var d=CUR_DOS;
-  var ro=d.statut==='valide'||d.statut==='cloture';
+  var ro=d.statut==='valide'||d.statut==='valide_override'||d.statut==='cloture';
   var p=d.patient;
   var bmap={
     en_attente:'<span class="badge a">⏳ EN ATTENTE</span>',
@@ -2268,9 +2189,7 @@ async function envoyerPrescription(){
   if(EXAMENS_REQUIS){
     if(!CUR_DOS||!CUR_DOS.supabaseId){toast('⚠️ Dossier non sauvegardé');return;}
     try{
-      var r=await fetch(DB_URL+'?table=examens&filter=consultation_id=eq.'+encodeURIComponent(CUR_DOS.supabaseId)+'&limit=1',{
-        headers:{'x-dokita-key':DOKITA_KEY}
-      });
+      var r=await fetchAPI(API_URL+'/medecin?action=examens&consultation_id='+encodeURIComponent(CUR_DOS.supabaseId));
       var data=await r.json();
       var rows=Array.isArray(data)?data:(data.data||[]);
       if(!rows.length){toast('⚠️ Ajoutez au moins un examen');return;}
@@ -2336,9 +2255,7 @@ async function lancerValidationIA(){
   var examens='';
   if(CUR_DOS&&CUR_DOS.supabaseId){
     try{
-      var er=await fetch(DB_URL+'?table=examens&filter=consultation_id=eq.'+encodeURIComponent(CUR_DOS.supabaseId)+'&order=created_at.asc',{
-        headers:{'x-dokita-key':DOKITA_KEY}
-      });
+      var er=await fetchAPI(API_URL+'/medecin?action=examens&consultation_id='+encodeURIComponent(CUR_DOS.supabaseId));
       var edata=await er.json();
       var erows=Array.isArray(edata)?edata:(edata.data||[]);
       if(erows.length){
@@ -2781,11 +2698,7 @@ async function finaliser(nouveauStatut){
         });
         if(entries.length){
           await Promise.all(entries.map(function(entry){
-            return fetch(DB_URL,{
-              method:'POST',
-              headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-              body:JSON.stringify({table:'dossier_medical',data:entry})
-            }).catch(function(e){dbgWarn('dossier_medical ord: '+e.message);});
+            return fetchAPI(API_URL+'/medecin?action=document',{method:'POST',body:JSON.stringify(entry)}).catch(function(e){dbgWarn('dossier_medical ord: '+e.message);});
           }));
           dbg('dossier_medical: '+entries.length+' entrées créées depuis ordonnance');
         }
@@ -2819,9 +2732,7 @@ async function finaliser(nouveauStatut){
   // 4. Vérifier examens obligatoires + annuler recommandés non reçus
   if(CUR_DOS.supabaseId&&EXAMENS_REQUIS){
     try{
-      var erCheck=await fetch(DB_URL+'?table=examens&filter=consultation_id=eq.'+encodeURIComponent(CUR_DOS.supabaseId),{
-        headers:{'x-dokita-key':DOKITA_KEY}
-      });
+      var erCheck=await fetchAPI(API_URL+'/medecin?action=examens&consultation_id='+encodeURIComponent(CUR_DOS.supabaseId));
       var erData=await erCheck.json();
       var erRows=Array.isArray(erData)?erData:(erData.data||[]);
 
@@ -2838,11 +2749,7 @@ async function finaliser(nouveauStatut){
       var recNonRecus=erRows.filter(function(ex){return !ex.obligatoire&&ex.statut==='prescrit';});
       if(recNonRecus.length>0){
         await Promise.all(recNonRecus.map(function(ex){
-          return fetch(DB_URL+'?table=examens&id='+ex.id,{
-            method:'PATCH',
-            headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-            body:JSON.stringify({statut:'annule'})
-          });
+          return fetchAPI(API_URL+'/medecin?action=examen&id='+ex.id,{method:'PATCH',body:JSON.stringify({statut:'annule'})});
         }));
         dbg('Examens recommandés non reçus → annulés: '+recNonRecus.length);
       }
@@ -3046,9 +2953,7 @@ var EXAMENS_CATALOGUE_LOADED=false;
 async function chargerCatalogueExamens(){
   if(EXAMENS_CATALOGUE_LOADED)return;
   try{
-    var r=await fetch(DB_URL+'?table=catalogue_examens&select=nom,categorie&order=nom.asc&limit=300',{
-      headers:{'x-dokita-key':DOKITA_KEY}
-    });
+    var r=await fetchAPI(API_URL+'/medecin?action=catalogue');
     var data=await r.json();
     var rows=Array.isArray(data)?data:(data.data||[]);
     EXAMENS_CATALOGUE=rows.map(function(r){return r.nom;});
@@ -3091,18 +2996,7 @@ async function saveExam(){
   if(!CUR_DOS||!CUR_DOS.supabaseId){toast('⚠️ Dossier non sauvegardé');return;}
   try{
     var patientId=CUR_DOS.patient&&(CUR_DOS.patient.patientId||CUR_DOS.patient.id)||null;
-    var r=await fetch(DB_URL+'?table=examens',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-      body:JSON.stringify({
-        consultation_id:CUR_DOS.supabaseId,
-        patient_id:patientId,
-        medecin_id:CUR_MED&&CUR_MED.supabaseId||null,
-        type_examen:nom,
-        obligatoire:EXAM_OBL,
-        statut:'prescrit'
-      })
-    });
+    var r=await fetchAPI(API_URL+'/medecin?action=examen',{method:'POST',body:JSON.stringify({consultation_id:CUR_DOS.supabaseId,patient_id:patientId,medecin_id:CUR_MED&&CUR_MED.supabaseId||null,type_examen:nom,obligatoire:EXAM_OBL,statut:'prescrit'})});
     if(!r.ok){var t=await r.text();throw new Error('Erreur '+r.status+' — '+t.slice(0,100));}
     document.getElementById('examModal').remove();
     toast('✅ Examen ajouté');
@@ -3145,11 +3039,7 @@ async function saveEditExam(examId){
   var nom=(document.getElementById('examEditNom').value||'').trim();
   if(!nom){toast('⚠️ Précisez le type d\'examen');return;}
   try{
-    var r=await fetch(DB_URL+'?table=examens&id='+encodeURIComponent(examId),{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-      body:JSON.stringify({type_examen:nom, obligatoire:EXAM_EDIT_OBL})
-    });
+    var r=await fetchAPI(API_URL+'/medecin?action=examen&id='+encodeURIComponent(examId),{method:'PATCH',body:JSON.stringify({type_examen:nom,obligatoire:EXAM_EDIT_OBL})});
     if(!r.ok){var t=await r.text();throw new Error('Erreur '+r.status+' — '+t.slice(0,100));}
     document.getElementById('examEditModal').remove();
     toast('✅ Examen modifié');
@@ -3161,10 +3051,7 @@ async function saveEditExam(examId){
 async function deleteExam(examId){
   if(!confirm('Supprimer cet examen ?'))return;
   try{
-    var r=await fetch(DB_URL+'?table=examens&id='+encodeURIComponent(examId),{
-      method:'DELETE',
-      headers:{'x-dokita-key':DOKITA_KEY}
-    });
+    var r=await fetchAPI(API_URL+'/medecin?action=examen&id='+encodeURIComponent(examId),{method:'DELETE'});
     if(!r.ok){var t=await r.text();throw new Error('Erreur '+r.status+' — '+t.slice(0,100));}
     toast('Examen supprimé');
     var resList=document.getElementById('examensResultatsList');
@@ -3454,9 +3341,7 @@ function ouvrirParams() {
   proApplyTheme(localStorage.getItem('pro_theme')||'light');
   // Charger profil complet depuis Supabase puis remplir le form
   if(CUR_MED&&CUR_MED.supabaseId){
-    fetch(DB_URL+'?table=medecins&filter=id=eq.'+encodeURIComponent(CUR_MED.supabaseId)+'&limit=1',{
-      headers:{'x-dokita-key':DOKITA_KEY}
-    }).then(function(r){return r.json();}).then(function(data){
+    fetchAPI(API_URL+'/medecin?action=profil').then(function(r){return r&&r.json?r.json():Promise.resolve({});}).then(function(data){
       var rows=Array.isArray(data)?data:(data.data||[]);
       if(rows.length){
         var m=rows[0];
@@ -3531,11 +3416,7 @@ async function sauvegarderSignature() {
 
   toast('⏳ Sauvegarde...');
   try {
-    var r = await fetch(DB_URL + '?table=medecins&id=' + CUR_MED.supabaseId, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-dokita-key': DOKITA_KEY },
-      body: JSON.stringify({ signature_base64: base64 })
-    });
+    var r = await fetchAPI(API_URL+'/medecin?action=profil',{method:'PATCH',body:JSON.stringify({signature_base64:base64})});
     if (r.ok) {
       CUR_MED.signature_base64 = base64;
       afficherAperçuSignature(base64);
@@ -3653,9 +3534,7 @@ async function envoyerLienPatient() {
   // Si pas de numéro → aller chercher dans Supabase patients via patient_id
   if (!patTel && CUR_DOS.patient && CUR_DOS.patient.patientId) {
     try {
-      var r = await fetch(DB_URL + '?table=patients&filter=patient_id=eq.' + encodeURIComponent(CUR_DOS.patient.patientId) + '&select=telephone&limit=1', {
-        headers: {'x-dokita-key': DOKITA_KEY}
-      });
+      var r = await fetchAPI(API_URL+'/medecin?action=patient_by_pid&patient_id='+encodeURIComponent(CUR_DOS.patient.patientId));
       var d = await r.json();
       var row = Array.isArray(d) ? d[0] : null;
       if (row && row.telephone) {
@@ -3734,9 +3613,7 @@ if('serviceWorker' in navigator){
 async function voirFichierExamenPro(examenId, patId){
   try{
     toast('⏳ Chargement du fichier...');
-    var r=await fetch(DB_URL+'?table=dossier_medical&select=contenu_base64,mime_type,nom&filter=note=eq.'+encodeURIComponent(examenId)+'&filter2=patient_id=eq.'+encodeURIComponent(patId)+'&limit=1',{
-      headers:{'x-dokita-key':DOKITA_KEY}
-    });
+    var r=await fetchAPI(API_URL+'/documents?action=get_by_note&note='+encodeURIComponent(examenId));
     var data=await r.json();
     var doc=data&&data[0];
     if(!doc||!doc.contenu_base64){toast('⚠️ Fichier non disponible');return;}
