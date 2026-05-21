@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.21
+     VERSION : V4.22
      DATE    : 2026-05-02 22:04:00
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
@@ -850,6 +850,7 @@ async function updateDossier(supabaseId, fields){
   if(fields.validationIA!==undefined)     body.validation_ia=fields.validationIA;
   if(fields.decisionMedecin!==undefined)  body.decision_medecin=fields.decisionMedecin;
   if(fields.scoreConformite!==undefined)  body.score_conformite=fields.scoreConformite;
+  if(fields.nbValidationsIA!==undefined)  body.nb_validations_ia=fields.nbValidationsIA;
   if(fields.brouillonJson!==undefined)    body.brouillon_json=fields.brouillonJson;
   if(fields.notifPatientEnvoyee!==undefined) body.notif_patient_envoyee=fields.notifPatientEnvoyee;
   body.updated_at=new Date().toISOString();
@@ -2520,8 +2521,22 @@ function modifierPrescription(){
 // ══════════════════════════════
 async function finaliser(nouveauStatut){
   var diag=(document.getElementById('diagMedInput')||{}).value||CUR_DOS.diagMed||'';
-  var examens=(document.getElementById('examensInput')||{}).value||CUR_DOS.examensPrescrit||'';
   var notes=(document.getElementById('notesInput')||{}).value||CUR_DOS.notes||'';
+
+  // Bug 6 fix — examens_prescrit : charger depuis Supabase (source de vérité)
+  // Le textarea examensInput est display:none et non rempli quand ajout via modal
+  var examens=(document.getElementById('examensInput')||{}).value||'';
+  if(!examens && CUR_DOS && CUR_DOS.supabaseId){
+    try{
+      var er=await fetchAPI(API_URL+'/medecin?action=examens&consultation_id='+encodeURIComponent(CUR_DOS.supabaseId));
+      var edata=await er.json();
+      var erows=Array.isArray(edata)?edata:(edata.data||[]);
+      if(erows.length){
+        examens=erows.map(function(ex){return ex.type_examen;}).join(', ');
+      }
+    }catch(e){dbgWarn('finaliser examens load: '+e.message);}
+  }
+  if(!examens) examens=CUR_DOS.examensPrescrit||'';
 
   // Helper : calculer date_fin depuis durée
   function calcDateFin(dureeStr){
@@ -2593,6 +2608,7 @@ async function finaliser(nouveauStatut){
     validationIA:conf?'CONFORME':'NON CONFORME',
     decisionMedecin:nouveauStatut==='valide_override'?'maintient':'adopte_oms',
     scoreConformite:scoreConformite,
+    nbValidationsIA:nbVal, // Bug 5 fix — écriture en Supabase
     brouillonJson:null
   });
 
