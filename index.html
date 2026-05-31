@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.22
+     VERSION : V4.23
      DATE    : 2026-05-02 22:04:00
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
@@ -483,6 +483,7 @@ var VIDEO_URL = 'https://heydoc-medecin.vercel.app/api/video';
 var DAILY_ROOM = null; // room active
 // ══════════════════════════════
 var DB_URL     = 'https://heydoc-medecin.vercel.app/api/db';
+var PAYOUT_SECRET = ''; // Injecté via Vercel env NEXT_PUBLIC_PAYOUT_SECRET — service-to-service
 var API_URL    = 'https://heydoc-mu.vercel.app/api';
 var SAVE_URL   = 'https://heydoc-medecin.vercel.app/api/save';
 var SEARCH_MED = 'https://heydoc-medecin.vercel.app/api/search-med';
@@ -495,7 +496,10 @@ function chargerJWT(){if(JWT_TOKEN)return JWT_TOKEN;try{JWT_TOKEN=localStorage.g
 function supprimerJWT(){JWT_TOKEN=null;try{localStorage.removeItem('dk_jwt_pro');}catch(e){}}
 async function fetchAPI(url,options){
   options=options||{};
-  options.headers=options.headers||{};
+  // Fusionner headers_extra dans headers (pour payout secret etc.)
+  var extra=options.headers_extra||{};
+  delete options.headers_extra;
+  options.headers=Object.assign({},options.headers||{},extra);
   var token=chargerJWT();
   if(token)options.headers['Authorization']='Bearer '+token;
   if(!options.headers['Content-Type'])options.headers['Content-Type']='application/json';
@@ -850,7 +854,6 @@ async function updateDossier(supabaseId, fields){
   if(fields.validationIA!==undefined)     body.validation_ia=fields.validationIA;
   if(fields.decisionMedecin!==undefined)  body.decision_medecin=fields.decisionMedecin;
   if(fields.scoreConformite!==undefined)  body.score_conformite=fields.scoreConformite;
-  if(fields.nbValidationsIA!==undefined)  body.nb_validations_ia=fields.nbValidationsIA;
   if(fields.brouillonJson!==undefined)    body.brouillon_json=fields.brouillonJson;
   if(fields.notifPatientEnvoyee!==undefined) body.notif_patient_envoyee=fields.notifPatientEnvoyee;
   body.updated_at=new Date().toISOString();
@@ -2521,22 +2524,8 @@ function modifierPrescription(){
 // ══════════════════════════════
 async function finaliser(nouveauStatut){
   var diag=(document.getElementById('diagMedInput')||{}).value||CUR_DOS.diagMed||'';
+  var examens=(document.getElementById('examensInput')||{}).value||CUR_DOS.examensPrescrit||'';
   var notes=(document.getElementById('notesInput')||{}).value||CUR_DOS.notes||'';
-
-  // Bug 6 fix — examens_prescrit : charger depuis Supabase (source de vérité)
-  // Le textarea examensInput est display:none et non rempli quand ajout via modal
-  var examens=(document.getElementById('examensInput')||{}).value||'';
-  if(!examens && CUR_DOS && CUR_DOS.supabaseId){
-    try{
-      var er=await fetchAPI(API_URL+'/medecin?action=examens&consultation_id='+encodeURIComponent(CUR_DOS.supabaseId));
-      var edata=await er.json();
-      var erows=Array.isArray(edata)?edata:(edata.data||[]);
-      if(erows.length){
-        examens=erows.map(function(ex){return ex.type_examen;}).join(', ');
-      }
-    }catch(e){dbgWarn('finaliser examens load: '+e.message);}
-  }
-  if(!examens) examens=CUR_DOS.examensPrescrit||'';
 
   // Helper : calculer date_fin depuis durée
   function calcDateFin(dureeStr){
@@ -2608,7 +2597,6 @@ async function finaliser(nouveauStatut){
     validationIA:conf?'CONFORME':'NON CONFORME',
     decisionMedecin:nouveauStatut==='valide_override'?'maintient':'adopte_oms',
     scoreConformite:scoreConformite,
-    nbValidationsIA:nbVal, // Bug 5 fix — écriture en Supabase
     brouillonJson:null
   });
 
@@ -2668,6 +2656,28 @@ async function finaliser(nouveauStatut){
         signature_base64: CUR_MED.signature_base64||null
       });
       dbg('✅ Ordonnance insérée dans Supabase');
+
+      // ── PAYOUT MÉDECIN — déclenché après insertion ordonnance réussie ──
+      if(statutOrdonnance==='envoyee_patient'){
+        try{
+          var payoutR=await fetchAPI(API_URL+'/cinetpay?action=payout',{
+            method:'POST',
+            body:JSON.stringify({
+              medecin_id:      CUR_MED.supabaseId||'',
+              consultation_id: CUR_DOS.supabaseId||'',
+              montant_patient: 5000,
+              abonnement_type: CUR_MED.abonnement_type||'gratuit'
+            }),
+            headers_extra:{'x-payout-secret': PAYOUT_SECRET}
+          });
+          var payoutD=await payoutR.json();
+          if(payoutD.ok){
+            dbg('Payout medecin OK: '+payoutD.montant_medecin+' FCFA (commission '+payoutD.commission_pct+'%)');
+          } else {
+            dbgWarn('Payout medecin echoue: '+(payoutD.error||'Inconnue'));
+          }
+        }catch(e){dbgWarn('Payout err: '+e.message);}
+      }
 
       // Fusion → dossier_medical : médicaments prescrits
       if(statutOrdonnance==='envoyee_patient'){
