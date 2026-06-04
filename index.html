@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.23
+     VERSION : V4.25
      DATE    : 2026-05-02 22:04:00
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
@@ -2660,7 +2660,7 @@ async function finaliser(nouveauStatut){
       // ── PAYOUT MÉDECIN — déclenché après insertion ordonnance réussie ──
       if(statutOrdonnance==='envoyee_patient'){
         try{
-          var payoutR=await fetchAPI(API_URL+'/cinetpay?action=payout',{
+          var payoutR=await fetchAPI(API_URL+'/payment?action=payout',{
             method:'POST',
             body:JSON.stringify({
               medecin_id:      CUR_MED.supabaseId||'',
@@ -2677,6 +2677,25 @@ async function finaliser(nouveauStatut){
             dbgWarn('Payout medecin echoue: '+(payoutD.error||'Inconnue'));
           }
         }catch(e){dbgWarn('Payout err: '+e.message);}
+
+        // Notifier le patient via WhatsApp
+        try{
+          var patTel=(CUR_DOS&&CUR_DOS.patient_telephone)||'';
+          if(patTel){
+            await fetchAPI(API_URL+'/whatsapp?action=notifier_patient',{
+              method:'POST',
+              body:JSON.stringify({
+                telephone:patTel,
+                type:'ordonnance_prete',
+                data:{
+                  prenom: (CUR_DOS&&CUR_DOS.patient_nom)||'',
+                  medecin:(CUR_MED&&((CUR_MED.prenom||'')+' '+(CUR_MED.nom||'')))||''
+                }
+              })
+            });
+            dbg('Notif WhatsApp patient envoyee');
+          }
+        }catch(e){dbgWarn('Notif WA: '+e.message);}
       }
 
       // Fusion → dossier_medical : médicaments prescrits
