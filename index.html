@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.25
+     VERSION : V4.26
      DATE    : 2026-05-02 22:04:00
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
@@ -1400,6 +1400,7 @@ function renderDossiers(){
     en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
     en_cours:'<span class="badge b">📋 EN COURS</span>',
     valide:'<span class="badge t">✅ VALIDÉ</span>',
+    valide_override:'<span class="badge t">✅ VALIDÉ</span>',
     cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
   };
   list.innerHTML='';
@@ -1517,6 +1518,7 @@ function openDos(supabaseId){
     en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
     en_cours:'<span class="badge b">📋 EN COURS</span>',
     valide:'<span class="badge t">✅ VALIDÉ</span>',
+    valide_override:'<span class="badge t">✅ VALIDÉ</span>',
     cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
   };
   document.getElementById('cTitre').textContent=(CUR_DOS.patient.nom||'Patient')+' • '+(CUR_DOS.patient.age||'?')+' ans';
@@ -1994,6 +1996,7 @@ function renderConsult(){
     en_attente_examen:'<span class="badge e">🔬 ATT. EXAMEN</span>',
     en_cours:'<span class="badge b">📋 EN COURS</span>',
     valide:'<span class="badge t">✅ VALIDÉ</span>',
+    valide_override:'<span class="badge t">✅ VALIDÉ</span>',
     cloture:'<span class="badge r">📁 CLÔTURÉ</span>'
   };
 
@@ -2480,28 +2483,30 @@ function afficherValidation(rep,diag,examens,notes){
         '<div style="font-size:10px;color:var(--text3);margin-top:6px;font-style:italic;">Information non bloquante — le médecin reste décisionnaire.</div>'+
       '</div>';
   }
+  var boxClass = conf===true?'conf': conf===false?'nconf':'oms-absent';
+  var boxTitle = conf===true?'\u2705 Prescription CONFORME':
+                 conf===false?'\u26a0\ufe0f Prescription NON CONFORME':
+                 '\u2705 R\u00e9f\u00e9rence OMS non disponible \u2014 Prescription validable';
+  var actionsHtml;
+  if(conf===true || conf===null){
+    var enCours=CUR_DOS&&CUR_DOS.statut==='en_cours';
+    var attExam=EXAMENS_REQUIS&&!enCours;
+    var statut=attExam?'en_attente_examen':'valide';
+    var label=attExam?'\U0001f52c Envoyer \u2014 Att. examens':'\u2705 Envoyer l\'ordonnance au patient';
+    actionsHtml='<button class="vbtn ok" onclick="finaliser(\''+statut+'\')">'+ label+'</button>';
+  } else {
+    actionsHtml=
+      '<button class="vbtn warn" onclick="modifierPrescription()">✏️ Modifier la prescription</button>'+
+      '<button class="vbtn ref" onclick="finaliser(\'valide_override\')">\U0001f4cb Valider & R\u00e9f\u00e9rer</button>';
+  }
   vb.innerHTML=
     interactionBanner+
-    '<div class="val-box '+(conf?'conf':'nconf')+'">'+
-      '<div class="val-title">'+(conf?'✅ Prescription CONFORME':'⚠️ Prescription NON CONFORME')+'</div>'+
+    '<div class="val-box '+boxClass+'">'+
+      '<div class="val-title">'+boxTitle+'</div>'+
+      (conf===null?'<div style="font-size:11px;color:var(--text3);margin-top:6px;">Maladie non couverte par les protocoles OMS/MSF. Le m\u00e9decin peut valider selon son jugement clinique.</div>':'')+
       '<div class="val-txt">'+(rep||'').replace(/\n/g,'<br>')+'</div>'+
     '</div>'+
-    '<div class="val-actions">'+
-      (conf?
-        // Si statut en_cours → examens reçus → envoyer l'ordonnance
-        // Si EXAMENS_REQUIS → encore en attente examens
-        (function(){
-          var enCours=CUR_DOS&&CUR_DOS.statut==='en_cours';
-          var attExam=EXAMENS_REQUIS&&!enCours;
-          var statut=attExam?'en_attente_examen':'valide';
-          var label=attExam?'🔬 Envoyer — Att. examens':'✅ Envoyer l\'ordonnance au patient';
-          return '<button class="vbtn ok" onclick="finaliser(\''+statut+'\')">'+label+'</button>';
-        })()
-      :
-        '<button class="vbtn warn" onclick="modifierPrescription()">✏️ Modifier la prescription</button>'+
-        '<button class="vbtn ref" onclick="finaliser(\'valide_override\')">📋 Valider & Référer</button>'
-      )+
-    '</div>';
+    '<div class="val-actions">'+actionsHtml+'</div>';
 }
 
 // ══════════════════════════════
