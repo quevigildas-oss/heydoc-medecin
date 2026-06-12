@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.26
+     VERSION : V4.28
      DATE    : 2026-05-02 22:04:00
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
@@ -2396,11 +2396,38 @@ async function lancerValidationIA(){
       'CORRECTION: [correction précise et minimale]'
     );
 
+  // Récupérer les chunks Dokita Dosages pour le diagnostic
+  var dokitaContext='';
+  try{
+    var diagKeyword=(diag||'').toLowerCase().split(' ').slice(0,3).join(' ');
+    var rc=await fetch('/api/rag',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
+      body:JSON.stringify({
+        isValidation:true,
+        query:diagKeyword,
+        messages:[{role:'user',content:diagKeyword}]
+      })
+    });
+    if(rc.ok){
+      var rcd=await rc.json();
+      if(rcd.dokitaChunks&&rcd.dokitaChunks.length>0){
+        dokitaContext='\n\n=== PROTOCOLE DOKITA DOSAGES RÉFÉRENCE ===\n'+
+          '⚠️ Ces données font autorité sur toute autre source pour la validation.\n'+
+          '✅ OUI = examen OBLIGATOIRE | ⚠️ Si... = examen CONDITIONNEL (non bloquant)\n\n'+
+          rcd.dokitaChunks.map(function(c){return '[Source: '+c.source+']\n'+c.content;}).join('\n\n---\n\n');
+        dbg('Dokita chunks chargés: '+rcd.dokitaChunks.length+' | '+rcd.dokitaChunks.map(function(c){return c.source;}).join(', '));
+      }
+    }
+  }catch(e){dbg('Dokita chunks err: '+e.message);}
+  // Injecter les chunks en début de prompt
+  var promptFinal=dokitaContext?dokitaContext+'\n\n'+prompt:prompt;
+
   try{
     var r=await fetch('/api/claude',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-dokita-key':DOKITA_KEY},
-      body:JSON.stringify({prompt:prompt})
+      body:JSON.stringify({prompt:promptFinal})
     });
     var data=await r.json();
     if(data.error){
