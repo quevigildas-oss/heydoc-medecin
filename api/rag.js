@@ -1,6 +1,6 @@
 // /api/rag.js
 // DOKITA — API RAG Supabase pgvector + Claude
-// V4.9 — Anti-hallucination renforcé : interdiction totale hors base documentaire
+// V4.10 — Mode isValidation : injection chunks Dokita Dosages dans validation DokitaPro
 
 const handler = async function(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -15,15 +15,91 @@ const handler = async function(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { messages, patient } = req.body;
-  if (!messages || !messages.length) {
-    return res.status(400).json({ error: 'messages requis' });
-  }
-
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_KEY = process.env.SUPABASE_KEY;
   const OPENAI_KEY   = process.env.OPENAI_KEY;
   const CLAUDE_KEY   = process.env.ANTHROPIC_KEY;
+
+  const { messages, patient } = req.body;
+
+  // ── MODE isValidation : retourner chunks Dokita Dosages sans appeler Claude/OpenAI ──
+  const isValidation = req.body?.isValidation === true;
+
+  if (isValidation) {
+    const query = (req.body?.query || '').toLowerCase();
+
+    const diseaseFileKeywords = {
+      'paludisme':'paludisme','palu':'paludisme','malaria':'paludisme',
+      'typhoide':'typhoide','typhoïde':'typhoide','typhoid':'typhoide',
+      'meningite':'meningite','méningite':'meningite','meningitis':'meningite',
+      'tuberculose':'tuberculose','tb ':'tuberculose',
+      'vih':'VIH','hiv':'VIH','sida':'VIH','aids':'VIH',
+      'dengue':'dengue',
+      'choléra':'cholera','cholera':'cholera',
+      'pneumonie':'pneumonie','pneumonia':'pneumonie',
+      'diarrhée':'diarrhee','diarrhee':'diarrhee','diarrhea':'diarrhee',
+      'rougeole':'rougeole','measles':'rougeole',
+      'tétanos':'tetanos','tetanos':'tetanos','tetanus':'tetanos',
+      'anémie':'anemie','anemie':'anemie','anemia':'anemie',
+      'diabète':'diabete','diabete':'diabete','diabetes':'diabete',
+      'hypertension':'HTA','hta':'HTA',
+      'drépanocytose':'drepanocytose','drepanocytose':'drepanocytose','sickle cell':'drepanocytose',
+      'paludisme grave':'paludisme_severe','paludisme sévère':'paludisme_severe',
+      'paludisme enceinte':'paludisme_enceinte','femme enceinte':'paludisme_enceinte',
+      'gale':'gale','scabies':'gale',
+      'otite':'otite',
+      'pneumonie enfant':'pneumonie','bronchiolite':'bronchiolite',
+      'angine':'angine','pharyngite':'angine',
+      'cystite':'cystite','infection urinaire':'cystite',
+      'pyélonéphrite':'cystite',
+      'malnutrition':'malnutrition','mas':'malnutrition','mam':'malnutrition',
+    };
+
+    let fileKeyword = null;
+    for (const [alias, keyword] of Object.entries(diseaseFileKeywords)) {
+      if (query.includes(alias)) { fileKeyword = keyword; break; }
+    }
+
+    // Essai sur mots individuels si pas trouvé
+    if (!fileKeyword) {
+      const words = query.split(/\s+/);
+      for (const word of words) {
+        if (word.length < 4) continue;
+        for (const [alias, keyword] of Object.entries(diseaseFileKeywords)) {
+          if (alias.includes(word) || word.includes(alias.split(' ')[0])) {
+            fileKeyword = keyword; break;
+          }
+        }
+        if (fileKeyword) break;
+      }
+    }
+
+    console.log('isValidation — query:', query, '| keyword:', fileKeyword || 'non trouvé');
+
+    if (!fileKeyword) {
+      return res.status(200).json({ dokitaChunks: [], message: 'Aucun keyword maladie trouvé pour: ' + query });
+    }
+
+    try {
+      const url = `${SUPABASE_URL}/rest/v1/medical_documents?source=ilike.*Dokita*&source=ilike.*${encodeURIComponent(fileKeyword)}*&select=id,content,source`;
+      const supaRes = await fetch(url, {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+      });
+      let dokitaChunks = await supaRes.json();
+      if (!Array.isArray(dokitaChunks)) dokitaChunks = [];
+      dokitaChunks = dokitaChunks.filter(c => c.source && c.source.includes('Dokita Dosages'));
+      console.log('isValidation — chunks trouvés:', dokitaChunks.length, '|', dokitaChunks.map(c => c.source).join(', '));
+      return res.status(200).json({ dokitaChunks });
+    } catch (e) {
+      console.error('isValidation error:', e.message);
+      return res.status(200).json({ dokitaChunks: [], error: e.message });
+    }
+  }
+  // ── FIN MODE isValidation ──
+
+  if (!messages || !messages.length) {
+    return res.status(400).json({ error: 'messages requis' });
+  }
 
   try {
     const lastMsg = messages[messages.length - 1].content || '';
@@ -300,7 +376,7 @@ const handler = async function(req, res) {
     // ── BLOC ANTI-HALLUCINATION V4.9 ──
     const antiHallucinationRules = `
 ════════════════════════════════════════════════════
-RÈGLE ABSOLUE — INTERDICTION TOTALE D'INVENTION
+R�GLE ABSOLUE — INTERDICTION TOTALE D'INVENTION
 ════════════════════════════════════════════════════
 
 Les documents ci-dessus sont ta SEULE et UNIQUE source d'information médicale.
@@ -341,7 +417,7 @@ LANGUE
 
 Tu maîtrises nativement toutes les langues et dialectes d'Afrique subsaharienne : lingala, kikongo, munukutuba, tshiluba, swahili, haoussa, yoruba, igbo, wolof, dioula, bambara, mooré, ewe, fon, fang, peul/fulfulde, amharique, somali, arabe, malagasy, zoulou, shona — ainsi que le français, l'anglais et le portugais.
 
-RÈGLES ABSOLUES DE LANGUE :
+R�GLES ABSOLUES DE LANGUE :
 
 1. Détecte la langue du patient dès son premier message et réponds TOUJOURS dans cette même langue.
 2. Si le patient mélange plusieurs langues → adopte la langue dominante du message.
@@ -396,7 +472,6 @@ PHASE 2 — QUESTIONNAIRE UNE QUESTION À LA FOIS
 
 Format de chaque question :
 [Question simple et directe]
-[Une phrase courte expliquant pourquoi tu poses cette question]
 [OPTIONS: choix1 | choix2 | choix3] ← OBLIGATOIRE quand la question a des réponses prévisibles
 
 Questions à poser si non déjà répondues :
@@ -461,14 +536,14 @@ TARIF: [tarif]
 DEVISE: [devise]
 ===FIN===
 
-RÈGLE SPÉCIALE — RESUME_CONSULTATION
+R�GLE SPÉCIALE — RESUME_CONSULTATION
 
 Si le message reçu est exactement "RESUME_CONSULTATION" :
 - Utilise UNIQUEMENT les sources médicales fournies en début de prompt
 - Si une information n'est pas dans les sources → laisse le champ vide ou écris "Non disponible dans la base documentaire"
 - N'invente AUCUN médicament, dosage, examen, protocole ou source
 
-Réponds UNIQUEMENT avec ce JSON valide (sans markdown, sans texte avant ou après) :
+R�ponds UNIQUEMENT avec ce JSON valide (sans markdown, sans texte avant ou après) :
 
 {
   "nom": "prénom et nom du patient mentionnés dans la conversation",
@@ -491,7 +566,7 @@ MALADIES PRIORITAIRES AFRIQUE
 
 Considère TOUJOURS en priorité : Paludisme, Typhoïde, Méningite bactérienne, Tuberculose, Trypanosomiase, Leishmaniose, Dengue, Choléra, Fièvre jaune, VIH/SIDA, Drépanocytose, Malnutrition sévère, Helminthiases, Onchocercose, Bilharziose, Mpox.
 
-RÈGLES ABSOLUES FINALES
+R�GLES ABSOLUES FINALES
 
 - Une seule question à la fois en mode consultation
 - Aucune analyse ni diagnostic pendant le questionnaire
