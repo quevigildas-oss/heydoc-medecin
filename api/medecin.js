@@ -1,6 +1,6 @@
 // api/medecin.js
 // Endpoints médecin — protégés JWT
-// VERSION : V2.1
+// VERSION : V2.1 (2026-06-13) : action signed_url pour justificatifs labo
 // FIX     : catalogue select — suppression colonnes inexistantes (description, obligatoire_defaut)
 // DATE    : 2026-05-12
 // CHANGELOG :
