@@ -3690,30 +3690,22 @@ if('serviceWorker' in navigator){
 // ══════════════════════════════
 async function voirFichierExamenPro(examenId, patId){
   try{
-    toast('⏳ Chargement du fichier...');
-    var r=await fetchAPI(API_URL+'/documents?action=get_by_note&note='+encodeURIComponent(examenId));
-    var data=await r.json();
-    var doc=data&&data[0];
-    if(!doc||!doc.contenu_base64){toast('⚠️ Fichier non disponible');return;}
-    var mime=doc.mime_type||'application/octet-stream';
-    var dataUrl='data:'+mime+';base64,'+doc.contenu_base64;
-    if(mime.startsWith('image/')){
-      // Ouvrir modal image
-      var old=document.getElementById('proModal');if(old)old.remove();
-      var m=document.createElement('div');
-      m.id='proModal';
-      m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;';
-      m.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;width:100%;max-width:700px;margin-bottom:10px;">'+
-        '<div style="font-size:12px;font-weight:700;color:#fff;">'+escHtml(doc.nom||'Résultat')+'</div>'+
-        '<button onclick="document.getElementById(\'proModal\').remove()" style="background:rgba(255,255,255,.15);border:none;border-radius:6px;padding:5px 12px;color:#fff;font-size:12px;cursor:pointer;">✕ Fermer</button>'+
-      '</div>'+
-      '<img src="'+dataUrl+'" style="max-width:100%;max-height:80vh;border-radius:10px;object-fit:contain;">';
-      document.body.appendChild(m);
-    }else{
-      // PDF → nouvel onglet
-      var blob=new Blob([Uint8Array.from(atob(doc.contenu_base64),function(c){return c.charCodeAt(0)})],{type:mime});
-      window.open(URL.createObjectURL(blob),'_blank');
-    }
+    toast('⏳ Chargement...');
+    // Récupérer resultat_pdf_url depuis les examens
+    fetchAPI(API_URL+'/medecin?action=examens&consultation_id='+encodeURIComponent(CUR_DOS&&CUR_DOS.supabaseId||'')).then(function(r){return r&&r.json?r.json():Promise.resolve({});}).then(async function(data){
+      var rows=Array.isArray(data)?data:(data.data||[]);
+      var ex=rows.find(function(e){return e.id===examenId;});
+      if(!ex||!ex.resultat_pdf_url){toast('⚠️ Fichier non disponible');return;}
+      // Générer URL signée
+      var marker='/object/resultats-labo/';
+      var pi=ex.resultat_pdf_url.indexOf(marker);
+      if(pi<0){window.open(ex.resultat_pdf_url,'_blank');return;}
+      var fp=ex.resultat_pdf_url.substring(pi+marker.length);
+      var sr=await fetchAPI(API_URL+'/medecin?action=signed_url&path='+encodeURIComponent(fp));
+      var sd=await sr.json();
+      if(sd.url){window.open(sd.url,'_blank');}
+      else{toast('⚠️ '+(sd.error||'Erreur accès fichier'));}
+    }).catch(function(e){toast('❌ '+e.message);});
   }catch(e){toast('❌ '+e.message);}
 }
 
