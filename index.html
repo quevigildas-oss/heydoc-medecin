@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.28
+     VERSION : V4.29
      DATE    : 2026-05-02 22:04:00
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
@@ -3073,7 +3073,8 @@ async function saveExam(){
   if(!CUR_DOS||!CUR_DOS.supabaseId){toast('⚠️ Dossier non sauvegardé');return;}
   try{
     var patientId=CUR_DOS.patient&&(CUR_DOS.patient.patientId||CUR_DOS.patient.id)||null;
-    var r=await fetchAPI(API_URL+'/medecin?action=examen',{method:'POST',body:JSON.stringify({consultation_id:CUR_DOS.supabaseId,patient_id:patientId,medecin_id:CUR_MED&&CUR_MED.supabaseId||null,type_examen:nom,obligatoire:EXAM_OBL,statut:'prescrit'})});
+    var medNom=(CUR_MED&&CUR_MED.nom_complet)||(CUR_MED?('Dr. '+(CUR_MED.prenom||'')+' '+(CUR_MED.nom||'')).trim():null);
+        var r=await fetchAPI(API_URL+'/medecin?action=examen',{method:'POST',body:JSON.stringify({consultation_id:CUR_DOS.supabaseId,patient_id:patientId,medecin_id:CUR_MED&&CUR_MED.supabaseId||null,type_examen:nom,obligatoire:EXAM_OBL,statut:'prescrit',prescrit_par_medecin:medNom,date_prescription:new Date().toISOString()})});
     if(!r.ok){var t=await r.text();throw new Error('Erreur '+r.status+' — '+t.slice(0,100));}
     document.getElementById('examModal').remove();
     toast('✅ Examen ajouté');
