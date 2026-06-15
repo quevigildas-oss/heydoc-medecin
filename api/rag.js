@@ -1,5 +1,6 @@
 // /api/rag.js
 // DOKITA — API RAG Supabase pgvector + Claude
+// V4.11 — 2026-06-15 : retry automatique (1x, +1s) sur appel Claude si réponse vide/erreur transitoire (429/529)
 // V4.10 — Mode isValidation : injection chunks Dokita Dosages dans validation DokitaPro
 
 const handler = async function(req, res) {
@@ -376,7 +377,7 @@ const handler = async function(req, res) {
     // ── BLOC ANTI-HALLUCINATION V4.9 ──
     const antiHallucinationRules = `
 ════════════════════════════════════════════════════
-R�GLE ABSOLUE — INTERDICTION TOTALE D'INVENTION
+R�GLE ABSOLUE — INTERDICTION TOTALE D'INVENTION
 ════════════════════════════════════════════════════
 
 Les documents ci-dessus sont ta SEULE et UNIQUE source d'information médicale.
@@ -417,7 +418,7 @@ LANGUE
 
 Tu maîtrises nativement toutes les langues et dialectes d'Afrique subsaharienne : lingala, kikongo, munukutuba, tshiluba, swahili, haoussa, yoruba, igbo, wolof, dioula, bambara, mooré, ewe, fon, fang, peul/fulfulde, amharique, somali, arabe, malagasy, zoulou, shona — ainsi que le français, l'anglais et le portugais.
 
-R�GLES ABSOLUES DE LANGUE :
+R�GLES ABSOLUES DE LANGUE :
 
 1. Détecte la langue du patient dès son premier message et réponds TOUJOURS dans cette même langue.
 2. Si le patient mélange plusieurs langues → adopte la langue dominante du message.
@@ -536,14 +537,14 @@ TARIF: [tarif]
 DEVISE: [devise]
 ===FIN===
 
-R�GLE SPÉCIALE — RESUME_CONSULTATION
+R�GLE SPÉCIALE — RESUME_CONSULTATION
 
 Si le message reçu est exactement "RESUME_CONSULTATION" :
 - Utilise UNIQUEMENT les sources médicales fournies en début de prompt
 - Si une information n'est pas dans les sources → laisse le champ vide ou écris "Non disponible dans la base documentaire"
 - N'invente AUCUN médicament, dosage, examen, protocole ou source
 
-R�ponds UNIQUEMENT avec ce JSON valide (sans markdown, sans texte avant ou après) :
+R�ponds UNIQUEMENT avec ce JSON valide (sans markdown, sans texte avant ou après) :
 
 {
   "nom": "prénom et nom du patient mentionnés dans la conversation",
@@ -566,7 +567,7 @@ MALADIES PRIORITAIRES AFRIQUE
 
 Considère TOUJOURS en priorité : Paludisme, Typhoïde, Méningite bactérienne, Tuberculose, Trypanosomiase, Leishmaniose, Dengue, Choléra, Fièvre jaune, VIH/SIDA, Drépanocytose, Malnutrition sévère, Helminthiases, Onchocercose, Bilharziose, Mpox.
 
-R�GLES ABSOLUES FINALES
+R�GLES ABSOLUES FINALES
 
 - Une seule question à la fois en mode consultation
 - Aucune analyse ni diagnostic pendant le questionnaire
@@ -578,24 +579,39 @@ R�GLES ABSOLUES FINALES
 - Ne jamais improviser un dosage, un protocole ou une source
 - Si l'information n'est pas dans les sources → "Information non disponible dans la base documentaire Dokita"`;
 
-    // 5. Appel Claude
-    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': CLAUDE_KEY,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
-        system: systemPrompt,
-        messages: messages
-      })
+    // 5. Appel Claude — avec retry automatique si erreur transitoire (429/529/réponse vide)
+    const claudeBody = JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1500,
+      system: systemPrompt,
+      messages: messages
     });
-    const claudeData = await claudeRes.json();
-    const answer = claudeData?.content?.[0]?.text || '';
-    console.log('Claude status:', claudeRes.status, 'answerLen:', answer.length, 'error:', claudeData?.error?.message || 'none');
+    const callClaude = async () => {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': CLAUDE_KEY,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json'
+        },
+        body: claudeBody
+      });
+      const d = await r.json();
+      return { status: r.status, data: d };
+    };
+
+    let claudeCall = await callClaude();
+    let answer = claudeCall.data?.content?.[0]?.text || '';
+
+    if (!answer) {
+      console.log('Claude retry — status:', claudeCall.status, 'error:', claudeCall.data?.error?.message || 'réponse vide');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      claudeCall = await callClaude();
+      answer = claudeCall.data?.content?.[0]?.text || '';
+    }
+
+    const claudeData = claudeCall.data;
+    console.log('Claude status:', claudeCall.status, 'answerLen:', answer.length, 'error:', claudeData?.error?.message || 'none');
 
     return res.status(200).json({
       answer,
