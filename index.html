@@ -1,11 +1,17 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.29
-     DATE    : 2026-05-02 22:04:00
+     VERSION : V4.30
+     DATE    : 2026-07-03
      STACK   : Claude API (validation prescription) + Supabase
      STATUS  : Migration Notion → Supabase complète
      CHANGELOG:
+       V4.30 — 2026-07-03 : DÉSACTIVATION payout médecin automatique après validation
+              d'ordonnance (bloc conservé en commentaire). Motifs : PAYOUT_SECRET vide
+              côté client (401 systématique — le payout n'a jamais fonctionné), secret
+              de virement exposable côté client = faille, et aucune vérification que la
+              consultation était payée avant de reverser. Remplacé par reversement manuel
+              tracé via dashboard admin (Lot 2).
        V4.10 — 2026-04-21 : Écran paramètres restructuré (style app patient) · Mode clair/sombre · Profil médecin (nom, spécialité, n° ordre, email, signature) · Suppression tuile Transférer
        V4.9 — 2026-04-12 : Consultation audio/vidéo Daily.co (boutons 📞📹 · modal iframe · lien WhatsApp patient · terminer appel)
 V4.9 — 2026-04-11 : Signature électronique (canvas → Supabase → ordonnance) · Écran paramètres ⚙️ · signature_base64 dans INSERT ordonnances · CSS btn-pri/btn-sec
@@ -2689,8 +2695,19 @@ async function finaliser(nouveauStatut){
       });
       dbg('✅ Ordonnance insérée dans Supabase');
 
-      // ── PAYOUT MÉDECIN — déclenché après insertion ordonnance réussie ──
       if(statutOrdonnance==='envoyee_patient'){
+        /* ── PAYOUT MÉDECIN AUTOMATIQUE (désactivé V4.30 — remplacé par reversement manuel via dashboard) ──
+           Raisons de la désactivation (NE PAS réactiver tel quel, voir SPEC §sécurité) :
+           1. Non fonctionnel : PAYOUT_SECRET est vide côté client (var ligne ~486, aucun
+              mécanisme d'injection NEXT_PUBLIC_ dans un HTML statique) → 401 systématique.
+           2. Faille de conception : un secret de virement n'a RIEN à faire côté client —
+              s'il était injecté, il serait lisible dans le source par n'importe qui, et
+              action=payout accepte un montant_patient arbitraire dans le body.
+           3. Incohérence financière : le payout se déclenchait sans vérifier que la
+              consultation était payée (paiement_statut='paye') — avec le gate consultation
+              désactivé, Dokita reverserait des fonds jamais encaissés.
+           Modèle actuel : reversement manuel depuis le dashboard Flutterwave/Mobile Money,
+           tracé via l'écran admin (registre des consultations à reverser).
         try{
           var payoutR=await fetchAPI(API_URL+'/payment?action=payout',{
             method:'POST',
@@ -2709,6 +2726,7 @@ async function finaliser(nouveauStatut){
             dbgWarn('Payout medecin echoue: '+(payoutD.error||'Inconnue'));
           }
         }catch(e){dbgWarn('Payout err: '+e.message);}
+        ── FIN PAYOUT MÉDECIN AUTOMATIQUE ── */
 
         // Notifier le patient via WhatsApp
         try{
