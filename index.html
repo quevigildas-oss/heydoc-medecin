@@ -1,8 +1,14 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.31
-     DATE    : 2026-07-03
+     VERSION : V4.32
+     DATE    : 2026-07-04
+     CHANGELOG V4.32 : Agenda basculé sur medecin_id (refonte §6E) — disponibilités,
+              RDV confirmés, demandes et badge ne dépendent plus d'etablissements.
+              Bénéfice : les téléconsultations planifiées (Lot 3) apparaissent
+              désormais dans l'agenda. Les anciennes dispos/demandes liées à un
+              établissement (sans medecin_id) ne sont plus affichées — assumé.
+              Nécessite medecin.js V2.4 (filtre medecin_id sur GET rdv).
      CHANGELOG V4.31 : Planification téléconsultation (Lot 3) — bouton 📅 dans le
               header du dossier (à côté de 📞📹), modal créneaux du médecin
               (filtre medecin_id, indépendant d'etablissements), réservation
@@ -948,15 +954,8 @@ async function doLogin(){
 
     // Polling badge agenda toutes les 60s
     setTimeout(function pollAgenda(){
-      if(AGENDA_ETAB_ID)mettreAJourBadgeAgenda();
-      else{
-        if(CUR_MED&&CUR_MED.supabaseId){
-          fetchAPI(API_URL+'/medecin?action=etablissement').then(function(r){return r&&r.json?r.json():Promise.resolve({});}).then(function(data){
-            var rows=Array.isArray(data)?data:(data.data||[]);
-            if(rows.length){AGENDA_ETAB_ID=rows[0].id;mettreAJourBadgeAgenda();}
-          }).catch(function(){});
-        }
-      }
+      // V4.32 — badge par medecin_id (plus de dépendance établissement)
+      if(CUR_MED&&CUR_MED.supabaseId)mettreAJourBadgeAgenda();
       setTimeout(pollAgenda,60000);
     },3000);
   }catch(e){errEl.textContent='Erreur connexion: '+e.message;errEl.classList.add('on');}
@@ -969,6 +968,7 @@ var AGENDA_ETAB_ID=null; // établissement du médecin connecté
 
 async function ouvrirAgenda(){
   showScreen('agendaScreen');
+  /* V4.32 — agenda par medecin_id : plus de résolution d'établissement (refonte §6E).
   if(CUR_MED&&CUR_MED.supabaseId&&!AGENDA_ETAB_ID){
     try{
       var r=await fetchAPI(API_URL+'/medecin?action=etablissement');
@@ -976,7 +976,7 @@ async function ouvrirAgenda(){
       var rows=Array.isArray(data)?data:(data.data||[]);
       if(rows.length)AGENDA_ETAB_ID=rows[0].id;
     }catch(e){dbgWarn('Etablissement médecin: '+e.message);}
-  }
+  } */
   AGENDA_TAB='dispo';
   switchAgendaTab('dispo');
   // Reset badge à l'ouverture
@@ -989,8 +989,8 @@ function actualiserAgenda(){
 }
 
 function mettreAJourBadgeAgenda(){
-  if(!AGENDA_ETAB_ID)return;
-  fetchAPI(API_URL+'/medecin?action=rdv&etablissement_id='+encodeURIComponent(AGENDA_ETAB_ID)+'&statut=demande').then(function(r){return r&&r.json?r.json():Promise.resolve({});}).then(function(data){
+  if(!CUR_MED||!CUR_MED.supabaseId)return;
+  fetchAPI(API_URL+'/medecin?action=rdv&medecin_id='+encodeURIComponent(CUR_MED.supabaseId)+'&statut=demande').then(function(r){return r&&r.json?r.json():Promise.resolve({});}).then(function(data){
     var rows=Array.isArray(data)?data:(data.data||[]);
     var badge=document.getElementById('agendaBadge');
     if(!badge)return;
@@ -1013,8 +1013,8 @@ async function chargerDispos(){
   var el=document.getElementById('agendaBody');
   el.innerHTML='<div class="loading-state">Chargement...</div>';
 
-  if(!AGENDA_ETAB_ID){
-    el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);font-size:13px;">Aucun établissement lié à votre compte.<br>Contactez l\'admin Dokita.</div>';
+  if(!CUR_MED||!CUR_MED.supabaseId){
+    el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);font-size:13px;">Session expirée — reconnectez-vous.</div>';
     return;
   }
 
@@ -1023,8 +1023,8 @@ async function chargerDispos(){
 
     // Charger dispos ET RDV confirmés en parallèle
     var [rDispos, rRDV]=await Promise.all([
-      fetchAPI(API_URL+'/medecin?action=disponibilites&etablissement_id='+encodeURIComponent(AGENDA_ETAB_ID)),
-      fetchAPI(API_URL+'/medecin?action=rdv&etablissement_id='+encodeURIComponent(AGENDA_ETAB_ID)+'&statut=confirme')
+      fetchAPI(API_URL+'/medecin?action=disponibilites&medecin_id='+encodeURIComponent(CUR_MED.supabaseId)),
+      fetchAPI(API_URL+'/medecin?action=rdv&medecin_id='+encodeURIComponent(CUR_MED.supabaseId)+'&statut=confirme')
     ]);
     var dispos=Array.isArray(await rDispos.clone().json())?await rDispos.json():(await rDispos.json()).data||[];
     var rdvData=await rRDV.json();
@@ -1106,10 +1106,10 @@ async function chargerDispos(){
 async function chargerDemandesRDV(){
   var el=document.getElementById('agendaBody');
   el.innerHTML='<div class="loading-state">Chargement...</div>';
-  if(!AGENDA_ETAB_ID){el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">Aucun établissement lié.</div>';return;}
+  if(!CUR_MED||!CUR_MED.supabaseId){el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">Session expirée.</div>';return;}
 
   try{
-    var r=await fetchAPI(API_URL+'/medecin?action=rdv&etablissement_id='+encodeURIComponent(AGENDA_ETAB_ID));
+    var r=await fetchAPI(API_URL+'/medecin?action=rdv&medecin_id='+encodeURIComponent(CUR_MED.supabaseId));
     var data=await r.json();
     var rows=Array.isArray(data)?data:(data.data||[]);
 
@@ -1189,10 +1189,10 @@ function ouvrirAjoutDispo(){
 async function saveDispo(btn){
   var date=document.getElementById('dispoDate').value;
   var heure=document.getElementById('dispoHeure').value;
-  if(!AGENDA_ETAB_ID){toast('Aucun établissement lié');return;}
   btn.disabled=true;btn.textContent='⏳ Ajout...';
   try{
-    await fetchAPI(API_URL+'/medecin?action=disponibilite',{method:'POST',body:JSON.stringify({etablissement_id:AGENDA_ETAB_ID,medecin_id:CUR_MED.supabaseId,date_specifique:date,heure_debut:heure,duree_minutes:30,statut:'disponible'})});
+    // V4.32 — créneau rattaché au médecin (etablissement_id abandonné, colonne nullable depuis migration Lot 3)
+    await fetchAPI(API_URL+'/medecin?action=disponibilite',{method:'POST',body:JSON.stringify({medecin_id:CUR_MED.supabaseId,date_specifique:date,heure_debut:heure,duree_minutes:30,statut:'disponible'})});
     btn.closest('div[style*=fixed]').remove();
     toast('✅ Créneau ajouté');
     chargerDispos();
