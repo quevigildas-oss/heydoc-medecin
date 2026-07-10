@@ -1,8 +1,17 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.32
-     DATE    : 2026-07-04
+     VERSION : V4.33
+     DATE    : 2026-07-09
+     CHANGELOG V4.33 : (1) Modal planif RDV refondu — section "Mes créneaux
+              disponibles" retirée (commentée), sélecteurs jour+heure conservés,
+              HEURES DÉJÀ RÉSERVÉES masquées (+ heures passées d'aujourd'hui),
+              bouton "Créer" contrasté (contour accent, visible en mode clair).
+              (2) RDV lié à sa consultation (consultation_id) → marquage 'effectue'
+              automatique à l'envoi de l'ordonnance (medecin.js V2.5). (3) Badge
+              "✅ Effectué" dans l'agenda pour les RDV honorés/passés. (4) Notification
+              RDV via Twilio après réservation (silencieuse ; nécessite whatsapp.js
+              action=notifier_rdv ; bouton WhatsApp manuel conservé en secours).
      CHANGELOG V4.32 : Agenda basculé sur medecin_id (refonte §6E) — disponibilités,
               RDV confirmés, demandes et badge ne dépendent plus d'etablissements.
               Bénéfice : les téléconsultations planifiées (Lot 3) apparaissent
@@ -1127,6 +1136,12 @@ async function chargerDemandesRDV(){
       var isDemande=rdv.statut==='demande';
       var isPropose=rdv.statut==='propose';
       var isConfirme=rdv.statut==='confirme';
+      var isEffectue=rdv.statut==='effectue';
+      // V4.33 — un RDV confirmé dont la date+heure est passée s'affiche "Effectué" (visuel)
+      if(isConfirme&&rdv.date_confirmee){
+        var dtRdv=new Date(rdv.date_confirmee+'T'+((rdv.heure_confirmee||'00:00').slice(0,5))+':00');
+        if(!isNaN(dtRdv.getTime())&&dtRdv.getTime()<Date.now()){isEffectue=true;isConfirme=false;}
+      }
       html+=
         '<div style="background:var(--bg2);border:1px solid '+(isDemande?'rgba(245,158,11,.3)':isConfirme?'rgba(0,200,150,.3)':'var(--border)')+';border-radius:12px;padding:14px;margin-bottom:10px;">'+
           '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'+
@@ -1135,6 +1150,7 @@ async function chargerDemandesRDV(){
           '</div>'+
           (rdv.motif?'<div style="font-size:12px;color:var(--text2);margin-bottom:6px;">'+escHtml(rdv.motif)+'</div>':'')+
           (isConfirme?'<div style="font-size:12px;color:var(--accent);font-weight:600;">📆 '+escHtml(rdv.date_confirmee||'')+(rdv.heure_confirmee?' à '+rdv.heure_confirmee:'')+'</div>':'')+
+          (isEffectue?'<div style="font-size:12px;color:var(--text3);font-weight:600;">✅ Effectué · '+escHtml(rdv.date_confirmee||'')+(rdv.heure_confirmee?' à '+rdv.heure_confirmee:'')+'</div>':'')+
           (isPropose?'<div style="font-size:11px;color:#4a9eff;">'+((rdv.creneaux_proposes&&rdv.creneaux_proposes.length)||0)+' créneau(x) proposé(s) — en attente patient</div>':'')+
           (isDemande?
             '<div style="display:flex;gap:8px;margin-top:10px;">'+
@@ -2735,6 +2751,11 @@ async function finaliser(nouveauStatut){
           }
         }catch(e){dbgWarn('Payout err: '+e.message);}
         ── FIN PAYOUT MÉDECIN AUTOMATIQUE ── */
+        // V4.33 — marquer le RDV téléconsultation de cette consultation 'effectue'
+        // (fait métier : ordonnance envoyée = échange patient réalisé). Silencieux.
+        try{
+          await fetchAPI(API_URL+'/medecin?action=rdv_effectue&consultation_id='+encodeURIComponent(CUR_DOS.supabaseId||''),{method:'PATCH',body:JSON.stringify({})});
+        }catch(eEff){dbgWarn('rdv_effectue: '+eEff.message);}
 
         // Notifier le patient via WhatsApp
         try{
@@ -3652,31 +3673,71 @@ function ouvrirPlanifierRdv(){
     var iso=d.toISOString().split('T')[0];
     dateOptions+='<option value="'+iso+'">'+JOURS[d.getDay()]+' '+d.getDate()+' '+MOIS[d.getMonth()]+'</option>';
   }
-  var heureOptions='';
-  for(var h=7;h<20;h++){
-    heureOptions+='<option value="'+String(h).padStart(2,'0')+':00">'+String(h).padStart(2,'0')+':00</option>';
-    heureOptions+='<option value="'+String(h).padStart(2,'0')+':30">'+String(h).padStart(2,'0')+':30</option>';
-  }
   var modal=document.createElement('div');
   modal.id='modalPlanifRdv';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:300;display:flex;align-items:flex-end;';
   modal.innerHTML=
     '<div style="background:var(--bg2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-height:82vh;overflow-y:auto;padding-bottom:calc(24px + var(--sb));">'+
       '<div style="font-family:\'Syne\',sans-serif;font-size:17px;font-weight:800;color:var(--text);margin-bottom:4px;">📅 Planifier la téléconsultation</div>'+
-      '<div style="font-size:12px;color:var(--text2);margin-bottom:14px;">Patient : '+(CUR_DOS.patient.nom||'').replace(/</g,'&lt;')+'</div>'+
-      '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Mes créneaux disponibles</div>'+
-      '<div id="planifSlots"><div class="loading-state">Chargement...</div></div>'+
-      '<div style="border-top:1px solid var(--border);margin:16px 0 14px;"></div>'+
-      '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Ou créer un créneau</div>'+
-      '<div style="display:flex;gap:8px;margin-bottom:10px;">'+
-        '<select id="planifDate" style="flex:1;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:11px 10px;font-size:13px;color:var(--text);outline:none;">'+dateOptions+'</select>'+
-        '<select id="planifHeure" style="width:96px;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:11px 10px;font-size:13px;color:var(--text);outline:none;">'+heureOptions+'</select>'+
+      '<div style="font-size:12px;color:var(--text2);margin-bottom:16px;">Patient : '+(CUR_DOS.patient.nom||'').replace(/</g,'&lt;')+'</div>'+
+      /* V4.33 — section "Mes créneaux disponibles" retirée (décision GQ session 17).
+         chargerSlotsPlanif()/reserverCreneauRdv(slotId) conservés plus bas, inutilisés. */
+      '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Choisir le jour et l\'heure</div>'+
+      '<div style="display:flex;gap:8px;margin-bottom:14px;">'+
+        '<select id="planifDate" onchange="majHeuresLibres()" style="flex:1;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:11px 10px;font-size:13px;color:var(--text);outline:none;">'+dateOptions+'</select>'+
+        '<select id="planifHeure" style="width:110px;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:11px 10px;font-size:13px;color:var(--text);outline:none;"></select>'+
       '</div>'+
-      '<button onclick="creerEtReserverCreneau(this)" style="width:100%;padding:13px;background:var(--grad);border:none;border-radius:12px;font-family:\'Syne\',sans-serif;font-size:13px;font-weight:700;color:#fff;cursor:pointer;margin-bottom:10px;">✅ Créer et réserver ce créneau</button>'+
-      '<button onclick="fermerPlanifRdv()" style="width:100%;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;">Fermer</button>'+
+      '<button onclick="creerEtReserverCreneau(this)" id="btnCreerRdv" style="width:100%;padding:14px;background:var(--grad);border:1.5px solid var(--accent);border-radius:12px;font-family:\'Syne\',sans-serif;font-size:14px;font-weight:800;color:#fff;cursor:pointer;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,200,150,.25);">✅ Créer et réserver ce créneau</button>'+
+      '<button onclick="fermerPlanifRdv()" style="width:100%;padding:12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:12px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;">Fermer</button>'+
     '</div>';
   document.body.appendChild(modal);
-  chargerSlotsPlanif();
+  chargerHeuresReservees(); // V4.33 — charge les RDV du médecin puis peuple les heures libres
+}
+
+// V4.33 — heures déjà réservées (RDV confirmés du médecin), pour les masquer
+var PLANIF_OCCUPE={}; // { 'YYYY-MM-DD': Set('HH:MM') }
+async function chargerHeuresReservees(){
+  PLANIF_OCCUPE={};
+  try{
+    var r=await fetchAPI(API_URL+'/medecin?action=rdv&medecin_id='+encodeURIComponent(CUR_MED.supabaseId||'')+'&statut=confirme');
+    var d=await r.json();
+    (Array.isArray(d)?d:(d.data||[])).forEach(function(rdv){
+      if(!rdv.date_confirmee||!rdv.heure_confirmee)return;
+      var k=rdv.date_confirmee;
+      if(!PLANIF_OCCUPE[k])PLANIF_OCCUPE[k]={};
+      PLANIF_OCCUPE[k][(rdv.heure_confirmee||'').slice(0,5)]=true;
+    });
+  }catch(e){dbgWarn('chargerHeuresReservees: '+e.message);}
+  majHeuresLibres();
+}
+function majHeuresLibres(){
+  var selDate=document.getElementById('planifDate');
+  var selHeure=document.getElementById('planifHeure');
+  if(!selDate||!selHeure)return;
+  var jour=selDate.value;
+  var occ=PLANIF_OCCUPE[jour]||{};
+  var now=new Date();
+  var estAujourdhui=(jour===now.toISOString().split('T')[0]);
+  var opts='';
+  for(var h=7;h<20;h++){
+    ['00','30'].forEach(function(m){
+      var hh=String(h).padStart(2,'0')+':'+m;
+      if(occ[hh])return; // déjà réservé ce jour → masqué
+      if(estAujourdhui){ // masquer les heures passées d'aujourd'hui
+        var passe=(h<now.getHours()||(h===now.getHours()&&parseInt(m,10)<=now.getMinutes()));
+        if(passe)return;
+      }
+      opts+='<option value="'+hh+'">'+hh+'</option>';
+    });
+  }
+  var btn=document.getElementById('btnCreerRdv');
+  if(!opts){
+    selHeure.innerHTML='<option value="">— Aucune heure libre —</option>';
+    if(btn){btn.disabled=true;btn.style.opacity='.5';btn.style.cursor='not-allowed';}
+  } else {
+    selHeure.innerHTML=opts;
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
+  }
 }
 
 function fermerPlanifRdv(){
@@ -3706,6 +3767,7 @@ async function chargerSlotsPlanif(){
 async function creerEtReserverCreneau(btn){
   var date=document.getElementById('planifDate').value;
   var heure=document.getElementById('planifHeure').value;
+  if(!heure){toast('⚠️ Aucune heure disponible ce jour');return;} // V4.33
   btn.disabled=true;btn.textContent='⏳ Création...';
   try{
     var payload={medecin_id:CUR_MED.supabaseId,date_specifique:date,heure_debut:heure,duree_minutes:30,statut:'disponible'};
@@ -3732,7 +3794,8 @@ async function reserverCreneauRdv(slotId,date,heure){
       heure_confirmee: heure,
       type_rdv:        'teleconsultation',
       motif:           'Téléconsultation programmée par le médecin',
-      etablissement_nom:'Téléconsultation — Dr '+medNom
+      etablissement_nom:'Téléconsultation — Dr '+medNom,
+      consultation_id: String(CUR_DOS.supabaseId||'') // V4.33 — lien pour marquage 'effectue'
     };
     var r=await fetchAPI(API_URL+'/medecin?action=rdv',{method:'POST',body:JSON.stringify(body)});
     var d=await r.json();
@@ -3741,6 +3804,22 @@ async function reserverCreneauRdv(slotId,date,heure){
     await fetchAPI(API_URL+'/medecin?action=disponibilite&id='+slotId,{method:'PATCH',body:JSON.stringify({statut:'reserve'})}).catch(function(){});
     RDV_PLANIF={date:date,heure:heure};
     dbg('RDV téléconsultation créé: '+d.id+' — '+date+' '+heure);
+    // V4.33 — notification Twilio automatique (pattern envoyer_ao). Silencieuse :
+    // en cas d'échec/sandbox, le bouton WhatsApp manuel reste disponible en secours.
+    try{
+      var patTelN=(CUR_DOS.patient.tel||'').replace(/[^\d]/g,'');
+      if(!patTelN&&CUR_DOS.patient.patientId){
+        var rT=await fetchAPI(API_URL+'/medecin?action=patient_by_pid&patient_id='+encodeURIComponent(CUR_DOS.patient.patientId));
+        var dT=await rT.json();var rowT=Array.isArray(dT)?dT[0]:null;
+        if(rowT&&rowT.telephone)patTelN=rowT.telephone.replace(/[^\d]/g,'');
+      }
+      if(patTelN){
+        fetchAPI(API_URL+'/whatsapp?action=notifier_rdv',{method:'POST',body:JSON.stringify({
+          telephone:patTelN, patient_nom:CUR_DOS.patient.nom||'',
+          date:date, heure:heure, medecin_nom:medNom
+        })}).catch(function(){});
+      }
+    }catch(eN){dbgWarn('notifier_rdv: '+eN.message);}
     afficherConfirmPlanif(date,heure);
   }catch(e){toast('❌ '+e.message);}
 }
