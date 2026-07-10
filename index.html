@@ -1,8 +1,16 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.33
-     DATE    : 2026-07-09
+     VERSION : V4.34
+     DATE    : 2026-07-10
+     CHANGELOG V4.34 : (1) Notification Twilio avec RETOUR VISIBLE (option 1) — le
+              médecin voit "✅ patient notifié" ou "⚠️ non aboutie + bouton manuel".
+              (2) Anti-doublon RDV : si une téléconsultation confirmée existe déjà
+              pour la consultation, le modal l'affiche et bloque la création (garde
+              aussi côté serveur medecin.js V2.6 → 409). (3) Messages WhatsApp : émojis
+              ressemblant à des dates retirés (préfixes "Date :"/"Heure :").
+     CHANGELOG V4.33 : Modal planif refondu (heures libres, bouton contrasté),
+              marquage 'effectue', badge agenda, notif Twilio.
      CHANGELOG V4.33 : (1) Modal planif RDV refondu — section "Mes créneaux
               disponibles" retirée (commentée), sélecteurs jour+heure conservés,
               HEURES DÉJÀ RÉSERVÉES masquées (+ heures passées d'aujourd'hui),
@@ -3665,6 +3673,7 @@ var RDV_PLANIF=null;
 
 function ouvrirPlanifierRdv(){
   if(!CUR_DOS||!CUR_DOS.patient||!CUR_DOS.patient.patientId){toast('⚠️ Ouvrez un dossier patient');return;}
+  RDV_DEJA_EXISTANT=null; // V4.34 — reset entre deux ouvertures
   var JOURS=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
   var MOIS=['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
   var dateOptions='';
@@ -3701,14 +3710,34 @@ async function chargerHeuresReservees(){
   try{
     var r=await fetchAPI(API_URL+'/medecin?action=rdv&medecin_id='+encodeURIComponent(CUR_MED.supabaseId||'')+'&statut=confirme');
     var d=await r.json();
+    var cidCourant=String(CUR_DOS&&CUR_DOS.supabaseId||'');
     (Array.isArray(d)?d:(d.data||[])).forEach(function(rdv){
+      // V4.34 — anti-doublon : un RDV confirmé existe déjà pour CETTE consultation ?
+      if(cidCourant&&String(rdv.consultation_id||'')===cidCourant)RDV_DEJA_EXISTANT=rdv;
       if(!rdv.date_confirmee||!rdv.heure_confirmee)return;
       var k=rdv.date_confirmee;
       if(!PLANIF_OCCUPE[k])PLANIF_OCCUPE[k]={};
       PLANIF_OCCUPE[k][(rdv.heure_confirmee||'').slice(0,5)]=true;
     });
   }catch(e){dbgWarn('chargerHeuresReservees: '+e.message);}
-  majHeuresLibres();
+  if(RDV_DEJA_EXISTANT)afficherRdvDejaExistant();
+  else majHeuresLibres();
+}
+
+// V4.34 — si un RDV est déjà programmé pour cette consultation, on bloque la création
+var RDV_DEJA_EXISTANT=null;
+function afficherRdvDejaExistant(){
+  var m=document.getElementById('modalPlanifRdv');
+  if(!m||!RDV_DEJA_EXISTANT)return;
+  var r=RDV_DEJA_EXISTANT;
+  var JOURS=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+  var MOIS=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  var lisible=r.date_confirmee||'';
+  try{var dt=new Date(r.date_confirmee+'T00:00:00');if(!isNaN(dt.getTime()))lisible=JOURS[dt.getDay()]+' '+dt.getDate()+' '+MOIS[dt.getMonth()];}catch(e){}
+  m.querySelector('div').innerHTML=
+    '<div style="font-family:\'Syne\',sans-serif;font-size:17px;font-weight:800;color:var(--text);margin-bottom:8px;">📅 Rendez-vous déjà programmé</div>'+
+    '<div style="font-size:13px;color:var(--text2);background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px;margin-bottom:16px;line-height:1.5;">Une téléconsultation est déjà programmée pour cette consultation, le <b>'+lisible+(r.heure_confirmee?' à '+r.heure_confirmee.slice(0,5):'')+'</b>.<br><br>Pour en programmer une autre, veuillez d\'abord annuler le rendez-vous existant.</div>'+
+    '<button onclick="fermerPlanifRdv()" style="width:100%;padding:13px;background:var(--grad);border:1.5px solid var(--accent);border-radius:12px;font-family:\'Syne\',sans-serif;font-size:14px;font-weight:800;color:#fff;cursor:pointer;">J\'ai compris</button>';
 }
 function majHeuresLibres(){
   var selDate=document.getElementById('planifDate');
@@ -3804,8 +3833,10 @@ async function reserverCreneauRdv(slotId,date,heure){
     await fetchAPI(API_URL+'/medecin?action=disponibilite&id='+slotId,{method:'PATCH',body:JSON.stringify({statut:'reserve'})}).catch(function(){});
     RDV_PLANIF={date:date,heure:heure};
     dbg('RDV téléconsultation créé: '+d.id+' — '+date+' '+heure);
-    // V4.33 — notification Twilio automatique (pattern envoyer_ao). Silencieuse :
-    // en cas d'échec/sandbox, le bouton WhatsApp manuel reste disponible en secours.
+    // V4.34 — notification Twilio automatique AVEC retour visible (option 1).
+    // On attend la réponse et on informe le médecin : succès → pas besoin du bouton
+    // manuel ; échec (ex. sandbox/numéro non enrôlé) → on propose le secours manuel.
+    var notifStatut='inconnu';
     try{
       var patTelN=(CUR_DOS.patient.tel||'').replace(/[^\d]/g,'');
       if(!patTelN&&CUR_DOS.patient.patientId){
@@ -3813,29 +3844,45 @@ async function reserverCreneauRdv(slotId,date,heure){
         var dT=await rT.json();var rowT=Array.isArray(dT)?dT[0]:null;
         if(rowT&&rowT.telephone)patTelN=rowT.telephone.replace(/[^\d]/g,'');
       }
-      if(patTelN){
-        fetchAPI(API_URL+'/whatsapp?action=notifier_rdv',{method:'POST',body:JSON.stringify({
+      if(!patTelN){
+        notifStatut='sans_numero';
+      } else {
+        var rN=await fetchAPI(API_URL+'/whatsapp?action=notifier_rdv',{method:'POST',body:JSON.stringify({
           telephone:patTelN, patient_nom:CUR_DOS.patient.nom||'',
           date:date, heure:heure, medecin_nom:medNom
-        })}).catch(function(){});
+        })});
+        var dN=await rN.json();
+        notifStatut=(rN.ok&&dN.ok)?'ok':'echec';
+        if(notifStatut==='echec')dbgWarn('notifier_rdv KO: '+(dN.error||rN.status));
       }
-    }catch(eN){dbgWarn('notifier_rdv: '+eN.message);}
-    afficherConfirmPlanif(date,heure);
+    }catch(eN){notifStatut='echec';dbgWarn('notifier_rdv: '+eN.message);}
+    afficherConfirmPlanif(date,heure,notifStatut);
   }catch(e){toast('❌ '+e.message);}
 }
 
-function afficherConfirmPlanif(date,heure){
+function afficherConfirmPlanif(date,heure,notifStatut){
   var m=document.getElementById('modalPlanifRdv');
   if(!m)return;
   var JOURS=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
   var MOIS=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
   var dt=new Date(date+'T00:00:00');
   var dateLisible=JOURS[dt.getDay()]+' '+dt.getDate()+' '+MOIS[dt.getMonth()];
+  // V4.34 — bloc d'état de la notification WhatsApp (option 1) + bouton manuel conditionnel
+  var blocNotif, blocBouton;
+  if(notifStatut==='ok'){
+    blocNotif='<div style="font-size:13px;color:var(--accent);background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.3);border-radius:10px;padding:10px 12px;margin-bottom:14px;">✅ Le patient a été notifié par WhatsApp.</div>';
+    blocBouton='<button onclick="notifierRdvWhatsApp()" style="width:100%;padding:11px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;margin-bottom:10px;">Renvoyer manuellement (optionnel)</button>';
+  } else {
+    var motif=(notifStatut==='sans_numero')?'aucun numéro de téléphone n\'est enregistré pour ce patient':'la notification automatique n\'a pas pu être envoyée';
+    blocNotif='<div style="font-size:13px;color:#F59E0B;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:10px 12px;margin-bottom:14px;">⚠️ Notification automatique non aboutie ('+motif+'). Vous pouvez informer le patient manuellement ci-dessous.</div>';
+    blocBouton='<button onclick="notifierRdvWhatsApp()" style="width:100%;padding:14px;background:#25D366;border:none;border-radius:12px;font-family:\'Syne\',sans-serif;font-size:14px;font-weight:700;color:#fff;cursor:pointer;margin-bottom:10px;">💬 Informer le patient par WhatsApp</button>';
+  }
   m.querySelector('div').innerHTML=
     '<div style="font-family:\'Syne\',sans-serif;font-size:17px;font-weight:800;color:var(--text);margin-bottom:8px;">✅ Téléconsultation planifiée</div>'+
-    '<div style="font-size:14px;color:var(--text);margin-bottom:4px;">🗓 '+dateLisible+' à '+heure+'</div>'+
-    '<div style="font-size:12px;color:var(--text2);margin-bottom:16px;">Le RDV apparaît dans le calendrier Dokita du patient, avec un rappel automatique 10 min avant. À l\'heure du RDV, lancez l\'appel 📞/📹 depuis ce dossier et envoyez le lien comme d\'habitude.</div>'+
-    '<button onclick="notifierRdvWhatsApp()" style="width:100%;padding:14px;background:#25D366;border:none;border-radius:12px;font-family:\'Syne\',sans-serif;font-size:14px;font-weight:700;color:#fff;cursor:pointer;margin-bottom:10px;">💬 Informer le patient par WhatsApp</button>'+
+    '<div style="font-size:14px;color:var(--text);margin-bottom:4px;">'+dateLisible+' à '+heure+'</div>'+
+    '<div style="font-size:12px;color:var(--text2);margin-bottom:14px;">Le RDV apparaît dans le calendrier Dokita du patient, avec un rappel automatique 10 min avant. À l\'heure du RDV, lancez l\'appel 📞/📹 depuis ce dossier et envoyez le lien de connexion.</div>'+
+    blocNotif+
+    blocBouton+
     '<button onclick="fermerPlanifRdv()" style="width:100%;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;">Fermer</button>';
 }
 
@@ -3857,12 +3904,12 @@ async function notifierRdvWhatsApp(){
   var dt=new Date(RDV_PLANIF.date+'T00:00:00');
   var dateLisible=JOURS[dt.getDay()]+' '+dt.getDate()+' '+MOIS[dt.getMonth()];
   var msg=encodeURIComponent(
-    '📅 Bonjour '+(CUR_DOS.patient.nom||'')+',\n\n'+
+    'Bonjour '+(CUR_DOS.patient.nom||'')+',\n\n'+
     'Votre téléconsultation Dokita est confirmée :\n'+
-    '🗓 '+dateLisible+'\n'+
-    '🕐 '+RDV_PLANIF.heure+'\n\n'+
+    'Date : '+dateLisible+'\n'+
+    'Heure : '+RDV_PLANIF.heure+'\n\n'+
     'Le rendez-vous est visible dans votre application Dokita (rubrique Rendez-vous).\n'+
-    '📱 Quelques minutes avant l\'heure, tenez votre téléphone à portée : votre médecin vous enverra le lien de connexion par WhatsApp au moment du rendez-vous.\n\n'+
+    'Quelques minutes avant l\'heure, tenez votre téléphone à portée : votre médecin vous enverra le lien de connexion par WhatsApp au moment du rendez-vous.\n\n'+
     'Dokita — Votre santé, notre priorité'
   );
   window.open('https://wa.me/'+patTel+'?text='+msg,'_blank');
