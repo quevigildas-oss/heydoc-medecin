@@ -1,8 +1,15 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.34
+     VERSION : V4.35
      DATE    : 2026-07-10
+     CHANGELOG V4.35 : Agenda médecin simplifié à UNE seule vue (téléconsultations
+              confirmées non annulées) — onglets Disponibilités/Demandes RDV et bouton
+              +Dispo commentés. Le médecin NE crée plus de créneaux : le modal 📅 pose
+              le RDV directement (disponibilite_id null) → PLUS de ligne dans la table
+              'disponibilites' (concept abandonné, table à SUPPRIMER — voir spec).
+              annulerRDVMedecin : notification WhatsApp d'annulation (retour visible) ;
+              plus de créneau à libérer. RDV passés affichés "Effectué".
      CHANGELOG V4.34 : (1) Notification Twilio avec RETOUR VISIBLE (option 1) — le
               médecin voit "✅ patient notifié" ou "⚠️ non aboutie + bouton manuel".
               (2) Anti-doublon RDV : si une téléconsultation confirmée existe déjà
@@ -371,16 +378,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 <div class="screen" id="agendaScreen">
   <div class="hdr">
     <div class="hdr-back" onclick="showScreen('dashScreen')">←</div>
-    <div class="hdr-info"><div class="hdr-title">Mon Agenda</div><div class="hdr-sub">Disponibilités & RDV</div></div>
+    <div class="hdr-info"><div class="hdr-title">Mon Agenda</div><div class="hdr-sub">Mes téléconsultations</div></div>
     <button class="hdr-btn" onclick="actualiserAgenda()" style="background:var(--bg3);color:var(--text2);border-color:var(--border);">↻</button>
+    <!-- V4.35 — bouton +Dispo retiré : le médecin ne crée plus de créneaux (RDV posé depuis le dossier).
     <button class="hdr-btn" onclick="ouvrirAjoutDispo()" style="background:rgba(0,200,150,.15);color:var(--accent);border-color:rgba(0,200,150,.3);">＋ Dispo</button>
+    -->
   </div>
   <div class="dash-body">
-    <!-- Onglets -->
+    <!-- V4.35 — onglets "Disponibilités" et "Demandes RDV" retirés : une seule vue,
+         les téléconsultations confirmées (non annulées). Réactivables si besoin.
     <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px;">
       <div id="agendaTabDispo" onclick="switchAgendaTab('dispo')" style="flex:1;padding:11px;text-align:center;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--accent);border-bottom:2px solid var(--accent);cursor:pointer;">📅 Disponibilités</div>
       <div id="agendaTabRDV" onclick="switchAgendaTab('rdv')" style="flex:1;padding:11px;text-align:center;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--text3);border-bottom:2px solid transparent;cursor:pointer;">📋 Demandes RDV</div>
     </div>
+    -->
+    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">Mes téléconsultations à venir</div>
     <div id="agendaBody"><div class="loading-state">Chargement...</div></div>
   </div>
 </div>
@@ -994,15 +1006,15 @@ async function ouvrirAgenda(){
       if(rows.length)AGENDA_ETAB_ID=rows[0].id;
     }catch(e){dbgWarn('Etablissement médecin: '+e.message);}
   } */
-  AGENDA_TAB='dispo';
-  switchAgendaTab('dispo');
+  AGENDA_TAB='rdv'; // V4.35 — une seule vue : les RDV confirmés
+  chargerRdvAgenda();
   // Reset badge à l'ouverture
   var badge=document.getElementById('agendaBadge');
   if(badge)badge.style.display='none';
 }
 
 function actualiserAgenda(){
-  switchAgendaTab(AGENDA_TAB||'dispo');
+  chargerRdvAgenda(); // V4.35 — une seule vue
 }
 
 function mettreAJourBadgeAgenda(){
@@ -1024,6 +1036,58 @@ function switchAgendaTab(tab){
   if(tabRDV){tabRDV.style.color=tab==='rdv'?'var(--accent)':'var(--text3)';tabRDV.style.borderBottom=tab==='rdv'?'2px solid var(--accent)':'2px solid transparent';}
   if(tab==='dispo')chargerDispos();
   else chargerDemandesRDV();
+}
+
+async function chargerRdvAgenda(){
+  // V4.35 — vue agenda unique : uniquement les téléconsultations CONFIRMÉES (non annulées).
+  // Ne lit plus la table disponibilites (concept abandonné — à supprimer, cf. spec).
+  var el=document.getElementById('agendaBody');
+  el.innerHTML='<div class="loading-state">Chargement...</div>';
+  if(!CUR_MED||!CUR_MED.supabaseId){
+    el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);font-size:13px;">Session expirée — reconnectez-vous.</div>';
+    return;
+  }
+  try{
+    var rRDV=await fetchAPI(API_URL+'/medecin?action=rdv&medecin_id='+encodeURIComponent(CUR_MED.supabaseId)+'&statut=confirme');
+    var rdvData=await rRDV.json();
+    var rdvConfirmes=Array.isArray(rdvData)?rdvData:(rdvData.data||[]);
+    var JOURS=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+    var MOIS=['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
+    var byDate={};
+    rdvConfirmes.forEach(function(r){
+      if(!r.date_confirmee)return;
+      if(!byDate[r.date_confirmee])byDate[r.date_confirmee]=[];
+      byDate[r.date_confirmee].push(r);
+    });
+    if(!Object.keys(byDate).length){
+      el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);font-size:13px;">Aucune téléconsultation programmée.<br>Planifiez un rendez-vous depuis le dossier d\'un patient (bouton 📅).</div>';
+      return;
+    }
+    var html='';
+    Object.keys(byDate).sort().forEach(function(date){
+      var d=new Date(date+'T00:00:00');
+      var jourLabel=JOURS[d.getDay()]+' '+d.getDate()+' '+MOIS[d.getMonth()];
+      html+='<div style="font-family:\'Syne\',sans-serif;font-size:12px;font-weight:700;color:var(--text);margin:14px 0 8px;">'+jourLabel+'</div>';
+      byDate[date].sort(function(a,b){return (a.heure_confirmee||'')>(b.heure_confirmee||'')?1:-1;}).forEach(function(rdv){
+        var passe=false;
+        try{var dt=new Date(rdv.date_confirmee+'T'+((rdv.heure_confirmee||'00:00').slice(0,5))+':00');passe=(!isNaN(dt.getTime())&&dt.getTime()<Date.now());}catch(e){}
+        html+=
+          '<div style="padding:12px;background:var(--bg2);border:1.5px solid '+(passe?'var(--border)':'rgba(0,200,150,.3)')+';border-radius:10px;margin-bottom:8px;'+(passe?'opacity:.7;':'')+'">'+
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'+
+              '<div style="font-family:\'Syne\',sans-serif;font-size:14px;font-weight:700;color:'+(passe?'var(--text3)':'var(--accent)')+';">'+((rdv.heure_confirmee||'').slice(0,5))+'</div>'+
+              '<div style="font-size:9px;font-weight:700;color:'+(passe?'var(--text3)':'var(--accent)')+';background:'+(passe?'var(--bg3)':'rgba(0,200,150,.1)')+';border-radius:4px;padding:2px 8px;">'+(passe?'✅ Effectué':'✅ Confirmé')+'</div>'+
+            '</div>'+
+            '<div style="font-size:13px;font-weight:600;color:var(--text);">'+escHtml(rdv.patient_nom||'-')+'</div>'+
+            '<div style="font-size:11px;color:var(--text2);margin-top:2px;margin-bottom:8px;">'+escHtml(rdv.motif||'')+'</div>'+
+            (passe?'':
+            '<div style="display:flex;gap:6px;">'+
+              '<button onclick="annulerRDVMedecin(\''+rdv.id+'\')" style="flex:1;padding:7px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:8px;font-size:11px;font-weight:600;color:#ef4444;cursor:pointer;">✕ Annuler</button>'+
+            '</div>')+
+          '</div>';
+      });
+    });
+    el.innerHTML=html;
+  }catch(e){el.innerHTML='<div style="color:var(--danger);font-size:13px;padding:20px;">❌ '+e.message+'</div>';}
 }
 
 async function chargerDispos(){
@@ -1381,10 +1445,40 @@ async function envoyerCreneaux(){
 
 async function annulerRDVMedecin(rdvId){
   if(!rdvId){toast('Erreur — RDV introuvable');return;}
-  if(!confirm('Annuler ce rendez-vous ? Le patient sera notifié.'))return;
+  if(!confirm('Annuler ce rendez-vous ? Le patient en sera informé par WhatsApp.'))return;
   try{
+    // Retrouver les infos du RDV (date/heure/patient) AVANT de l'annuler, pour la notif
+    var rdvInfo=null;
+    try{
+      var rInfo=await fetchAPI(API_URL+'/medecin?action=rdv&medecin_id='+encodeURIComponent(CUR_MED.supabaseId)+'&statut=confirme');
+      var dInfo=await rInfo.json();
+      (Array.isArray(dInfo)?dInfo:(dInfo.data||[])).forEach(function(r){if(r.id===rdvId)rdvInfo=r;});
+    }catch(e){}
     await fetchAPI(API_URL+'/medecin?action=rdv&id='+encodeURIComponent(rdvId),{method:'PATCH',body:JSON.stringify({statut:'annule_praticien',creneaux_proposes:[]})});
-    toast('✅ RDV annulé');
+    // V4.35 — plus de créneau à libérer (on ne crée plus de dispo). Notif WhatsApp
+    // d'annulation avec retour visible (option 1), même logique que notifier_rdv.
+    var notifTxt='';
+    if(rdvInfo){
+      var patTelN='';
+      try{
+        var rT=await fetchAPI(API_URL+'/medecin?action=patient_by_pid&patient_id='+encodeURIComponent(rdvInfo.patient_id||''));
+        var dT=await rT.json();var rowT=Array.isArray(dT)?dT[0]:null;
+        if(rowT&&rowT.telephone)patTelN=rowT.telephone.replace(/[^\d]/g,'');
+      }catch(e){}
+      if(patTelN){
+        try{
+          var rN=await fetchAPI(API_URL+'/whatsapp?action=notifier_annulation_rdv',{method:'POST',body:JSON.stringify({
+            telephone:patTelN, patient_nom:rdvInfo.patient_nom||'',
+            date:rdvInfo.date_confirmee||'', heure:rdvInfo.heure_confirmee||''
+          })});
+          var dN=await rN.json();
+          notifTxt=(rN.ok&&dN.ok)?' — patient notifié':' — notification non aboutie, prévenez le patient autrement';
+        }catch(e){notifTxt=' — notification non aboutie, prévenez le patient autrement';}
+      } else {
+        notifTxt=' — pas de numéro patient, prévenez-le autrement';
+      }
+    }
+    toast('✅ RDV annulé'+notifTxt);
     chargerDispos();
   }catch(e){toast('❌ '+e.message);}
 }
@@ -3798,13 +3892,12 @@ async function creerEtReserverCreneau(btn){
   var heure=document.getElementById('planifHeure').value;
   if(!heure){toast('⚠️ Aucune heure disponible ce jour');return;} // V4.33
   btn.disabled=true;btn.textContent='⏳ Création...';
+  // V4.35 — on ne crée PLUS de ligne 'disponibilites' (concept abandonné, cf. spec :
+  // table à supprimer). Le RDV est posé directement (disponibilite_id null). Plus de
+  // créneau = plus d'orphelin possible à l'annulation. Le masquage des heures et
+  // l'anti-doublon lisent les RDV confirmés, pas les dispos — donc rien ne casse.
   try{
-    var payload={medecin_id:CUR_MED.supabaseId,date_specifique:date,heure_debut:heure,duree_minutes:30,statut:'disponible'};
-    if(AGENDA_ETAB_ID)payload.etablissement_id=AGENDA_ETAB_ID; // compat agenda existant si étab lié
-    var r=await fetchAPI(API_URL+'/medecin?action=disponibilite',{method:'POST',body:JSON.stringify(payload)});
-    var d=await r.json();
-    if(!r.ok||!d.id){toast('❌ '+(d.error||'Création créneau impossible'));btn.disabled=false;btn.textContent='✅ Créer et réserver ce créneau';return;}
-    await reserverCreneauRdv(d.id,date,heure);
+    await reserverCreneauRdv(null,date,heure);
   }catch(e){
     toast('❌ '+e.message);
     btn.disabled=false;btn.textContent='✅ Créer et réserver ce créneau';
@@ -3818,7 +3911,7 @@ async function reserverCreneauRdv(slotId,date,heure){
     var body={
       patient_id:      CUR_DOS.patient.patientId||'',
       patient_nom:     CUR_DOS.patient.nom||'',
-      disponibilite_id:slotId,
+      disponibilite_id:slotId||null, // V4.35 — null en fonctionnement normal
       date_confirmee:  date,
       heure_confirmee: heure,
       type_rdv:        'teleconsultation',
@@ -3829,8 +3922,11 @@ async function reserverCreneauRdv(slotId,date,heure){
     var r=await fetchAPI(API_URL+'/medecin?action=rdv',{method:'POST',body:JSON.stringify(body)});
     var d=await r.json();
     if(!r.ok){toast('❌ '+(d.error||'Erreur création RDV'));return;}
-    // Marquer le créneau réservé (valeur 'reserve' déjà utilisée par l'agenda existant)
-    await fetchAPI(API_URL+'/medecin?action=disponibilite&id='+slotId,{method:'PATCH',body:JSON.stringify({statut:'reserve'})}).catch(function(){});
+    // V4.35 — plus de création de dispo : si slotId (legacy) présent on le réserve,
+    // sinon (cas normal désormais) rien à faire.
+    if(slotId){
+      await fetchAPI(API_URL+'/medecin?action=disponibilite&id='+slotId,{method:'PATCH',body:JSON.stringify({statut:'reserve'})}).catch(function(){});
+    }
     RDV_PLANIF={date:date,heure:heure};
     dbg('RDV téléconsultation créé: '+d.id+' — '+date+' '+heure);
     // V4.34 — notification Twilio automatique AVEC retour visible (option 1).
