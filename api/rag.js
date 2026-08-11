@@ -1,5 +1,15 @@
 // /api/rag.js
 // DOKITA — API RAG Supabase pgvector + Claude
+// V4.12 — 2026-08 : DÉ-IDENTIFICATION (Sprint 1). Le nom du patient ne transite plus vers Claude.
+//        (1) Gabarit d'affichage "Profil :" — "[Prénom Nom]" retiré (→ "[âge] ans, [sexe], ...").
+//        (2) RESUME_CONSULTATION — champ "nom" retiré du JSON demandé au modèle. SANS RISQUE :
+//            le front (index_patient.html L3041 "resume.nom = prénom+nom // profil = source de
+//            vérité") écrase de toute façon ce champ par le nom réel du profil LOCAL — le nom
+//            n'a donc jamais besoin d'être produit par le modèle. L'identité reste gérée en local.
+//        Modif faite dans le TEXTE du prompt (pas en commentaire inline : des // à l'intérieur
+//        d'une chaîne de prompt seraient envoyés à Claude — piège connu). Trace = ce changelog.
+//        NB : si le patient tape spontanément son nom dans le chat, il transite encore (rare,
+//        non contrôlable par code ; le bot n'est pas censé le demander).
 // V4.11 — 2026-06-15 : retry automatique (1x, +1s) sur appel Claude si réponse vide/erreur transitoire (429/529)
 // V4.10 — Mode isValidation : injection chunks Dokita Dosages dans validation DokitaPro
 
@@ -505,7 +515,7 @@ PHASE 4 — RÉPONSE FINALE
 
 🔍 ANALYSE DE VOS SYMPTÔMES
 
-Profil : [Prénom Nom], [âge] ans, [sexe], [poids]kg, [ville]
+Profil : [âge] ans, [sexe], [poids]kg, [ville]
 
 Symptômes : [liste des symptômes décrits]
 
@@ -547,7 +557,6 @@ Si le message reçu est exactement "RESUME_CONSULTATION" :
 R�ponds UNIQUEMENT avec ce JSON valide (sans markdown, sans texte avant ou après) :
 
 {
-  "nom": "prénom et nom du patient mentionnés dans la conversation",
   "age": "âge en chiffres seulement",
   "poids": "poids en kg, chiffres seulement",
   "ville": "ville mentionnée",
