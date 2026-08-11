@@ -2462,7 +2462,11 @@ async function lancerValidationIA(){
   var prompt=
     'Tu es un expert en pharmacologie clinique et protocoles OMS Afrique subsaharienne.\n\n'+
     '=== PATIENT ===\n'+
-    'Nom: '+p.nom+'\n'+
+    // V4.36 — DÉ-IDENTIFICATION (Sprint 1) : nom retiré du prompt envoyé à Claude.
+    // Le nom est un identifiant pur, inutile pour juger la conformité d'une prescription
+    // (dosage/examens/interactions ne dépendent pas de l'identité). Réversible : décommenter
+    // la ligne ci-dessous si un cadre conforme (hébergement souverain + BAA) le permet un jour.
+    // 'Nom: '+p.nom+'\n'+
     'Âge: '+p.age+' ans\n'+
     'Poids: '+(p.poids||'non renseigné')+'kg\n'+
     'Allergies connues: '+(p.allergies||'Aucune renseignée')+'\n'+
