@@ -1,5 +1,17 @@
 // /api/rag.js
 // DOKITA — API RAG Supabase pgvector + Claude
+// V4.14 — 2026-08 : BRIQUE 2 étape 3.3 — DÉTECTION déterministe des red flags au RESUME.
+//        detecterRedFlags(messages) parcourt le fil, apparie chaque question taguée à la
+//        réponse patient, interprète les numéros (redflags.js), produit le CONTEXTE CLINIQUE
+//        (gravité + red flags positifs + checklist médecin + grossesse/âge). Ajouté à la
+//        réponse : champ red_flags. Le LLM POSE, le CODE DÉCIDE. Action patient = étape 3.4.
+// V4.13 — 2026-08 : BRIQUE 2 (garde-fou red flags) étape 3.1 — injection des questions de
+//        sécurité dans le prompt. Après le questionnaire (Phase 2) et AVANT l'analyse (Phase 3),
+//        le bot pose 2 questions de sécurité : (1) filtre de signes vitaux universels [RF-FILTRE],
+//        (2) question groupée des red flags 🔴 du motif [RF-MOTIF:motif]. Questions numérotées,
+//        réponses = numéros ou "Aucun". Le CODE (redflags.js) génère les libellés et interprétera
+//        les réponses au RESUME (étape 3.3). Le LLM POSE, le code DÉCIDE. Réversible : la section
+//        est un bloc identifiable dans le prompt + l'import ci-dessous.
 // V4.12 — 2026-08 : DÉ-IDENTIFICATION (Sprint 1). Le nom du patient ne transite plus vers Claude.
 //        (1) Gabarit d'affichage "Profil :" — "[Prénom Nom]" retiré (→ "[âge] ans, [sexe], ...").
 //        (2) RESUME_CONSULTATION — champ "nom" retiré du JSON demandé au modèle. SANS RISQUE :
@@ -12,6 +24,80 @@
 //        non contrôlable par code ; le bot n'est pas censé le demander).
 // V4.11 — 2026-06-15 : retry automatique (1x, +1s) sur appel Claude si réponse vide/erreur transitoire (429/529)
 // V4.10 — Mode isValidation : injection chunks Dokita Dosages dans validation DokitaPro
+
+const redflags = require('./redflags.js');
+
+// BRIQUE 2 (V4.14) — DÉTECTION DÉTERMINISTE des red flags au RESUME.
+// Parcourt le fil de conversation, apparie chaque question taguée du bot ([RF-FILTRE] /
+// [RF-MOTIF:motif]) à la réponse du patient qui suit, interprète les numéros de façon
+// déterministe (via redflags.js), et produit le CONTEXTE CLINIQUE.
+// Le LLM a POSÉ les questions ; ce code DÉCIDE (jamais l'inverse).
+//   messages : le fil complet [{role:'user'|'assistant', content:'...'}].
+// Retourne le contexte de evaluerContexteClinique(), ou null si aucune question RF trouvée.
+function detecterRedFlags(messages) {
+  if (!Array.isArray(messages) || !messages.length) return null;
+
+  let reponses = {};            // { redFlagId: reponseDeclenchante }
+  let motifDetecte = null;      // dernier motif rencontré (pour la checklist médecin)
+  let auMoinsUneQuestionRF = false;
+
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i];
+    if (!m || m.role !== 'assistant' || !m.content) continue;
+    const contenu = m.content;
+
+    // Réponse du patient = 1er message 'user' APRÈS cette question du bot.
+    const reponsePatient = (() => {
+      for (let j = i + 1; j < messages.length; j++) {
+        if (messages[j] && messages[j].role === 'user') return messages[j].content || '';
+      }
+      return '';
+    })();
+    if (!reponsePatient) continue;
+
+    // [RF-FILTRE] → filtre d'entrée (6 signes vitaux universels)
+    if (/\[RF-FILTRE\]/i.test(contenu)) {
+      auMoinsUneQuestionRF = true;
+      Object.assign(reponses, redflags.interpreterReponseFiltre(reponsePatient));
+    }
+
+    // [RF-MOTIF:motif] → question groupée du motif
+    const motifMatch = contenu.match(/\[RF-MOTIF:([^\]]+)\]/i);
+    if (motifMatch) {
+      auMoinsUneQuestionRF = true;
+      const motif = motifMatch[1].trim();
+      motifDetecte = motif;
+      Object.assign(reponses, redflags.interpreterReponseGroupee(motif, reponsePatient));
+    }
+  }
+
+  if (!auMoinsUneQuestionRF) return null; // aucune question de sécurité posée → rien à évaluer
+
+  // Faits de profil (grossesse/âge) : extraits prudemment du fil pour affiner le contexte.
+  const faitsProfil = extraireFaitsProfil(messages);
+
+  return redflags.evaluerContexteClinique(reponses, faitsProfil, motifDetecte);
+}
+
+// Extraction PRUDENTE de faits de profil depuis le fil (grossesse, âge).
+// Best-effort : sert à enrichir le contexte (désambiguïsation), jamais critique pour la détection.
+function extraireFaitsProfil(messages) {
+  const texte = messages.map(m => (m && m.content) || '').join(' ').toLowerCase();
+  const faits = {};
+  // Grossesse : le bot demande "Êtes-vous enceinte ou allaitante ?" [Oui, enceinte | Non | ...]
+  // On cherche une réponse patient contenant "enceinte" sans négation immédiate.
+  if (/\benceinte\b/.test(texte) && !/pas enceinte|non enceinte|ne suis pas enceinte/.test(texte)) {
+    // heuristique conservatrice : "enceinte" présent → drapeau posé, le médecin confirmera
+    faits.grossesse = /oui,?\s*enceinte|je suis enceinte|enceinte de/.test(texte);
+  }
+  // Âge : "[PROFIL PATIENT: 30 ans" ou "30 ans" mentionné
+  const ageMatch = texte.match(/(\d{1,3})\s*ans?/);
+  if (ageMatch) {
+    const age = parseInt(ageMatch[1], 10);
+    if (age >= 0 && age <= 120) faits.age = age;
+  }
+  return faits;
+}
 
 const handler = async function(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -260,6 +346,15 @@ const handler = async function(req, res) {
     let normalizedDisease = null;
 
     if (isResume) {
+      // BRIQUE 2 (V4.14) : détection déterministe des red flags à partir du fil complet.
+      // Calculé ici (au RESUME), disponible pour l'ajouter à la réponse renvoyée au front.
+      req._redFlagsContext = detecterRedFlags(messages);
+      if (req._redFlagsContext) {
+        console.log('RedFlags — niveau:', req._redFlagsContext.niveau_max,
+                    '| gravite:', req._redFlagsContext.gravite,
+                    '| positifs:', (req._redFlagsContext.red_flags_positifs||[]).length);
+      }
+
       const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
       const diagText = (lastAssistantMsg?.content || '');
       const convText = messages.map(m => m.content || '').join(' ').toLowerCase();
@@ -414,6 +509,10 @@ dosages — examens — diagnostics différentiels — recommandations — proto
 ════════════════════════════════════════════════════`;
 
     // 4. System prompt complet
+    // BRIQUE 2 (V4.13) : blocs de sécurité générés depuis redflags.js (source de vérité).
+    // Le filtre universel + les questions de motif sont injectés dans la PHASE 2.5 ci-dessous.
+    const rfFiltre = redflags.blocFiltrePourPrompt();
+    const rfMotifs = redflags.blocQuestionsMotifsPourPrompt();
     const systemPrompt = `SOURCES AUTORISÉES
 
 Les guidelines médicales OMS/MSF suivantes ont été trouvées pour cette consultation :
@@ -497,6 +596,21 @@ Questions à poser si non déjà répondues :
 "Avez-vous des maladies chroniques connues ?" [OPTIONS: Diabète | Hypertension | Drépanocytose | Aucune]
 "Êtes-vous enceinte ou allaitante ?" [OPTIONS: Oui, enceinte | Non | En cours d'allaitement]
 
+PHASE 2.5 — VÉRIFICATION DE SÉCURITÉ (signes de gravité)
+
+⚠️ À faire APRÈS avoir recueilli les symptômes et identifié le motif principal, et AVANT de déclencher l'analyse (PHASE 3). Ne jamais conclure la consultation sans avoir mené cette vérification.
+Tu l'introduis calmement, sans alarmer. Tu ne commentes JAMAIS les réponses de façon anxiogène, quelles qu'elles soient. Même ton rassurant que le reste du questionnaire.
+
+Cette vérification se fait en DEUX temps, chacun sous forme d'UNE question numérotée. Le patient répond avec le ou les numéros concernés (ex. « 1, 3 ») ou « Aucun ». Tu poses ces questions EXACTEMENT comme fournies ci-dessous, sans reformuler ni changer les numéros, en conservant l'étiquette entre crochets au début.
+
+TEMPS 1 — Signes vitaux généraux (à poser à toute consultation) :
+${rfFiltre}
+
+TEMPS 2 — Signes liés au motif identifié. Choisis, dans la liste ci-dessous, LA question qui correspond au motif principal du patient, et pose-la (une seule, celle du bon motif). Si aucun motif ci-dessous ne correspond exactement, pose uniquement le TEMPS 1.
+${rfMotifs}
+
+Après avoir posé ces deux questions et reçu les réponses, tu passes à la PHASE 3. Tu ne fais AUCUNE analyse de gravité toi-même : tu poses les questions, la suite du système s'occupe de l'interprétation.
+
 PHASE 3 — DÉCLENCHEMENT DE L'ANALYSE
 
 Déclenche la PHASE 4 uniquement quand tu as obtenu au minimum :
@@ -505,8 +619,9 @@ Déclenche la PHASE 4 uniquement quand tu as obtenu au minimum :
 - Symptômes associés
 - Localisation géographique
 - Antécédents / médicaments en cours
+- ET la VÉRIFICATION DE SÉCURITÉ de la PHASE 2.5 a été menée (TEMPS 1 + TEMPS 2 si un motif correspond)
 
-Si ces 5 informations sont présentes dès le premier message → passe directement à la PHASE 4.
+Si ces informations sont présentes dès le premier message → mène d'abord la PHASE 2.5, puis passe à la PHASE 4.
 
 PHASE 4 — RÉPONSE FINALE
 
@@ -625,6 +740,11 @@ R�GLES ABSOLUES FINALES
     return res.status(200).json({
       answer,
       chunks_used: chunks.length,
+      // BRIQUE 2 (V4.14) : contexte red flags calculé de façon déterministe par le code
+      // (jamais par le LLM). null si pas de RESUME ou aucune question de sécurité trouvée.
+      // Le front médecin lira ce champ pour afficher gravité + checklist. L'action patient
+      // (escalade non-alarmiste) sera branchée en 2.4.
+      red_flags: req._redFlagsContext || null,
       debug: claudeData?.error || null
     });
 

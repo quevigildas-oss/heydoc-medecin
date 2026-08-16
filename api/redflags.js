@@ -580,6 +580,28 @@ function interpreterReponseFiltre(reponsePatient) {
   return out;
 }
 
+// Génère le BLOC TEXTE complet de toutes les questions de sécurité par motif,
+// prêt à être injecté dans le prompt système de rag.js (étape 3.1 brique 2).
+// Chaque motif est préfixé de [RF-MOTIF:<motif>]. Le bot posera celle du motif identifié.
+function blocQuestionsMotifsPourPrompt() {
+  const motifs = listerMotifs();
+  let bloc = '';
+  for (const m of motifs) {
+    const q = questionGroupeeMotif(m);
+    if (q) {
+      // intro adaptée au motif (transition naturelle après le filtre universel)
+      bloc += '[RF-MOTIF:' + m + ']\n' + q.texte + '\n\n';
+    }
+  }
+  return bloc.trim();
+}
+
+// Génère le TEXTE de la question filtre d'entrée, prêt pour le prompt.
+function blocFiltrePourPrompt() {
+  const f = questionFiltreEntree();
+  return '[RF-FILTRE]\n' + f.texte;
+}
+
 module.exports = {
   NIVEAUX,
   ACTION_PAR_NIVEAU,
@@ -595,5 +617,7 @@ module.exports = {
   questionGroupeeMotif,
   interpreterReponseGroupee,
   questionFiltreEntree,
-  interpreterReponseFiltre
+  interpreterReponseFiltre,
+  blocQuestionsMotifsPourPrompt,
+  blocFiltrePourPrompt
 };
