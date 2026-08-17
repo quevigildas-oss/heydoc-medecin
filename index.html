@@ -1,8 +1,24 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.37
+     VERSION : V4.40
      DATE    : 2026-08
+     CHANGELOG V4.40 : BRIQUE 2 étape 3.4b-3 — onglet CLÔTURÉS (enfin fonctionnel). Un dossier
+              y va s il est TRAITÉ (valide/valide_override) ET ancien (> 7 j). Retiré des autres
+              vues pour désencombrer. RÈGLE SÉCURITÉ : un dossier non traité n est JAMAIS clôturé
+              (donc jamais caché), a fortiori un urgent. Géré par affichage (dossierEstCloture),
+              pas de changement de statut en base = réversible. Compteur Clôturés corrigé.
+     CHANGELOG V4.39 : BRIQUE 2 étape 3.4b-2 — onglet URGENCES. Nouveau filtre "🔴 Urgences"
+              (dossiers avec red flag urgence, quel que soit le statut) + compteur + badge "🔴 Urgence"
+              sur les cartes (visible aussi en vue Tous, ne cache jamais). L onglet met en AVANT,
+              ne remplace pas la vue normale. dossierEstUrgent() lit d.redFlags.gravite.
+     CHANGELOG V4.38 : BRIQUE 2 (garde-fou red flags) étape 3.4b-1 — SOCLE médecin. Le dossier
+              affiche en tête un bandeau des signes de gravité détectés au triage (red flags
+              positifs signalés par le patient) + la CHECKLIST des signes 🟠 à vérifier en
+              consultation (non demandés au patient) + contexte grossesse. Lit CUR_DOS.redFlags
+              (colonne red_flags JSONB, parsée dans parseDossierSupabase). Rétrocompatible :
+              pas de bandeau pour les dossiers antérieurs. Ton non-alarmiste, jamais criard.
+              (Onglet Urgence + onglet Clôturés = étapes 3.4b-2 et 3.4b-3.)
      CHANGELOG V4.37 : BUG B (validation IA) — le verdict EN_ATTENTE est désormais un 3e état
               distinct (neutre, ambre), au lieu d'être affiché à tort comme "NON CONFORME" (rouge).
               Le validateur claude.js renvoie EN_ATTENTE quand les données OMS sont insuffisantes ;
@@ -160,6 +176,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .filter-row::-webkit-scrollbar{display:none;}
 .ftag{background:var(--card);border:1.5px solid var(--border);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .2s;}
 .ftag.on{background:var(--accent);border-color:var(--accent);color:var(--bg);}
+/* BRIQUE 2 : onglet Urgences — discret au repos, rouge quand actif ; compteur en pastille */
+.ftag-urgence{border-color:rgba(239,68,68,.4);color:#B91C1C;}
+.ftag-urgence.on{background:#B91C1C;border-color:#B91C1C;color:#fff;}
+.fcount{display:inline-block;min-width:16px;padding:0 5px;margin-left:4px;border-radius:9px;background:rgba(239,68,68,.15);color:#B91C1C;font-size:11px;font-weight:800;text-align:center;}
+.ftag-urgence.on .fcount{background:rgba(255,255,255,.25);color:#fff;}
 .sec-title{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;}
 .dcard{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:16px;margin-bottom:10px;cursor:pointer;transition:border-color .2s,transform .1s;}
 .dcard:active{transform:scale(.98);}
@@ -372,6 +393,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
     </div>
     <div class="filter-row">
       <div class="ftag on" onclick="setFilter('tous',this)">Tous</div>
+      <div class="ftag ftag-urgence" onclick="setFilter('urgence',this)">🔴 Urgences <span id="stU" class="fcount">0</span></div>
       <div class="ftag" onclick="setFilter('en_attente',this)">⏳ En attente</div>
       <div class="ftag" onclick="setFilter('en_attente_examen',this)">🔬 Att. examen</div>
       <div class="ftag" onclick="setFilter('en_cours',this)">📋 Exam reçus</div>
@@ -868,6 +890,13 @@ function parseDossierSupabase(row){
   var statut=row.statut||'en_attente';
   // Brouillon JSON stocké directement en JSONB
   var brouillonJson=row.brouillon_json||null;
+  // BRIQUE 2 : contexte red flags (JSONB) calculé au triage. Peut être un objet (JSONB parsé
+  // par PostgREST) ou une chaîne JSON selon la config. On normalise en objet, null si absent.
+  var redFlags=null;
+  if(row.red_flags){
+    if(typeof row.red_flags==='object'){ redFlags=row.red_flags; }
+    else { try{ redFlags=JSON.parse(row.red_flags); }catch(e){ redFlags=null; } }
+  }
   // valIA : objet ou texte depuis validation_ia_texte
   var valIA=null;
   if(row.validation_ia_texte){
@@ -890,6 +919,7 @@ function parseDossierSupabase(row){
       email: ''
     },
     date: row.created_at?(new Date(row.created_at)).toLocaleDateString('fr-FR'):'',
+    created_at: row.created_at||null,
     statut: statut,
     symptomes: row.symptomes||'',
     diagIA: row.diagnostic_ia||'',
@@ -905,6 +935,7 @@ function parseDossierSupabase(row){
     medecin: row.medecin_id||'',
     valIA: valIA,
     brouillonJson: brouillonJson,
+    redFlags: redFlags,
     urgent: statut==='en_attente'
   };
 }
@@ -1530,13 +1561,51 @@ function renderDash(){
   document.getElementById('stE').textContent=DOSSIERS.filter(function(d){return d.statut==='en_attente_examen';}).length;
   document.getElementById('stEC').textContent=DOSSIERS.filter(function(d){return d.statut==='en_cours';}).length;
   document.getElementById('stT').textContent=DOSSIERS.filter(function(d){return d.statut==='valide';}).length;
-  document.getElementById('stR').textContent=DOSSIERS.filter(function(d){return d.statut==='cloture';}).length;
+  document.getElementById('stR').textContent=DOSSIERS.filter(dossierEstCloture).length;
+  // BRIQUE 2 : compteur d'urgences (dossiers avec red flag 🔴)
+  var stU=document.getElementById('stU');
+  if(stU)stU.textContent=DOSSIERS.filter(dossierEstUrgent).length;
   renderDossiers();
+}
+
+// BRIQUE 2 (V4.39) — un dossier est "urgent" (onglet Urgence) si son contexte red flags
+// contient une gravité (au moins un red flag 🔴). Indépendant du statut.
+function dossierEstUrgent(d){
+  return !!(d && d.redFlags && (d.redFlags.gravite===true || d.redFlags.niveau_max==='urgence'));
+}
+
+// BRIQUE 2 (V4.40) — onglet Clôturés : un dossier y va s'il est TRAITÉ (valide/valide_override)
+// ET ancien (> 7 jours). Objectif : désencombrer la vue courante SANS jamais cacher un dossier
+// non traité (règle de sécurité). Géré par AFFICHAGE (pas de changement de statut en base =
+// réversible, et on ne perd pas l'info "validé"). Un dossier urgent non traité n'est JAMAIS
+// clôturé (il n'est pas "valide", donc exclu de fait). created_at requis (sinon jamais clôturé).
+var CLOTURE_JOURS=7;
+function dossierEstCloture(d){
+  if(!d)return false;
+  var traite=(d.statut==='valide'||d.statut==='valide_override');
+  if(!traite)return false;
+  if(!d.created_at)return false;
+  var ageMs=Date.now()-new Date(d.created_at).getTime();
+  var ageJours=ageMs/(1000*60*60*24);
+  return ageJours>CLOTURE_JOURS;
 }
 
 function renderDossiers(){
   var ds=DOSSIERS;
-  if(FILTRE!=='tous')ds=ds.filter(function(d){return d.statut===FILTRE;});
+  if(FILTRE==='urgence'){
+    // Onglet Urgence : dossiers avec red flag 🔴, quel que soit leur statut (met en AVANT,
+    // ne remplace pas la vue normale où ils restent visibles).
+    ds=ds.filter(dossierEstUrgent);
+  } else if(FILTRE==='cloture'){
+    // Onglet Clôturés : dossiers traités + anciens (> 7 j).
+    ds=ds.filter(dossierEstCloture);
+  } else if(FILTRE!=='tous'){
+    // Vues par statut : on exclut les dossiers clôturés (désencombrement).
+    ds=ds.filter(function(d){return d.statut===FILTRE && !dossierEstCloture(d);});
+  } else {
+    // Vue "Tous" : exclut aussi les clôturés (ils sont dans leur onglet dédié).
+    ds=ds.filter(function(d){return !dossierEstCloture(d);});
+  }
   var list=document.getElementById('dList');
   if(!ds.length){
     list.innerHTML='<div class="empty"><div class="empty-ico">📂</div><div class="empty-txt">Aucun dossier</div></div>';
@@ -1565,6 +1634,7 @@ function renderDossiers(){
         '<div style="flex:1">'+
           '<div class="dcard-nom">'+escHtml(nom)+
             '<span style="font-size:11px;color:var(--text2);font-weight:400"> • '+d.patient.age+' ans'+(d.patient.poids?' • '+d.patient.poids+'kg':'')+'</span>'+
+            (dossierEstUrgent(d)?'<span style="font-size:10px;font-weight:800;color:#fff;background:#B91C1C;border-radius:8px;padding:1px 7px;margin-left:6px;">🔴 Urgence</span>':'')+
           '</div>'+
           '<div class="dcard-meta">'+d.date+(d.patient.ville?' • '+escHtml(d.patient.ville):'')+'</div>'+
         '</div>'+
@@ -1998,6 +2068,57 @@ function parseMedsStr(str){
   return{meds:meds,medsAld:medsAld};
 }
 
+// BRIQUE 2 (V4.38) — Bandeau red flags dans le dossier médecin.
+// Affiche la gravité détectée au triage (red flags positifs) + la CHECKLIST des signes 🟠
+// à vérifier par le médecin (non demandés au patient). rf = objet CUR_DOS.redFlags (ou null).
+// Ne s'affiche que si rf existe (rétrocompat : dossiers antérieurs à la brique 2 = pas de bandeau).
+function renderRedFlagsBanner(rf){
+  if(!rf || typeof rf!=='object') return '';
+  var positifs=Array.isArray(rf.red_flags_positifs)?rf.red_flags_positifs:[];
+  var checklist=Array.isArray(rf.checklist_medecin)?rf.checklist_medecin:[];
+  var niveau=rf.niveau_max||null;
+  // Rien à afficher si aucun red flag positif ET aucune checklist ET pas de gravité
+  if(!positifs.length && !checklist.length && !rf.gravite) return '';
+
+  var estUrgence=(niveau==='urgence'||rf.gravite===true);
+  // Couleurs : urgence = rouge doux, prioritaire = ambre, sinon neutre. JAMAIS criard.
+  var bg=estUrgence?'rgba(239,68,68,.07)':'rgba(245,158,11,.07)';
+  var bd=estUrgence?'rgba(239,68,68,.35)':'rgba(245,158,11,.35)';
+  var titreCol=estUrgence?'#B91C1C':'#C2410C';
+  var titre=estUrgence
+    ?'\u26a0\ufe0f Signes de gravité détectés au triage'
+    :'\u2139\ufe0f Points de vigilance signalés au triage';
+
+  var html='<div class="fsec" style="background:'+bg+';border:1.5px solid '+bd+';border-radius:12px;">'+
+    '<div class="fsec-title"><div class="fsec-label" style="color:'+titreCol+';font-weight:800;">'+titre+'</div></div>';
+
+  // Red flags positifs détectés (signalés par le patient)
+  if(positifs.length){
+    html+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin:4px 0 6px;">Signalés par le patient :</div>';
+    html+='<ul style="margin:0 0 8px;padding-left:18px;">'+positifs.map(function(p){
+      var pastille=(p.niveau==='urgence')?'\ud83d\udd34':(p.niveau==='prioritaire'?'\ud83d\udfe0':'\ud83d\udfe1');
+      return '<li style="font-size:12px;color:var(--text);line-height:1.5;margin-bottom:3px;">'+pastille+' '+escHtml(p.signe||p.id)+'</li>';
+    }).join('')+'</ul>';
+  }
+
+  // Grossesse (fait de profil remonté, contexte utile)
+  if(rf.grossesse===true){
+    html+='<div style="font-size:12px;color:var(--text);margin-bottom:8px;">\ud83e\udd30 Contexte : patiente enceinte (à confirmer)</div>';
+  }
+
+  // Checklist médecin (🟠 non demandés au patient — à vérifier en consultation)
+  if(checklist.length){
+    html+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin:8px 0 6px;">Merci de vérifier en consultation (non demandés au patient) :</div>';
+    html+='<ul style="margin:0;padding-left:18px;">'+checklist.map(function(c){
+      return '<li style="font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:3px;">\u2610 '+escHtml(c.signe||c.id)+'</li>';
+    }).join('')+'</ul>';
+  }
+
+  html+='<div style="font-size:10px;color:var(--text3);margin-top:8px;font-style:italic;">Triage automatique Dokita — à interpréter selon votre jugement clinique.</div>';
+  html+='</div>';
+  return html;
+}
+
 function sympToList(txt){
   if(!txt)return '<div style="color:var(--text3);font-size:12px;">Aucun symptôme renseigné</div>';
   var items=txt.split(/[,|]/).map(function(s){return s.trim();}).filter(function(s){return s.length>2;});
@@ -2186,6 +2307,9 @@ function renderConsult(){
       '<div class="fsec-title"><div class="fsec-ico" style="background:rgba(99,102,241,.15);">📁</div><div class="fsec-label">Documents médicaux</div></div>'+
       '<div id="docPatientList"><div style="font-size:12px;color:var(--text3);padding:8px 0;">⏳ Chargement...</div></div>'+
     '</div>'+
+
+    // 3.5 — BRIQUE 2 : bandeau red flags (gravité + checklist médecin), affiché en premier
+    renderRedFlagsBanner(d.redFlags)+
 
     // 4. Symptômes
     '<div class="fsec">'+
