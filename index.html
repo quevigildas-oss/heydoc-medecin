@@ -1,8 +1,26 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.40
+     VERSION : V4.42
      DATE    : 2026-08
+     CHANGELOG V4.42 : BUG A (complément) — la bannière de divergence MALADIE ajoute une
+              invitation à l action UNIQUEMENT quand la divergence porte sur la FORME (même
+              maladie, ex. palu simple vs palu enceinte) : "Merci de vérifier/préciser la forme
+              de la maladie et de relancer la validation si vous le jugez nécessaire." Pas de
+              suggestion quand la divergence porte sur une MALADIE différente (le validateur ne
+              présume jamais qu un diagnostic de maladie doit changer — hors de son rôle).
+     CHANGELOG V4.41 : BUG A — désambiguïsation des formes cliniques (paludisme simple/grave/
+              enceinte, asthme, etc.) dans lancerValidationIA (2 modes). Le diagnostic du MÉDECIN
+              fait foi (pas le diagnostic IA) : le validateur identifie la forme correspondante
+              parmi celles fournies par le protocole Dokita, valide UNIQUEMENT contre elle, et
+              tombe en EN_ATTENTE si aucune forme ne correspond avec certitude. NOUVEAU : détection
+              et affichage de la DIVERGENCE diagnostic IA / diagnostic médecin (maladie différente
+              OU forme différente de la même maladie) — bannière dédiée (indigo, distincte des
+              interactions), NON BLOQUANTE (n influence pas le VERDICT), sur le modèle exact de
+              la bannière interactions médicamenteuses déjà existante. Le médecin reste seul
+              décisionnaire (peut forcer l envoi dans tous les cas, comme avant). ⚠️ GQ observera
+              l usage réel avant de décider si cette divergence doit influencer le VERDICT.
+              claude.js (proxy) et rag.js NON MODIFIÉS — correctif entièrement dans ce fichier.
      CHANGELOG V4.40 : BRIQUE 2 étape 3.4b-3 — onglet CLÔTURÉS (enfin fonctionnel). Un dossier
               y va s il est TRAITÉ (valide/valide_override) ET ancien (> 7 j). Retiré des autres
               vues pour désencombrer. RÈGLE SÉCURITÉ : un dossier non traité n est JAMAIS clôturé
@@ -2628,13 +2646,18 @@ async function lancerValidationIA(){
     (EXAMENS_REQUIS?
       // MODE EXAMENS UNIQUEMENT
       '=== INSTRUCTIONS ===\n'+
-      'Le médecin est en phase de bilan diagnostique. Les médicaments NE SONT PAS encore prescrits — ils le seront après réception des résultats. Tu dois UNIQUEMENT valider les examens prescrits.\n\n'+
+      'Le médecin est en phase de bilan diagnostique. Les médicaments NE SONT PAS encore prescrits — ils le seront après réception des résultats. Tu dois valider les examens prescrits ET identifier la maladie/forme.\n\n'+
       'RÈGLE ABSOLUE : NE PAS évaluer les médicaments. NE PAS mentionner l\'absence de médicaments. NE PAS marquer NON CONFORME pour absence de médicaments.\n\n'+
-      'Compare les examens prescrits avec les examens OMS recommandés pour ce diagnostic.\n'+
-      'CONFORME si tous les examens OBLIGATOIRES OMS sont prescrits.\n'+
-      'NON CONFORME si un examen OBLIGATOIRE manque.\n\n'+
+      '0) IDENTIFICATION DE LA MALADIE ET DE LA FORME (Bug A — désambiguïsation)\n'+
+      'Le diagnostic du médecin (Diagnostic final) FAIT FOI pour la validation. Le diagnostic IA est indicatif (orientation du triage), il ne fait jamais foi.\n'+
+      'Le PROTOCOLE DOKITA peut contenir PLUSIEURS FORMES d\'une même maladie (ex. simple / grave / femme enceinte), chacune avec ses propres examens obligatoires. Identifie la forme correspondant EXACTEMENT au diagnostic du médecin, et valide les examens UNIQUEMENT contre cette forme — n\'exige pas les examens des autres formes. Si le diagnostic du médecin ne correspond à aucune forme fournie avec certitude, réponds VERDICT: EN_ATTENTE en précisant ce qui manque.\n'+
+      'Compare ensuite le diagnostic IA et le diagnostic du médecin : s\'ils désignent une maladie différente OU une forme différente de la même maladie (ex. paludisme simple vs paludisme chez la femme enceinte), signale-le au format MALADIE ci-dessous. Ce signalement N\'EST JAMAIS bloquant : le médecin reste seul décisionnaire, cela n\'affecte pas le VERDICT.\n\n'+
+      'Compare les examens prescrits avec les examens OMS recommandés pour cette forme.\n'+
+      'CONFORME si tous les examens OBLIGATOIRES OMS de cette forme sont prescrits.\n'+
+      'NON CONFORME si un examen OBLIGATOIRE de cette forme manque.\n\n'+
       'FORMAT DE RÉPONSE OBLIGATOIRE:\n'+
       'VERDICT: CONFORME ou NON CONFORME\n\n'+
+      'MALADIE: [Diagnostic IA = ... | Diagnostic médecin = ... → concordant / divergent : maladie différente OU forme différente]. Si FORME différente (même maladie), termine par : " Merci de vérifier/préciser la forme de la maladie et de relancer la validation si vous le jugez nécessaire." Si MALADIE différente, ne pas ajouter cette phrase. — ou MALADIE: Concordant si pas de divergence\n\n'+
       'EXAMENS:\n'+
       '- [examen OMS]: [prescrit ✅ / manquant ⚠️ / non obligatoire ℹ️]\n\n'+
       'Si NON CONFORME seulement:\n'+
@@ -2642,7 +2665,11 @@ async function lancerValidationIA(){
     :
       // MODE COMPLET
       '=== INSTRUCTIONS ===\n'+
-      'Tu es un validateur de décision médicale. Tu dois valider DEUX choses simultanément :\n\n'+
+      'Tu es un validateur de décision médicale. Tu dois valider TROIS choses simultanément :\n\n'+
+      '0) IDENTIFICATION DE LA MALADIE ET DE LA FORME (Bug A — désambiguïsation)\n'+
+      'Le diagnostic du médecin (Diagnostic final) FAIT FOI pour la validation. Le diagnostic IA est indicatif (orientation du triage), il ne fait jamais foi.\n'+
+      'Le PROTOCOLE DOKITA peut contenir PLUSIEURS FORMES d\'une même maladie (ex. simple / grave / femme enceinte), chacune avec ses propres examens et traitements. Identifie la forme correspondant EXACTEMENT au diagnostic du médecin, et valide examens ET médicaments UNIQUEMENT contre cette forme — n\'exige pas les critères des autres formes. Si le diagnostic du médecin ne correspond à aucune forme fournie avec certitude, réponds VERDICT: EN_ATTENTE en précisant ce qui manque.\n'+
+      'Compare ensuite le diagnostic IA et le diagnostic du médecin : s\'ils désignent une maladie différente OU une forme différente de la même maladie (ex. paludisme simple vs paludisme chez la femme enceinte), signale-le au format MALADIE ci-dessous. Ce signalement N\'EST JAMAIS bloquant : le médecin reste seul décisionnaire, cela n\'affecte pas le VERDICT.\n\n'+
       'A) EXAMENS PRESCRITS vs EXAMENS OMS\n'+
       'Compare les examens prescrits par le médecin avec les examens recommandés OMS pour ce diagnostic.\n'+
       'Vérifie que les examens OBLIGATOIRES selon les guidelines sont bien prescrits.\n'+
@@ -2656,6 +2683,7 @@ async function lancerValidationIA(){
       'VERDICT GLOBAL: CONFORME si examens obligatoires couverts ET médicaments conformes. NON CONFORME si au moins un manque critique.\n\n'+
       'FORMAT DE RÉPONSE OBLIGATOIRE:\n'+
       'VERDICT: CONFORME ou NON CONFORME\n\n'+
+      'MALADIE: [Diagnostic IA = ... | Diagnostic médecin = ... → concordant / divergent : maladie différente OU forme différente]. Si FORME différente (même maladie), termine par : " Merci de vérifier/préciser la forme de la maladie et de relancer la validation si vous le jugez nécessaire." Si MALADIE différente, ne pas ajouter cette phrase. — ou MALADIE: Concordant si pas de divergence\n\n'+
       'EXAMENS:\n'+
       '- [examen OMS]: [prescrit ✅ / manquant ⚠️ / non obligatoire ℹ️]\n\n'+
       'RÉSULTATS EXAMENS:\n'+
@@ -2769,6 +2797,21 @@ function afficherValidation(rep,diag,examens,notes){
   }
   CUR_DOS.valIA={statut:(conf==='attente'?'EN_ATTENTE':(conf?'CONFORME':'NON CONFORME')),texte:rep};
 
+  // ── Parser la divergence de maladie/forme (Bug A) ──
+  var divergenceMaladie=null;
+  if(rep){
+    var lignesMal=rep.split('\n');
+    lignesMal.forEach(function(line){
+      var trimmed=line.trim();
+      if(trimmed.toUpperCase().startsWith('MALADIE:')){
+        var contenu=trimmed.replace(/^MALADIE:\s*/i,'');
+        if(contenu && !/^concordant/i.test(contenu)){
+          divergenceMaladie=contenu;
+        }
+      }
+    });
+  }
+
   // ── Parser les interactions médicamenteuses ──
   var interactions=[];
   if(rep){
@@ -2783,6 +2826,17 @@ function afficherValidation(rep,diag,examens,notes){
 
   var vb=document.getElementById('valBox');
   if(!vb)return;
+
+  // Bannière divergence maladie/forme (Bug A — non bloquante, médecin décide)
+  var maladieBanner='';
+  if(divergenceMaladie){
+    maladieBanner=
+      '<div style="background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.35);border-radius:12px;padding:12px 14px;margin-bottom:10px;">'+
+        '<div style="font-family:\'Syne\',sans-serif;font-size:12px;font-weight:700;color:#4F46E5;margin-bottom:6px;">🔀 Diagnostic IA ≠ diagnostic retenu</div>'+
+        '<div style="font-size:11px;color:var(--text2);padding:3px 0;">'+escHtml(divergenceMaladie)+'</div>'+
+        '<div style="font-size:10px;color:var(--text3);margin-top:6px;font-style:italic;">Information non bloquante — le médecin reste décisionnaire.</div>'+
+      '</div>';
+  }
 
   // Bannière interactions (non bloquante — médecin décide)
   var interactionBanner='';
@@ -2833,6 +2887,7 @@ function afficherValidation(rep,diag,examens,notes){
       '<button class="vbtn ref" onclick="finaliser(\'valide_override\')">\U0001f4cb Valider & R\u00e9f\u00e9rer</button>';
   }
   vb.innerHTML=
+    maladieBanner+
     interactionBanner+
     '<div class="val-box '+boxClass+'">'+
       '<div class="val-title">'+boxTitle+'</div>'+
