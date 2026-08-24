@@ -1,5 +1,12 @@
 // /api/rag.js
 // DOKITA — API RAG Supabase pgvector + Claude
+// V4.15 — 2026-08-19 : mapping diseaseFileKeywords (mode isValidation) étendu — ajout
+//        asthme/asthma → asthme, bpco/copd/bronchopneumopathie → bpco. Sans ça, ni les
+//        nouvelles fiches Asthme/BPCO (WHO PEN, chantier MNT) ni les fiches MSF asthme
+//        préexistantes (30_asthme_aigu, 31_asthme_chronique) n étaient jamais trouvées par
+//        le validateur. diabete/HTA non touchés — déjà fonctionnels (matching insensible
+//        à la casse, ILIKE PostgreSQL). Testé : matching OK, pas de régression sur mapping
+//        existant (paludisme/diabete/HTA re-vérifiés).
 // V4.14 — 2026-08 : BRIQUE 2 étape 3.3 — DÉTECTION déterministe des red flags au RESUME.
 //        detecterRedFlags(messages) parcourt le fil, apparie chaque question taguée à la
 //        réponse patient, interprète les numéros (redflags.js), produit le CONTEXTE CLINIQUE
@@ -150,6 +157,8 @@ const handler = async function(req, res) {
       'cystite':'cystite','infection urinaire':'cystite',
       'pyélonéphrite':'cystite',
       'malnutrition':'malnutrition','mas':'malnutrition','mam':'malnutrition',
+      'asthme':'asthme','asthma':'asthme',
+      'bpco':'bpco','copd':'bpco','bronchopneumopathie':'bpco',
     };
 
     let fileKeyword = null;
