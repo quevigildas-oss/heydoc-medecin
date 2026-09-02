@@ -1,8 +1,20 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.46
+     VERSION : V4.47
      DATE    : 2026-08
+     CHANGELOG V4.47 : GARDE-FOU DIAGNOSTIC AVANT RÉVÉLATION — sans lui, cliquer directement
+              sur le toggle examens ou "Ajouter un médicament" AVANT d avoir tapé son propre
+              diagnostic affichait le diagnostic IA en premier, exactement l influence qu on
+              voulait éviter en le masquant par défaut. reveleIAPatient() exige maintenant que
+              diagMedInput contienne au moins 3 caractères non-espaces avant de révéler quoi
+              que ce soit. Seuil pragmatique, PAS une validation clinique ("toto" passerait
+              le seuil, assumé) — un vrai filtre demanderait un jugement médical ou un appel
+              LLM, écarté pour l instant. Si bloqué, un nouveau clic après complétion du
+              diagnostic fonctionne normalement (testé). AMÉLIORATION FUTURE NOTÉE (prochaine
+              session, impact à étudier) : remplacer le texte libre par une liste de maladies
+              structurée (comme les examens), qui supprimerait ce problème de validation à la
+              racine — pas de texte libre à juger, un choix dans une liste fermée.
      CHANGELOG V4.46 : COMPARAISON DIAGNOSTIC IMMÉDIATE — badge diagnostic IA (diagIABadge)
               ajouté SUR LA MÊME LIGNE que "Diagnostic final", pour comparaison visuelle au
               coup d œil dès que le médecin regarde son propre diagnostic — pas besoin de
@@ -3473,6 +3485,18 @@ var MODAL_MODE='';
 var IA_PATIENT_REVELE=false;
 function reveleIAPatient(){
   if(IA_PATIENT_REVELE)return; // ne pas re-déclencher l'effet visuel à chaque clic suivant
+  // BRIQUE garde-fou (V4.47) : ne révèle QUE si le médecin a déjà commencé à écrire SON
+  // diagnostic (champ diagMedInput). Sans ce garde-fou, cliquer directement sur le toggle
+  // examens ou "Ajouter un médicament" AVANT d'avoir tapé son diagnostic afficherait le
+  // diagnostic IA en premier — exactement l'influence qu'on voulait éviter en le masquant
+  // par défaut. Seuil pragmatique : 3 caractères non-espaces minimum (couvre "HTA", légitime
+  // et court). Ne détecte PAS un texte absurde ("toto" passerait le seuil) — un vrai filtre
+  // demanderait un jugement clinique/LLM, écarté pour l'instant (coût, latence). Amélioration
+  // prévue : liste de maladies structurée (comme les examens), qui supprimerait ce problème
+  // à la racine — à traiter dans une prochaine session, impact à étudier avant de coder.
+  var diagInput=document.getElementById('diagMedInput');
+  var diagTexte=diagInput?diagInput.value.trim():'';
+  if(diagTexte.length<3)return; // pas encore assez de diagnostic saisi — on ne révèle rien
   var sec=document.getElementById('iaPatientSec');
   var badge=document.getElementById('diagIABadge'); // V4.46 : badge même ligne que le diagnostic
   if(badge)badge.style.display='inline-block';
