@@ -1,8 +1,51 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.42
+     VERSION : V4.45
      DATE    : 2026-08
+     CHANGELOG V4.45 : STABILITÉ DE LA VALIDATION — cause racine du bug d instabilité des
+              examens (fond d œil manquant puis non puis re-manquant sur la même prescription
+              inchangée, observé lors du test Gildas Quevi) : DEUX sources d examens/médicaments
+              concurrentes étaient envoyées dans le même prompt — dokitaContext (dynamique,
+              lié au diagnostic du MÉDECIN, correct) ET les champs statiques EXAMENS
+              RECOMMANDÉS OMS / RECOMMANDATIONS OMS / MÉDICAMENTS OMS / CONTRE-INDICATIONS OMS
+              (figés depuis la consultation bot d origine, liés au diagnostic IA — obsolètes
+              une fois le médecin passé). Une instruction de hiérarchie existait déjà
+              ("ces données font autorité") mais s est montrée insuffisante en pratique.
+              CORRECTIF : quand dokitaContext est non vide, les 4 blocs statiques concurrents
+              sont RETIRÉS du prompt (regex, avant promptFinal) — il ne reste plus qu UNE
+              source d obligations, éliminant la source d instabilité plutôt que de compter
+              sur une instruction. DIAGNOSTIC IA et RÉSULTATS EXAMENS (valeurs réelles du
+              patient) sont TOUJOURS conservés (le premier nécessaire au calcul de divergence,
+              le second n étant pas une source de recommandation, jamais en conflit).
+              Si dokitaContext est VIDE (aucune fiche Dokita trouvée) : AUCUN retrait, le
+              prompt est strictement identique à l original — comportement de repli sur les
+              recommandations OMS génériques inchangé, testé (égalité stricte de chaîne).
+              Testé aussi : retrait complet et propre des 4 blocs + leur contenu quand
+              dokitaContext présent, ordre et intégrité du reste du prompt préservés.
+     CHANGELOG V4.44 : PARSING TOLÉRANT AU MARKDOWN — le LLM formate parfois "**MALADIE:**"
+              (gras) au lieu de "MALADIE:" (texte brut demandé) — startsWith échouait
+              silencieusement, la bannière de divergence ne s affichait JAMAIS dans ce cas
+              (contenu noyé dans le texte brut du verdict, observé lors du test Gildas Quevi).
+              Correctif : retrait des ** avant le test de préfixe ET avant l extraction du
+              contenu, sur MALADIE: ET INTERACTION: (même vulnérabilité potentielle, corrigée
+              par précaution bien que non observée sur INTERACTION:). Testé : cas réel du bug
+              (gras), non-régression texte brut, "Concordant" toujours filtré même en gras,
+              pas de faux positif sur mention accidentelle du mot MALADIE dans un texte libre.
+     CHANGELOG V4.43 : DIVERGENCE PRÉCOCE — la section 'Analyse IA patient' (diagnostic IA
+              + observations OMS de la consultation bot) reste cachée à l ouverture du dossier
+              (comme avant), mais est désormais révélée dès le PREMIER clic sur Ajouter un
+              examen OU Ajouter un médicament (reveleIAPatient(), appelée dans openExamModal
+              et openMedModal) — AVANT la validation IA complète, qui la révélait seule jusqu
+              ici (afficherValidation, toujours actif, les deux coexistent sans conflit).
+              Aucune comparaison automatique de texte/LLM : c est le MÉDECIN qui juge lui-même
+              s il est aligné avec l IA, cohérent avec la doctrine du projet. Effet visuel
+              temporaire (surbrillance douce 2,5s, scroll dans la vue) pour attirer l œil sans
+              être alarmant — pas de rouge, pas de mention "divergence". Flag IA_PATIENT_REVELE
+              réinitialisé à chaque ouverture de dossier (openDos) — sans ça, la révélation
+              n aurait fonctionné qu une fois par session au lieu d une fois par dossier (testé).
+              Origine : test end-to-end Gildas Quevi (HTA vs méningite IA) — la divergence n
+              apparaissait qu après la lourde validation complète, trop tard dans le flux.
      CHANGELOG V4.42 : BUG A (complément) — la bannière de divergence MALADIE ajoute une
               invitation à l action UNIQUEMENT quand la divergence porte sur la FORME (même
               maladie, ex. palu simple vs palu enceinte) : "Merci de vérifier/préciser la forme
@@ -1674,6 +1717,7 @@ function renderDossiers(){
 function openDos(supabaseId){
   CUR_DOS=DOSSIERS.find(function(d){return d.supabaseId===supabaseId;})||null;
   if(!CUR_DOS)return;
+  IA_PATIENT_REVELE=false; // BRIQUE divergence précoce (V4.43) : réinitialisé à chaque dossier
   // Restaurer brouillon depuis JSONB Supabase (propre, pas de ##BROUILLON## hack)
   var brouillonOk=false;
   if(CUR_DOS.brouillonJson&&typeof CUR_DOS.brouillonJson==='object'){
@@ -2336,6 +2380,11 @@ function renderConsult(){
     '</div>'+
 
     // 4. Diagnostic IA patient — masqué, révélé après validation
+    // BRIQUE divergence précoce (V4.43) : section cachée par défaut — le médecin forme son
+    // propre jugement avant de voir l'IA. Révélée dès qu'il commence sa prescription (1er
+    // clic Ajouter examen/médicament, cf. reveleIAPatient()), PAS seulement après validation
+    // complète (afficherValidation la révèle aussi, en complément — display:block répété
+    // est sans effet, donc les deux déclencheurs coexistent sans conflit).
     '<div class="fsec" id="iaPatientSec" style="display:none">'+
       '<div class="fsec-title"><div class="fsec-ico bl">🤖</div><div class="fsec-label">Analyse IA patient</div></div>'+
       (d.noteHistorique?'<div style="background:#FFF7ED;border:1.5px solid #F59E0B;border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;gap:10px;align-items:flex-start;"><div style="font-size:18px;flex-shrink:0;">🔄</div><div><div style="font-size:10px;font-weight:700;color:#D97706;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Historique patient</div><div style="font-size:12px;color:#92400E;line-height:1.5;">'+escHtml(d.noteHistorique)+'</div></div></div>':'')+
@@ -2725,7 +2774,27 @@ async function lancerValidationIA(){
     }
   }catch(e){dbg('Dokita chunks err: '+e.message);}
   // Injecter les chunks en début de prompt
-  var promptFinal=dokitaContext?dokitaContext+'\n\n'+prompt:prompt;
+  // V4.45 : quand dokitaContext existe (fiche(s) Dokita Dosages trouvée(s) pour le diagnostic
+  // du médecin), on RETIRE du prompt les blocs statiques concurrents (EXAMENS RECOMMANDÉS OMS /
+  // RECOMMANDATIONS OMS / MÉDICAMENTS OMS / CONTRE-INDICATIONS OMS) — ils datent de la
+  // consultation bot d'origine et sont liés au DIAGNOSTIC IA, pas au diagnostic du médecin.
+  // Avoir DEUX sources d'examens/médicaments concurrentes dans le même prompt (même avec une
+  // instruction de hiérarchie) a produit des verdicts INSTABLES d'un appel à l'autre lors des
+  // tests (ex. fond d'œil manquant puis non puis re-manquant, sur la même prescription
+  // inchangée) — le validateur n'est censé être déterministe (temperature:0) qu'à contexte
+  // identique ; deux sources concurrentes cassent cette garantie. On garde DIAGNOSTIC IA
+  // (nécessaire au calcul de divergence, purement informatif) et RÉSULTATS EXAMENS (valeurs
+  // réelles du patient, pas une source de recommandation — jamais en conflit). Si dokitaContext
+  // est VIDE (aucune fiche trouvée), rien n'est retiré : les champs statiques redeviennent la
+  // seule référence disponible, comportement de repli inchangé (pas de régression).
+  var promptSansOMSStatique=prompt;
+  if(dokitaContext){
+    ['EXAMENS RECOMMANDÉS OMS','RECOMMANDATIONS OMS','MÉDICAMENTS OMS \\(1ère intention\\)','CONTRE-INDICATIONS OMS'].forEach(function(champ){
+      var re=new RegExp('=== '+champ+' ===\\n[\\s\\S]*?\\n\\n(?====)','');
+      promptSansOMSStatique=promptSansOMSStatique.replace(re,'');
+    });
+  }
+  var promptFinal=dokitaContext?dokitaContext+'\n\n'+promptSansOMSStatique:prompt;
 
   try{
     var r=await fetch('/api/claude',{
@@ -2798,11 +2867,15 @@ function afficherValidation(rep,diag,examens,notes){
   CUR_DOS.valIA={statut:(conf==='attente'?'EN_ATTENTE':(conf?'CONFORME':'NON CONFORME')),texte:rep};
 
   // ── Parser la divergence de maladie/forme (Bug A) ──
+  // V4.44 : tolérant au markdown — le LLM formate parfois "**MALADIE:**" (gras) au lieu de
+  // "MALADIE:" (texte brut demandé dans le prompt). startsWith('MALADIE:') échouait alors
+  // silencieusement, la bannière ne s'affichait jamais (le contenu restait noyé dans le texte
+  // brut affiché tel quel). On retire les ** avant le test ET avant l'extraction du contenu.
   var divergenceMaladie=null;
   if(rep){
     var lignesMal=rep.split('\n');
     lignesMal.forEach(function(line){
-      var trimmed=line.trim();
+      var trimmed=line.trim().replace(/\*\*/g,'');
       if(trimmed.toUpperCase().startsWith('MALADIE:')){
         var contenu=trimmed.replace(/^MALADIE:\s*/i,'');
         if(contenu && !/^concordant/i.test(contenu)){
@@ -2813,11 +2886,13 @@ function afficherValidation(rep,diag,examens,notes){
   }
 
   // ── Parser les interactions médicamenteuses ──
+  // V4.44 : même correctif de tolérance markdown que MALADIE ci-dessus (même vulnérabilité
+  // potentielle, non observée mais symétrique — corrigée par précaution).
   var interactions=[];
   if(rep){
     var lines=rep.split('\n');
     lines.forEach(function(line){
-      var trimmed=line.trim();
+      var trimmed=line.trim().replace(/\*\*/g,'');
       if(trimmed.toUpperCase().startsWith('INTERACTION:') && !trimmed.toLowerCase().includes('aucune')){
         interactions.push(trimmed.replace(/^INTERACTION:\s*/i,''));
       }
@@ -3367,7 +3442,30 @@ document.addEventListener('click',function(e){
 // MODAL MÉDICAMENT
 // ══════════════════════════════
 var MODAL_MODE='';
+// BRIQUE divergence précoce (V4.43) : révèle la section "Analyse IA patient" (diagnostic IA
+// + observations OMS) dès que le médecin commence sa prescription (1er ajout examen/médicament)
+// — AVANT la validation IA complète, pour qu'il puisse comparer visuellement son propre
+// diagnostic à celui de l'IA au bon moment. Pas de comparaison automatique (texte/LLM) :
+// c'est le médecin qui juge lui-même s'il est aligné ou non — cohérent avec la doctrine
+// "le médecin reste décisionnaire". Mise en avant visuelle temporaire (surbrillance) pour
+// qu'il ne la rate pas, sans être alarmant (pas de rouge, pas de mention "divergence").
+var IA_PATIENT_REVELE=false;
+function reveleIAPatient(){
+  if(IA_PATIENT_REVELE)return; // ne pas re-déclencher l'effet visuel à chaque clic suivant
+  var sec=document.getElementById('iaPatientSec');
+  if(!sec)return;
+  sec.style.display='block';
+  IA_PATIENT_REVELE=true;
+  // Surbrillance temporaire pour attirer l'œil sans être alarmant (bordure douce, s'estompe)
+  sec.style.transition='box-shadow .6s ease, border-color .6s ease';
+  sec.style.boxShadow='0 0 0 2px rgba(74,158,255,.35)';
+  sec.style.borderRadius='16px';
+  setTimeout(function(){ if(sec)sec.style.boxShadow='none'; }, 2500);
+  sec.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
 function openExamModal(){
+  reveleIAPatient();
   var modal=document.createElement('div');
   modal.id='examModal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:flex;align-items:flex-end;';
@@ -3516,6 +3614,7 @@ async function deleteExam(examId){
 }
 
 function openMedModal(mode){
+  reveleIAPatient();
   MODAL_MODE=mode||'';
   MODAL_EDIT_IDX=-1;
   document.getElementById('mNom').value='';
