@@ -1,8 +1,21 @@
 <!DOCTYPE html>
 <!-- ============================================
      DOKITA PRO — App Médecin
-     VERSION : V4.45
+     VERSION : V4.46
      DATE    : 2026-08
+     CHANGELOG V4.46 : COMPARAISON DIAGNOSTIC IMMÉDIATE — badge diagnostic IA (diagIABadge)
+              ajouté SUR LA MÊME LIGNE que "Diagnostic final", pour comparaison visuelle au
+              coup d œil dès que le médecin regarde son propre diagnostic — pas besoin de
+              chercher plus bas dans le dossier. Affiche uniquement le 1er diagnostic (le plus
+              probable) si plusieurs sont listés (séparés par " | "), tronqué à 60 caractères.
+              Révélé par le même mécanisme que la section Analyse IA patient complète
+              (reveleIAPatient(), inchangée dans son principe — ne remplace pas iaPatientSec,
+              vient en complément pour la comparaison rapide). CORRECTIF 3e point d entrée
+              manquant : toggleExamen() (le bouton "Examens complémentaires requis") n
+              appelait PAS reveleIAPatient() — seuls openExamModal/openMedModal l appelaient
+              (V4.43). Corrigé : les 3 points d entrée déclenchent maintenant la révélation.
+              Vérifié : openDos() n est PAS async, d.diagIA vient du cache DOSSIERS déjà
+              chargé — pas de latence technique réelle pour son affichage.
      CHANGELOG V4.45 : STABILITÉ DE LA VALIDATION — cause racine du bug d instabilité des
               examens (fond d œil manquant puis non puis re-manquant sur la même prescription
               inchangée, observé lors du test Gildas Quevi) : DEUX sources d examens/médicaments
@@ -2205,6 +2218,7 @@ function selectDisease(el){
 }
 
 function toggleExamen(){
+  reveleIAPatient(); // V4.46 : 3e point d'entrée manquant (avec les 2 modals déjà câblés en V4.43)
   EXAMENS_REQUIS=!EXAMENS_REQUIS;
   var tog=document.getElementById('examToggle');
   var sw=document.getElementById('examSw');
@@ -2397,8 +2411,15 @@ function renderConsult(){
       '<div class="fsec">'+
         '<div class="fsec-title"><div class="fsec-ico gr">🩺</div><div class="fsec-label">Décision médicale</div></div>'+
 
-        // Diagnostic
-        '<div class="frow"><div class="flabel">Diagnostic final</div>'+
+        // Diagnostic — V4.46 : badge diagnostic IA juxtaposé, pour comparaison visuelle
+        // immédiate (même ligne). Caché par défaut, révélé par reveleIAPatient() (même
+        // déclencheur que la section Analyse IA patient — toggle examens ou 1er ajout
+        // examen/médicament). Ne remplace PAS la section iaPatientSec existante (qui garde
+        // le détail complet + les observations OMS) — c'est un résumé rapide en plus, pour
+        // la comparaison au coup d'œil sans avoir à chercher plus bas dans le dossier.
+        '<div class="frow"><div class="flabel">Diagnostic final'+
+          '<span id="diagIABadge" style="display:none;margin-left:8px;font-size:10px;font-weight:700;color:#0EA5E9;background:rgba(14,165,233,.12);border:1px solid rgba(14,165,233,.3);border-radius:6px;padding:2px 8px;vertical-align:middle;">🤖 IA : '+escHtml((d.diagIA||'Non renseigné').split('\n')[0].split('|')[0].trim().slice(0,60))+'</span>'+
+        '</div>'+
         '<div class="dtags">'+renderDiseaseTags(d.diagMed)+'</div>'+
         '<textarea class="finput" id="diagMedInput" rows="2" placeholder="Diagnostic précis...">'+escHtml(d.diagMed)+'</textarea></div>'+
 
@@ -3453,6 +3474,8 @@ var IA_PATIENT_REVELE=false;
 function reveleIAPatient(){
   if(IA_PATIENT_REVELE)return; // ne pas re-déclencher l'effet visuel à chaque clic suivant
   var sec=document.getElementById('iaPatientSec');
+  var badge=document.getElementById('diagIABadge'); // V4.46 : badge même ligne que le diagnostic
+  if(badge)badge.style.display='inline-block';
   if(!sec)return;
   sec.style.display='block';
   IA_PATIENT_REVELE=true;
