@@ -1,4 +1,12 @@
 // api/claude.js — Proxy Vercel sécurisé pour API Anthropic
+// V4.5 — 2026-09-06
+// FIX  : max_tokens 1024 → 4096. Le prompt de validation (index_medecin.html) a été enrichi
+//        depuis V4.4 (bannière MALADIE, tableau RÉSULTATS EXAMENS avec interprétation ligne
+//        par ligne, checklist red flags, etc.) — les réponses détaillées dépassaient 1024
+//        tokens et étaient TRONQUÉES avant la section MÉDICAMENTS et la conclusion (observé
+//        lors du test Gildas Quevi : réponse coupée en pleine phrase, verdict médicaments
+//        jamais affiché). 4096 laisse une marge confortable pour ce niveau de détail sans
+//        être excessif. Reste un simple proxy générique — aucune autre logique modifiée.
 // V4.4 — 2026-07-09
 // FIX  : modèle retiré du service — claude-sonnet-4-20250514 renvoyait
 //        "not_found" (erreur affichée : "Erreur API: model: claude-sonnet-4-20250514"
@@ -44,7 +52,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6', // V4.4 — ex claude-sonnet-4-20250514 (retiré du service)
-        max_tokens: 1024,
+        max_tokens: 4096, // V4.5 — était 1024, insuffisant pour les réponses de validation enrichies
         temperature: 0,
         system: systemPrompt,
         messages: [{ role: 'user', content: prompt }]
